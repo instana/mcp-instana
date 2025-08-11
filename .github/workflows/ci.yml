@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, test-ci ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Install uv
+        run: pip install uv
+        
+      - name: Install dependencies
+        run: uv sync
+        
+      - name: Run ruff check
+        run: uv run ruff check .
+        
+      - name: Run tests with verbose output
+        run: uv run test -v
+        
+      - name: Run tests with coverage
+        run: uv run test-coverage

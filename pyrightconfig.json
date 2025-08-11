@@ -1,0 +1,36 @@
+{
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__"
+  ],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.9",
+  
+  // These settings help with mock-related issues
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportUnknownParameterType": "none",
+  "reportAttributeAccessIssue": false,
+  
+  // Additional settings to make the linter less strict
+  "reportOptionalMemberAccess": false,
+  "reportOptionalSubscript": false,
+  "reportOptionalCall": false,
+  "reportOptionalIterable": false,
+  "reportOptionalContextManager": false,
+  "reportOptionalOperand": false,
+  
+  // Settings for test files
+  "reportPrivateUsage": false,
+  "reportMissingTypeStubs": false,
+  
+  // General settings
+  "useLibraryCodeForTypes": true,
+  "reportGeneralTypeIssues": "warning"
+}
