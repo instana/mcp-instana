@@ -188,9 +188,9 @@ def get_client_categories():
         from src.application.application_catalog import ApplicationCatalogMCPTools
         from src.application.application_metrics import ApplicationMetricsMCPTools
         from src.application.application_resources import ApplicationResourcesMCPTools
+        from src.application.application_settings import ApplicationSettingsMCPTools
         from src.application.application_topology import ApplicationTopologyMCPTools
         from src.event.events_tools import AgentMonitoringEventsMCPTools
-        from src.application.application_settings import ApplicationSettingsMCPTools
         from src.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzeMCPTools,
         )
