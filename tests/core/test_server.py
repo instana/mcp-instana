@@ -176,7 +176,20 @@ class TestMCPServer(unittest.TestCase):
         # Verify that logger.error was called but don't actually log anything
         mock_logger.error.assert_called_with("Error creating app", exc_info=True)
 
-    def test_get_enabled_client_configs_all(self):
+    @patch('src.core.server.get_client_categories')
+    def test_get_enabled_client_configs_all(self, mock_get_categories):
+        # Mock the client categories
+        mock_get_categories.return_value = {
+            "infra": [
+                ('infra_client', MagicMock),
+            ],
+            "app": [
+                ('app_client', MagicMock),
+            ],
+            "events": [
+                ('events_client', MagicMock),
+            ]
+        }
         configs = get_enabled_client_configs("all")
         self.assertGreater(len(configs), 0)
         for config in configs:
@@ -185,7 +198,20 @@ class TestMCPServer(unittest.TestCase):
             self.assertIsInstance(config[0], str)
             self.assertTrue(callable(config[1]) or isinstance(config[1], type))
 
-    def test_get_enabled_client_configs_specific(self):
+    @patch('src.core.server.get_client_categories')
+    def test_get_enabled_client_configs_specific(self, mock_get_categories):
+        # Mock the client categories
+        mock_get_categories.return_value = {
+            "infra": [
+                ('infra_client', MagicMock),
+            ],
+            "app": [
+                ('app_client', MagicMock),
+            ],
+            "events": [
+                ('events_client', MagicMock),
+            ]
+        }
         configs = get_enabled_client_configs("events")
         self.assertGreater(len(configs), 0)
         for config in configs:
