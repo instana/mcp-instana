@@ -76,6 +76,7 @@ class MCPState:
     app_catalog_client: Any = None
     app_topology_client: Any = None
     app_analyze_client: Any = None
+    app_settings_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -189,6 +190,7 @@ def get_client_categories():
         from src.application.application_resources import ApplicationResourcesMCPTools
         from src.application.application_topology import ApplicationTopologyMCPTools
         from src.event.events_tools import AgentMonitoringEventsMCPTools
+        from src.application.application_settings import ApplicationSettingsMCPTools
         from src.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzeMCPTools,
         )
@@ -223,6 +225,7 @@ def get_client_categories():
             ('app_catalog_client', ApplicationCatalogMCPTools),
             ('app_topology_client', ApplicationTopologyMCPTools),
             ('app_analyze_client', ApplicationAnalyzeMCPTools),
+            ('app_settings_client', ApplicationSettingsMCPTools),
         ],
         "events": [
             ('events_client', AgentMonitoringEventsMCPTools),
