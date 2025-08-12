@@ -16,7 +16,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from src.prompts.prompt_loader import register_prompts
+from src.prompts.mcp_instana_prompts import PROMPT_REGISTRY
 
 load_dotenv()
 
@@ -151,8 +151,9 @@ def create_app(token: str, base_url: str, port: int = 8000, enabled_categories: 
             except Exception as e:
                 logger.error(f"Failed to register tool {tool_name}: {e}", exc_info=True)
 
-        # Register prompts from the prompt registry
-        register_prompts(server)
+        # Register prompts to the server
+        for prompt in PROMPT_REGISTRY:
+            server.add_prompt(prompt)
 
         return server, tools_registered
 
@@ -281,7 +282,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events). If not provided, all tools are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events,prompts). If not provided, all tools are enabled."
         )
         parser.add_argument(
             "--list-tools",
