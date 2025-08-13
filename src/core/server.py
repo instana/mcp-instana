@@ -15,21 +15,6 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from dotenv import load_dotenv
-
-# Import application modules
-import src.prompts.application.application_alerts as app_alerts
-import src.prompts.application.application_catalog as app_catalog
-import src.prompts.application.application_metrics as app_metrics
-import src.prompts.application.application_resources as app_resources
-import src.prompts.application.application_settings as app_settings
-import src.prompts.application.application_topology as app_topology
-import src.prompts.infrastructure.infrastructure_analyze as infra_analyze
-import src.prompts.infrastructure.infrastructure_catalog as infra_catalog
-import src.prompts.infrastructure.infrastructure_metrics as infra_metrics
-
-# Import infrastructure modules
-import src.prompts.infrastructure.infrastructure_resources as infra_resources
-import src.prompts.infrastructure.infrastructure_topology as infra_topology
 from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
