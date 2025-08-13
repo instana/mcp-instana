@@ -15,6 +15,7 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from dotenv import load_dotenv
+
 from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
