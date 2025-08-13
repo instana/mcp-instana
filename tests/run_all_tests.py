@@ -296,7 +296,19 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.infrastructure.test_infrastructure_resources',
             'tests.infrastructure.test_infrastructure_topology',
             'tests.log.test_log_alert_configuration',
-            'tests.prompts.test_mcp_instana_prompts',
+            'tests.prompts.test_prompt_registry',
+            # New prompt test modules
+            'tests.prompts.application.test_application_alerts_prompts',
+            'tests.prompts.application.test_application_catalog_prompts',
+            'tests.prompts.application.test_application_metrics_prompts',
+            'tests.prompts.application.test_application_resources_prompts',
+            'tests.prompts.application.test_application_settings_prompts',
+            'tests.prompts.application.test_application_topology_prompts',
+            'tests.prompts.infrastructure.test_infrastructure_analyze_prompts',
+            'tests.prompts.infrastructure.test_infrastructure_catalog_prompts',
+            'tests.prompts.infrastructure.test_infrastructure_metrics_prompts',
+            'tests.prompts.infrastructure.test_infrastructure_resources_prompts',
+            'tests.prompts.infrastructure.test_infrastructure_topology_prompts',
         ]
 
         all_tests = unittest.TestSuite()

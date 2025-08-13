@@ -16,7 +16,21 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from src.prompts.mcp_instana_prompts import PROMPT_REGISTRY
+# Import application modules
+import src.prompts.application.application_alerts as app_alerts
+import src.prompts.application.application_catalog as app_catalog
+import src.prompts.application.application_metrics as app_metrics
+import src.prompts.application.application_resources as app_resources
+import src.prompts.application.application_settings as app_settings
+import src.prompts.application.application_topology as app_topology
+import src.prompts.infrastructure.infrastructure_analyze as infra_analyze
+import src.prompts.infrastructure.infrastructure_catalog as infra_catalog
+import src.prompts.infrastructure.infrastructure_metrics as infra_metrics
+
+# Import infrastructure modules
+import src.prompts.infrastructure.infrastructure_resources as infra_resources
+import src.prompts.infrastructure.infrastructure_topology as infra_topology
+from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
 
@@ -130,7 +144,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MCPState]:
         # Yield empty state if client creation failed
         yield MCPState()
 
-def create_app(token: str, base_url: str, port: int = 8000, enabled_categories: str = "all") -> tuple[FastMCP, int]:
+def create_app(token: str, base_url: str, port: int = 8000, enabled_categories: str = "all", args=None) -> tuple[FastMCP, int]:
     """Create and configure the MCP server with the given credentials."""
     try:
         server = FastMCP(name="Instana MCP Server", host="0.0.0.0", port=port)
@@ -152,9 +166,51 @@ def create_app(token: str, base_url: str, port: int = 8000, enabled_categories: 
             except Exception as e:
                 logger.error(f"Failed to register tool {tool_name}: {e}", exc_info=True)
 
+        # Get enabled prompt categories
+        enabled_prompt_categories = args.prompts.split(",") if hasattr(args, 'prompts') and args.prompts else list(get_prompt_categories().keys())
+
+        # Get enabled prompt categories
+        prompt_categories = get_prompt_categories()
+
+        if args and hasattr(args, 'prompts') and args.prompts:
+            enabled_prompt_categories = args.prompts.split(",")
+            logger.info(f"Enabling prompt categories: {', '.join(enabled_prompt_categories)}")
+        else:
+            enabled_prompt_categories = list(prompt_categories.keys())
+            logger.info("Enabling all prompt categories")
+
         # Register prompts to the server
-        for prompt in PROMPT_REGISTRY:
-            server.add_prompt(prompt)
+        logger.info("Registering prompts by category:")
+        registered_prompts = set()
+
+        for category, prompt_groups in prompt_categories.items():
+            if category in enabled_prompt_categories:
+                logger.info(f"  - {category}: {len(prompt_groups)} prompt groups")
+
+                for group_name, prompts in prompt_groups:
+                    prompt_count = len(prompts)
+                    logger.info(f"    - {group_name}: {prompt_count} prompts")
+
+                    for prompt_name, prompt_func in prompts:
+                        server.add_prompt(prompt_func)
+                        registered_prompts.add(prompt_name)
+                        logger.debug(f"      * Registered prompt: {prompt_name}")
+            else:
+                logger.info(f"  - {category}: DISABLED")
+
+        # Register any remaining prompts that might not be in categories
+        uncategorized_count = 0
+
+        # Skip registering uncategorized prompts for now as it's causing issues
+        # We've already registered the categorized prompts which is what we wanted
+
+        # Just log the count of remaining prompts
+        remaining_prompts = len(PROMPT_REGISTRY) - len(registered_prompts)
+        if remaining_prompts > 0:
+            logger.info(f"  - uncategorized: {remaining_prompts} prompts (not registered)")
+
+        if uncategorized_count > 0:
+            logger.info(f"  - uncategorized: {uncategorized_count} prompts")
 
         return server, tools_registered
 
@@ -179,6 +235,65 @@ async def execute_tool(tool_name: str, arguments: dict, clients_state) -> str:
         return f"Tool {tool_name} not found"
     except Exception as e:
         return f"Error executing tool {tool_name}: {e!s}"
+
+def get_prompt_categories():
+    """Get prompt categories organized by functionality"""
+    # Import the class-based prompts
+    from src.prompts.application.application_alerts import ApplicationAlertsPrompts
+    from src.prompts.application.application_catalog import ApplicationCatalogPrompts
+    from src.prompts.application.application_metrics import ApplicationMetricsPrompts
+    from src.prompts.application.application_resources import (
+        ApplicationResourcesPrompts,
+    )
+    from src.prompts.application.application_settings import ApplicationSettingsPrompts
+    from src.prompts.application.application_topology import ApplicationTopologyPrompts
+    from src.prompts.infrastructure.infrastructure_analyze import (
+        InfrastructureAnalyzePrompts,
+    )
+    from src.prompts.infrastructure.infrastructure_catalog import (
+        InfrastructureCatalogPrompts,
+    )
+    from src.prompts.infrastructure.infrastructure_metrics import (
+        InfrastructureMetricsPrompts,
+    )
+    from src.prompts.infrastructure.infrastructure_resources import (
+        InfrastructureResourcesPrompts,
+    )
+    from src.prompts.infrastructure.infrastructure_topology import (
+        InfrastructureTopologyPrompts,
+    )
+
+    # Use the get_prompts method to get all prompts from the classes
+    infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()
+    infra_metrics_prompts = InfrastructureMetricsPrompts.get_prompts()
+    infra_catalog_prompts = InfrastructureCatalogPrompts.get_prompts()
+    infra_topology_prompts = InfrastructureTopologyPrompts.get_prompts()
+    infra_resources_prompts = InfrastructureResourcesPrompts.get_prompts()
+    app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
+    app_metrics_prompts = ApplicationMetricsPrompts.get_prompts()
+    app_catalog_prompts = ApplicationCatalogPrompts.get_prompts()
+    app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
+    app_topology_prompts = ApplicationTopologyPrompts.get_prompts()
+    app_alert_prompts = ApplicationAlertsPrompts.get_prompts()
+
+    # Return the categories with their prompt groups
+    return {
+        "infra": [
+            ('infra_resources_prompts', infra_resources_prompts),
+            ('infra_catalog_prompts', infra_catalog_prompts),
+            ('infra_topology_prompts', infra_topology_prompts),
+            ('infra_analyze_prompts', infra_analyze_prompts),
+            ('infra_metrics_prompts', infra_metrics_prompts),
+        ],
+        "app": [
+            ('app_resources_prompts', app_resources_prompts),
+            ('app_metrics_prompts', app_metrics_prompts),
+            ('app_catalog_prompts', app_catalog_prompts),
+            ('app_settings_prompts', app_settings_prompts),
+            ('app_topology_prompts', app_topology_prompts),
+            ('app_alert_prompts', app_alert_prompts),
+        ],
+    }
 
 def get_client_categories():
     """Get client categories with lazy imports to avoid circular dependencies"""
@@ -285,7 +400,13 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events,prompts). If not provided, all tools are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events). If not provided, all tools are enabled."
+        )
+        parser.add_argument(
+            "--prompts",
+            type=str,
+            metavar='<categories>',
+            help="Comma-separated list of prompt categories to enable (--prompts infra,app). If not provided, all prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -343,6 +464,14 @@ def main():
                 logger.info(f"  {category}: {len(tool_names)} tools")
                 for tool_name in tool_names:
                     logger.info(f"    - {tool_name}")
+
+            logger.info("\nAvailable prompt categories:")
+            prompt_categories = get_prompt_categories()
+            for category, prompts in prompt_categories.items():
+                prompt_names = [name for name, _ in prompts]
+                logger.info(f"  {category}: {len(prompt_names)} prompts")
+                for prompt_name in prompt_names:
+                    logger.info(f"    - {prompt_name}")
             sys.exit(0)
 
         # By default, enable all categories
@@ -394,7 +523,7 @@ def main():
         # Create and configure the MCP server
         try:
             enabled_categories = ",".join(enabled)
-            app, registered_tool_count = create_app(INSTANA_API_TOKEN, INSTANA_BASE_URL, args.port, enabled_categories)
+            app, registered_tool_count = create_app(INSTANA_API_TOKEN, INSTANA_BASE_URL, args.port, enabled_categories, args)
         except Exception as e:
             print(f"Failed to create MCP server: {e}", file=sys.stderr)
             sys.exit(1)
