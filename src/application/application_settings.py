@@ -10,9 +10,7 @@ import re
 import sys
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
-import logging
-logger = logging.getLogger(__name__)
+from typing import Any, Dict, List, Optional
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
@@ -100,146 +98,59 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @register_as_tool
     @with_header_auth(ApplicationSettingsApi)
     async def add_application_config(self,
-                               payload: Union[Dict[str, Any], str],
+                               access_rules: List[Dict[str, str]],
+                               boundary_scope: str,
+                               label: str,
+                               scope: str,
+                               tag_filter_expression: Optional[List[Dict[str, str]]] = None,
                                ctx=None,
                                api_client=None) -> Dict[str, Any]:
         """
         Add a new Application Perspective configuration.
         This tool allows you to create a new Application Perspective with specified settings.
-        Args: 
-        Sample payload: 
-        {
-        "accessRules": [
-            {
-            "accessType": "READ_WRITE",
-            "relationType": "GLOBAL",
-            "relatedId": null
-            }
-        ],
-        "boundaryScope": "INBOUND",
-        "label": "Discount Build 6987",
-        "scope": "INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING",
-        "tagFilterExpression": {
-            "type": "EXPRESSION",
-            "logicalOperator": "AND",
-            "elements": [
-            {
-                "type": "TAG_FILTER",
-                "name": "kubernetes.label",
-                "stringValue": "stage=canary",
-                "numberValue": null,
-                "booleanValue": null,
-                "key": "stage",
-                "value": "canary",
-                "operator": "EQUALS",
-                "entity": "DESTINATION"
-            },
-            {
-                "type": "TAG_FILTER",
-                "name": "kubernetes.label",
-                "stringValue": "build=6987",
-                "numberValue": null,
-                "booleanValue": null,
-                "key": "build",
-                "value": "6987",
-                "operator": "EQUALS",
-                "entity": "DESTINATION"
-            },
-            {
-                "type": "TAG_FILTER",
-                "name": "kubernetes.label",
-                "stringValue": "app=discount",
-                "numberValue": null,
-                "booleanValue": null,
-                "key": "app",
-                "value": "discount",
-                "operator": "EQUALS",
-                "entity": "DESTINATION"
-            }
-            ]
-        }
-        }
+        Args:
+            accessRules: List of access rules for the application perspective
+            boundaryScope: Boundary scope for the application perspective
+            label: Label for the application perspective
+            scope: Scope of the application perspective
+            tagFilterExpression: Tag filter expression for the application perspective (Optional)
+            ctx: The MCP context (optional)
         Returns:
             Dictionary containing the created application perspective configuration or error information
         """
         try:
-            logger.debug(f"create_global_application_alert_config called with payload={payload}")
+            debug_print("Adding new application perspective configuration")
+            if not (access_rules or boundary_scope or label or scope):
+                return {"error": "Required enitities are missing or invalid"}
 
-            # Parse the payload if it's a string
-            if isinstance(payload, str):
-                logger.debug("Payload is a string, attempting to parse")
-                try:
-                    import json
-                    try:
-                        parsed_payload = json.loads(payload)
-                        logger.debug("Successfully parsed payload as JSON")
-                        request_body = parsed_payload
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
+            # Create a NewApplicationConfig instance with the provided parameters
+            request_body = {
+                "access_rules": access_rules,
+                "boundary_scope": boundary_scope,
+                "label": label,
+                "scope": scope,
+                "tag_filter_expression": tag_filter_expression
+            }
+            new_application_config = NewApplicationConfig(**request_body)
+            debug_print(f"New Application Config: {new_application_config.to_dict()}")
 
-                        # Try replacing single quotes with double quotes
-                        fixed_payload = payload.replace("'", "\"")
-                        try:
-                            parsed_payload = json.loads(fixed_payload)
-                            logger.debug("Successfully parsed fixed JSON")
-                            request_body = parsed_payload
-                        except json.JSONDecodeError:
-                            # Try as Python literal
-                            import ast
-                            try:
-                                parsed_payload = ast.literal_eval(payload)
-                                logger.debug("Successfully parsed payload as Python literal")
-                                request_body = parsed_payload
-                            except (SyntaxError, ValueError) as e2:
-                                logger.debug(f"Failed to parse payload string: {e2}")
-                                return {"error": f"Invalid payload format: {e2}", "payload": payload}
-                except Exception as e:
-                    logger.debug(f"Error parsing payload string: {e}")
-                    return {"error": f"Failed to parse payload: {e}", "payload": payload}
-            else:
-                # If payload is already a dictionary, use it directly
-                logger.debug("Using provided payload dictionary")
-                request_body = payload
-
-            # Validate the payload
-            if not request_body:
-                return {"error": "Payload is required"}
-
-            # Import the NewApplicationConfig class
-            try:
-                from instana_client.models.new_application_config import (
-                    NewApplicationConfig
-                )
-                logger.debug("Successfully imported NewApplicationConfig")
-            except ImportError as e:
-                logger.debug(f"Error importing NewApplicationConfig: {e}")
-                return {"error": f"Failed to import NewApplicationConfig: {e!s}"}
-
-            # Create an NewApplicationConfig object from the request body
-            try:
-                logger.debug(f"Creating NewApplicationConfig with params: {request_body}")
-                config_object = NewApplicationConfig(**request_body)
-                logger.debug("Successfully created config object")
-            except Exception as e:
-                logger.debug(f"Error creating NewApplicationConfig: {e}")
-                return {"error": f"Failed to create config object: {e!s}"}
-
-            # Call the create_global_application_alert_config method from the SDK
-            logger.debug("Calling create_global_application_alert_config with config object")
-            result = api_client.add_application_config(new_application_config=config_object)
+            # Call the add_application_config method from the SDK
+            result = api_client.add_application_config(
+                new_application_config=new_application_config
+            )
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
             else:
-                # If it's already a dict or another format, use it as is
                 result_dict = result
 
-            logger.debug(f"Result from create_global_application_alert_config: {result_dict}")
+            debug_print(f"Result from add_application_config: {result_dict}")
             return result_dict
         except Exception as e:
-            logger.error(f"Error in create_global_application_alert_config: {e}", exc_info=True)
-            return {"error": f"Failed to create global application alert config: {e!s}"}
+            debug_print(f"Error in add_application_config: {e}")
+            traceback.print_exc(file=sys.stderr)
+            return {"error": f"Failed to add application configuration: {e!s}"}
 
     @register_as_tool
     @with_header_auth(ApplicationSettingsApi)
