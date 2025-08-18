@@ -71,4 +71,4 @@ class InfrastructureResourcesPrompts:
             ('post_infrastructure_metrics_snapshot', cls.post_infrastructure_metrics_snapshot),
         ]
 
- 
+

@@ -35,4 +35,4 @@ class InfrastructureTopologyPrompts:
             ('get_topology', cls.get_topology),
         ]
 
- 
+
