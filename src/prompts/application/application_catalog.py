@@ -24,5 +24,3 @@ class ApplicationCatalogPrompts:
         return [
             ('app_catalog_yesterday', cls.app_catalog_yesterday),
         ]
-
-# Made with Bob

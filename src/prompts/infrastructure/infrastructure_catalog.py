@@ -50,4 +50,4 @@ class InfrastructureCatalogPrompts:
             ('get_tag_catalog_all', cls.get_tag_catalog_all),
         ]
 
-# Made with Bob
+ 

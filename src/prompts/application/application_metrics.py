@@ -55,5 +55,3 @@ class ApplicationMetricsPrompts:
             ('get_application_endpoints_metrics', cls.get_application_endpoints_metrics),
             ('get_application_service_metrics', cls.get_application_service_metrics),
         ]
-
-# Made with Bob

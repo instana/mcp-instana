@@ -28,5 +28,3 @@ class ApplicationTopologyPrompts:
         return [
             ('get_application_topology', cls.get_application_topology),
         ]
-
-# Made with Bob

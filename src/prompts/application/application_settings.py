@@ -73,5 +73,3 @@ class ApplicationSettingsPrompts:
             ('add_manual_service_config', cls.add_manual_service_config),
             ('get_service_config', cls.get_service_config),
         ]
-
-# Made with Bob

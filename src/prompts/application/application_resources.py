@@ -24,5 +24,3 @@ class ApplicationResourcesPrompts:
         return [
             ('application_insights_summary', cls.application_insights_summary),
         ]
-
-# Made with Bob

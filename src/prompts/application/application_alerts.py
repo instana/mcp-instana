@@ -52,5 +52,3 @@ class ApplicationAlertsPrompts:
             ('app_alert_config_delete', cls.app_alert_config_delete),
             ('app_alert_config_enable', cls.app_alert_config_enable),
         ]
-
-# Made with Bob
