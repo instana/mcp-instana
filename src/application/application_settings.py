@@ -6,13 +6,12 @@ This module provides application settings-specific MCP tools for Instana monitor
 The API endpoints of this group provides a way to create, read, update, delete (CRUD) for various configuration settings.
 """
 
-import logging
 import re
 import sys
 import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
-
+import logging
 logger = logging.getLogger(__name__)
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
@@ -107,7 +106,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         Add a new Application Perspective configuration.
         This tool allows you to create a new Application Perspective with specified settings.
-        Args: Sample payload: {
+        Args: 
+        Sample payload: 
+        {
         "accessRules": [
             {
             "accessType": "READ_WRITE",
@@ -207,7 +208,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             # Import the NewApplicationConfig class
             try:
                 from instana_client.models.new_application_config import (
-                    NewApplicationConfig,
+                    NewApplicationConfig
                 )
                 logger.debug("Successfully imported NewApplicationConfig")
             except ImportError as e:
