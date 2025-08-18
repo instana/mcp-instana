@@ -41,6 +41,9 @@ cd mcp-instana
 
 # Set up the environment
 uv sync
+
+# Alternative: Install from PyPI
+pip install mcp-instana
 ```
 #### 3. Create a New MCP Tools Module
 
@@ -48,7 +51,7 @@ Create a new file in the src/client directory with a descriptive name following 
 
 #### 4. Implement the MCP Tools class
 
-Follow any existing tools class under src/clinet to know the template structure for your new class.
+Follow any existing tools class under src/client to know the template structure for your new class.
 
 #### 5. Write API tool Description precisely
 
@@ -81,20 +84,25 @@ async def get_example_data(self, query: str, ctx=None) -> Dict[str, Any]:
 
 #### 6. Update the Main Server File
 
-update src/mcp_server.py to register your new tools:
+Update src/core/server.py to register your new tools:
 
 #### 7. Test Your MCP Tool
 
-build the mcp-instana with
+Build the mcp-instana with:
 
 ```bash
+# For development (editable install)
 uv pip install -e .
+
+# Or install from PyPI
+pip install mcp-instana
 ```
 
-Now open/restart the mcp host like claude desktop/github copilot and then run the query to test your new tool.
+Now open/restart the mcp host like Claude Desktop/GitHub Copilot and then run the query to test your new tool.
 
-To run the MCP server locally for testing:
+To run the MCP server locally:
 
+**Using Development Installation:**
 ```bash
 # Run in Streamable HTTP mode
 uv run src/core/server.py --transport streamable-http --debug
@@ -104,6 +112,18 @@ uv run src/core/server.py --tools app,infra --transport streamable-http
 
 # List all available tool categories
 uv run src/core/server.py --list-tools
+```
+
+**Using CLI (PyPI Installation):**
+```bash
+# Run in Streamable HTTP mode
+mcp-instana --transport streamable-http --debug
+
+# Run with specific tool categories
+mcp-instana --tools app,infra --transport streamable-http
+
+# List all available tool categories
+mcp-instana --list-tools
 ```
 
 #### 8. Add Documentation
