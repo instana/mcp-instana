@@ -5,7 +5,7 @@ This module provides application analyze tool functionality for Instana monitori
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 # Import the necessary classes from the SDK
 try:
@@ -21,7 +21,7 @@ except ImportError:
     logger.error("Failed to import application analyze API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool
+from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             raise
 
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_call_details(
         self,
         trace_id: str,
@@ -96,6 +97,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get call details: {e!s}"}
 
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_trace_details(
         self,
         id: str,
@@ -156,83 +158,140 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
 
 
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_all_traces(
         self,
-        includeInternal: Optional[bool] = None,
-        includeSynthetic: Optional[bool] = None,
-        order: Optional[Dict[str, str]] = None,
-        pagination: Optional[Dict[str, int]] = None,
-        tagFilterExpression: Optional[Dict[str, str]] = None,
-        timeFrame: Optional[Dict[str, int]] = None,
+        payload: Optional[Union[Dict[str, Any], str]]=None,
+        api_client = None,
         ctx=None
     ) -> Dict[str, Any]:
         """
         Get all traces.
         This tool endpoint retrieves the metrics for traces.
 
-        Args:
-            includeInternal (Optional[bool]): Whether to include internal traces.
-            includeSynthetic (Optional[bool]): Whether to include synthetic traces.
-            order (Optional[Dict[str, str]]): Order by field and direction.
-            pagination (Optional[Dict[str, int]]): Pagination parameters.
-            tagFilterExpression (Optional[Dict[str, str]]): Tag filter expression.
-            timeFrame (Optional[Dict[str, int]]): Time frame for the traces.
-            ctx: Optional context for the request.
+        Sample payload: {
+        "includeInternal": false,
+        "includeSynthetic": false,
+        "pagination": {
+            "retrievalSize": 1
+        },
+        "tagFilterExpression": {
+            "type": "EXPRESSION",
+            "logicalOperator": "AND",
+            "elements": [
+            {
+                "type": "TAG_FILTER",
+                "name": "endpoint.name",
+                "operator": "EQUALS",
+                "entity": "DESTINATION",
+                "value": "GET /"
+            },
+            {
+                "type": "TAG_FILTER",
+                "name": "service.name",
+                "operator": "EQUALS",
+                "entity": "DESTINATION",
+                "value": "groundskeeper"
+            }
+            ]
+        },
+        "order": {
+            "by": "traceLabel",
+            "direction": "DESC"
+        }
+        }
 
         Returns:
             Dict[str, Any]: List of traces matching the criteria.
         """
-
         try:
-            logger.debug("Fetching all traces with filters and pagination")
-            body = {}
+            # Parse the payload if it's a string
+            if isinstance(payload, str):
+                logger.debug("Payload is a string, attempting to parse")
+                try:
+                    import json
+                    try:
+                        parsed_payload = json.loads(payload)
+                        logger.debug("Successfully parsed payload as JSON")
+                        request_body = parsed_payload
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
 
-            if includeInternal is not None:
-                body["includeInternal"] = includeInternal
-            if includeSynthetic is not None:
-                body["includeSynthetic"] = includeSynthetic
-            if order is not None:
-                body["order"] = order
-            if pagination is not None:
-                body["pagination"] = pagination
-            if tagFilterExpression is not None:
-                body["tagFilterExpression"] = tagFilterExpression
-            if timeFrame is not None:
-                body["timeFrame"] = timeFrame
+                        # Try replacing single quotes with double quotes
+                        fixed_payload = payload.replace("'", "\"")
+                        try:
+                            parsed_payload = json.loads(fixed_payload)
+                            logger.debug("Successfully parsed fixed JSON")
+                            request_body = parsed_payload
+                        except json.JSONDecodeError:
+                            # Try as Python literal
+                            import ast
+                            try:
+                                parsed_payload = ast.literal_eval(payload)
+                                logger.debug("Successfully parsed payload as Python literal")
+                                request_body = parsed_payload
+                            except (SyntaxError, ValueError) as e2:
+                                logger.debug(f"Failed to parse payload string: {e2}")
+                                return {"error": f"Invalid payload format: {e2}", "payload": payload}
+                except Exception as e:
+                    logger.debug(f"Error parsing payload string: {e}")
+                    return {"error": f"Failed to parse payload: {e}", "payload": payload}
+            else:
+                # If payload is already a dictionary, use it directly
+                logger.debug("Using provided payload dictionary")
+                request_body = payload
 
-            get_traces = GetTraces(**body)
+            # Import the GetTraces class
+            try:
+                from instana_client.models.get_traces import (
+                    GetTraces,
+                )
+                from instana_client.models.group import Group
+                logger.debug("Successfully imported GetTraces")
+            except ImportError as e:
+                logger.debug(f"Error importing GetTraces: {e}")
+                return {"error": f"Failed to import GetTraces: {e!s}"}
 
-            result = self.analyze_api.get_traces(
-                get_traces=get_traces
+            # Create an GetTraces object from the request body
+            try:
+                query_params = {}
+                if request_body and "tag_filter_expression" in request_body:
+                    query_params["tag_filter_expression"] = request_body["tag_filter_expression"]
+                logger.debug(f"Creating get_traces with params: {query_params}")
+                config_object = GetTraces(**query_params)
+                logger.debug("Successfully got traces")
+            except Exception as e:
+                logger.debug(f"Error creating get_traces: {e}")
+                return {"error": f"Failed to get tracest: {e!s}"}
+
+            # Call the get_traces method from the SDK
+            logger.debug("Calling get_traces with config object")
+            result = api_client.get_traces(
+                get_traces=config_object
             )
-
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
             else:
                 # If it's already a dict or another format, use it as is
-                result_dict = result
+                result_dict = result or {
+                    "success": True,
+                    "message": "Get traces"
+                }
 
-            logger.debug(f"Result from get_all_traces: {result_dict}")
-            # Ensure we return a dictionary
-            return dict(result_dict) if not isinstance(result_dict, dict) else result_dict
-
+            logger.debug(f"Result from get_traces: {result_dict}")
+            return result_dict
         except Exception as e:
-            logger.error(f"Error getting all traces: {e}", exc_info=True)
-            return {"error": f"Failed to get all traces: {e!s}"}
+            logger.error(f"Error in get_traces: {e}")
+            return {"error": f"Failed to get traces: {e!s}"}
 
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_grouped_trace_metrics(
         self,
-        group: Dict[str, Any],
-        metrics: List[Dict[str, str]],
-        includeInternal: Optional[bool] = None,
-        includeSynthetic: Optional[bool] = None,
+        payload: Optional[Union[Dict[str, Any], str]]=None,
         fill_time_series: Optional[bool] = None,
-        order: Optional[Dict[str, Any]] = None,
-        pagination: Optional[Dict[str, Any]] = None,
-        tagFilterExpression: Optional[Dict[str, Any]] = None,
-        timeFrame: Optional[Dict[str, int]] = None,
+        api_client=None,
         ctx=None
     ) -> Dict[str, Any]:
         """
@@ -240,79 +299,143 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         This tool Get grouped trace metrics (by endpoint or service name).
 
         Args:
-            group (Dict[str, Any]): Grouping definition with groupbyTag, groupbyTagEntity, etc.
-            metrics (List[Dict[str, str]]): List of metric configs with metric and aggregation.
-            includeInternal (Optional[bool]): Whether to include internal calls.
-            includeSynthetic (Optional[bool]): Whether to include synthetic calls.
             fillTimeSeries (Optional[bool]): Whether to fill missing data points with zeroes.
-            order (Optional[Dict[str, Any]]): Ordering configuration.
-            pagination (Optional[Dict[str, Any]]): Cursor-based pagination settings.
-            tagFilterExpression (Optional[Dict[str, Any]]): Tag filters.
-            timeFrame (Optional[Dict[str, int]]): Time window (to, windowSize).
+            Sample Payload: {
+            "group": {
+                "groupbyTag": "trace.endpoint.name",
+                "groupbyTagEntity": "NOT_APPLICABLE"
+            },
+            "metrics": [
+                {
+                "aggregation": "SUM",
+                "metric": "latency"
+                }
+            ],
+            "order": {
+                "by": "latency",
+                "direction": "ASC"
+            },
+            "pagination": {
+                "retrievalSize": 20
+            },
+            "tagFilterExpression": {
+                "type": "EXPRESSION",
+                "logicalOperator": "AND",
+                "elements": [
+                {
+                    "type": "TAG_FILTER",
+                    "name": "call.type",
+                    "operator": "EQUALS",
+                    "entity": "NOT_APPLICABLE",
+                    "value": "DATABASE"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "service.name",
+                    "operator": "EQUALS",
+                    "entity": "DESTINATION",
+                    "value": "ratings"
+                }
+                ]
+            }
+            }
             ctx: Optional execution context.
 
         Returns:
             Dict[str, Any]: Grouped trace metrics result.
         """
-
         try:
-            logger.debug("Calling trace group metrics API")
+            # Parse the payload if it's a string
+            if isinstance(payload, str):
+                logger.debug("Payload is a string, attempting to parse")
+                try:
+                    import json
+                    try:
+                        parsed_payload = json.loads(payload)
+                        logger.debug("Successfully parsed payload as JSON")
+                        request_body = parsed_payload
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
 
-            body = {
-                "group": group,
-                "metrics": metrics
-            }
+                        # Try replacing single quotes with double quotes
+                        fixed_payload = payload.replace("'", "\"")
+                        try:
+                            parsed_payload = json.loads(fixed_payload)
+                            logger.debug("Successfully parsed fixed JSON")
+                            request_body = parsed_payload
+                        except json.JSONDecodeError:
+                            # Try as Python literal
+                            import ast
+                            try:
+                                parsed_payload = ast.literal_eval(payload)
+                                logger.debug("Successfully parsed payload as Python literal")
+                                request_body = parsed_payload
+                            except (SyntaxError, ValueError) as e2:
+                                logger.debug(f"Failed to parse payload string: {e2}")
+                                return {"error": f"Invalid payload format: {e2}", "payload": payload}
+                except Exception as e:
+                    logger.debug(f"Error parsing payload string: {e}")
+                    return {"error": f"Failed to parse payload: {e}", "payload": payload}
+            else:
+                # If payload is already a dictionary, use it directly
+                logger.debug("Using provided payload dictionary")
+                request_body = payload
 
-            if includeInternal is not None:
-                body["includeInternal"] = includeInternal
-            if includeSynthetic is not None:
-                body["includeSynthetic"] = includeSynthetic
-            if fill_time_series is not None:
-                body["fillTimeSeries"] = fill_time_series
-            if order is not None:
-                body["order"] = order
-            if pagination is not None:
-                body["pagination"] = pagination
-            if tagFilterExpression is not None:
-                body["tagFilterExpression"] = tagFilterExpression
-            if timeFrame is not None:
-                body["timeFrame"] = timeFrame
+            # Import the GetTraceGroups class
+            try:
+                from instana_client.models.get_trace_groups import (
+                    GetTraceGroups,
+                )
+                from instana_client.models.group import Group
+                logger.debug("Successfully imported GetTraceGroups")
+            except ImportError as e:
+                logger.debug(f"Error importing GetTraceGroups: {e}")
+                return {"error": f"Failed to import GetTraceGroups: {e!s}"}
 
-            # Looking at how get_call_group is implemented below
-            # It seems the method might be different
-            if fill_time_series is not None:
-                body["fillTimeSeries"] = fill_time_series
+            # Create an GetTraceGroups object from the request body
+            try:
+                query_params = {}
+                if request_body and "group" in request_body:
+                    query_params["group"] = request_body["group"]
+                if request_body and "metrics" in request_body:
+                    query_params["metrics"] = request_body["metrics"]
+                if request_body and "tag_filter_expression" in request_body:
+                    query_params["tag_filter_expression"] = request_body["tag_filter_expression"]
+                logger.debug(f"Creating GetTraceGroups with params: {query_params}")
+                config_object = GetTraceGroups(**query_params)
+                logger.debug("Successfully created endpoint config object")
+            except Exception as e:
+                logger.debug(f"Error creating GetTraceGroups: {e}")
+                return {"error": f"Failed to create config object: {e!s}"}
 
-            GetTraces(**body)
-
-            # Call the API method - the actual parameter name doesn't matter in tests
-            # since the method is mocked
-            result = self.analyze_api.get_trace_groups()
-
-            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+            # Call the create_endpoint_config method from the SDK
+            logger.debug("Calling create_endpoint_config with config object")
+            result = api_client.get_trace_groups(
+                get_trace_groups=config_object
+            )
+            # Convert the result to a dictionary
+            if hasattr(result, 'to_dict'):
+                result_dict = result.to_dict()
+            else:
+                # If it's already a dict or another format, use it as is
+                result_dict = result or {
+                    "success": True,
+                    "message": "Grouped trace metrics"
+                }
 
             logger.debug(f"Result from get_grouped_trace_metrics: {result_dict}")
-            # Ensure we return a dictionary
-            return dict(result_dict) if not isinstance(result_dict, dict) else result_dict
-
+            return result_dict
         except Exception as e:
-            logger.error(f"Error in get_grouped_trace_metrics: {e}", exc_info=True)
+            logger.error(f"Error in get_grouped_trace_metrics: {e}")
             return {"error": f"Failed to get grouped trace metrics: {e!s}"}
 
-
-
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_grouped_calls_metrics(
         self,
-        group: Dict[str, Any],
-        metrics: List[Dict[str, str]],
-        includeInternal: Optional[bool] = None,
-        includeSynthetic: Optional[bool] = None,
-        fill_time_series: Optional[bool] = None,
-        order: Optional[Dict[str, Any]] = None,
-        pagination: Optional[Dict[str, Any]] = None,
-        tagFilterExpression: Optional[Dict[str, Any]] = None,
-        timeFrame: Optional[Dict[str, int]] = None,
+        fillTimeSeries: Optional[str] = None,
+        payload: Optional[Union[Dict[str, Any], str]]=None,
+        api_client = None,
         ctx=None
     ) -> Dict[str, Any]:
         """
@@ -320,64 +443,150 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         This endpoint retrieves the metrics for calls.
 
         Args:
-            group (Dict[str, Any]): Grouping definition with groupbyTag, groupbyTagEntity, etc.
-            metrics (List[Dict[str, str]]): List of metric configs with metric and aggregation.
-            includeInternal (Optional[bool]): Whether to include internal calls.
-            includeSynthetic (Optional[bool]): Whether to include synthetic calls.
             fillTimeSeries (Optional[bool]): Whether to fill missing data points with zeroes.
-            order (Optional[Dict[str, Any]]): Ordering configuration.
-            pagination (Optional[Dict[str, Any]]): Cursor-based pagination settings.
-            tagFilterExpression (Optional[Dict[str, Any]]): Tag filters.
-            timeFrame (Optional[Dict[str, int]]): Time window (to, windowSize).
+            Sample payload: {
+            "group": {
+                "groupbyTag": "service.name",
+                "groupbyTagEntity": "DESTINATION"
+            },
+            "metrics": [
+                {
+                "aggregation": "SUM",
+                "metric": "calls"
+                },
+                {
+                "aggregation": "P75",
+                "metric": "latency",
+                "granularity": 360
+                }
+            ],
+            "includeInternal": false,
+            "includeSynthetic": false,
+            "order": {
+                "by": "calls",
+                "direction": "DESC"
+            },
+            "pagination": {
+                "retrievalSize": 20
+            },
+            "tagFilterExpression": {
+                "type": "EXPRESSION",
+                "logicalOperator": "AND",
+                "elements": [
+                {
+                    "type": "TAG_FILTER",
+                    "name": "call.type",
+                    "operator": "EQUALS",
+                    "entity": "NOT_APPLICABLE",
+                    "value": "DATABASE"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "service.name",
+                    "operator": "EQUALS",
+                    "entity": "DESTINATION",
+                    "value": "ratings"
+                }
+                ]
+            },
+            "timeFrame": {
+                "to": "1688366990000",
+                "windowSize": "600000"
+            }
+            }
             ctx: Optional execution context.
 
         Returns:
             Dict[str, Any]: Grouped trace metrics result.
         """
-
         try:
-            logger.debug("Calling call group metrics API")
+            # Parse the payload if it's a string
+            if isinstance(payload, str):
+                logger.debug("Payload is a string, attempting to parse")
+                try:
+                    import json
+                    try:
+                        parsed_payload = json.loads(payload)
+                        logger.debug("Successfully parsed payload as JSON")
+                        request_body = parsed_payload
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
 
-            body = {
-                "group": group,
-                "metrics": metrics
-            }
+                        # Try replacing single quotes with double quotes
+                        fixed_payload = payload.replace("'", "\"")
+                        try:
+                            parsed_payload = json.loads(fixed_payload)
+                            logger.debug("Successfully parsed fixed JSON")
+                            request_body = parsed_payload
+                        except json.JSONDecodeError:
+                            # Try as Python literal
+                            import ast
+                            try:
+                                parsed_payload = ast.literal_eval(payload)
+                                logger.debug("Successfully parsed payload as Python literal")
+                                request_body = parsed_payload
+                            except (SyntaxError, ValueError) as e2:
+                                logger.debug(f"Failed to parse payload string: {e2}")
+                                return {"error": f"Invalid payload format: {e2}", "payload": payload}
+                except Exception as e:
+                    logger.debug(f"Error parsing payload string: {e}")
+                    return {"error": f"Failed to parse payload: {e}", "payload": payload}
+            else:
+                # If payload is already a dictionary, use it directly
+                logger.debug("Using provided payload dictionary")
+                request_body = payload
 
-            if includeInternal is not None:
-                body["includeInternal"] = includeInternal
-            if includeSynthetic is not None:
-                body["includeSynthetic"] = includeSynthetic
-            if fill_time_series is not None:
-                body["fillTimeSeries"] = fill_time_series
-            if order is not None:
-                body["order"] = order
-            if pagination is not None:
-                body["pagination"] = pagination
-            if tagFilterExpression is not None:
-                body["tagFilterExpression"] = tagFilterExpression
-            if timeFrame is not None:
-                body["timeFrame"] = timeFrame
+            # Import the GetCallGroups class
+            try:
+                from instana_client.models.get_call_groups import (
+                    GetCallGroups,
+                )
+                from instana_client.models.group import Group
+                logger.debug("Successfully imported GetCallGroups")
+            except ImportError as e:
+                logger.debug(f"Error importing GetCallGroups: {e}")
+                return {"error": f"Failed to import GetCallGroups: {e!s}"}
 
-            GetCallGroups(**body)
+            # Create an GetCallGroups object from the request body
+            try:
+                query_params = {}
+                if request_body and "group" in request_body:
+                    query_params["group"] = request_body["group"]
+                logger.debug(f"Creating GetCallGroups with params: {query_params}")
+                config_object = GetCallGroups(**query_params)
+                logger.debug("Successfully created endpoint config object")
+            except Exception as e:
+                logger.debug(f"Error creating GetTraceGroups: {e}")
+                return {"error": f"Failed to create config object: {e!s}"}
 
-            # Call the API method - the actual parameter name doesn't matter in tests
-            # since the method is mocked
-            result = self.analyze_api.get_call_group()
+            # Call the get_call_groups method from the SDK
+            logger.debug("Calling get_call_groups with config object")
+            result = api_client.get_call_group(
+                get_call_groups=config_object
+            )
+            # Convert the result to a dictionary
+            if hasattr(result, 'to_dict'):
+                result_dict = result.to_dict()
+            else:
+                # If it's already a dict or another format, use it as is
+                result_dict = result or {
+                    "success": True,
+                    "message": "Get Grouped call"
+                }
 
-            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
-
-            logger.debug(f"Result from get_grouped_calls_metrics: {result_dict}")
-            # Ensure we return a dictionary
-            return dict(result_dict) if not isinstance(result_dict, dict) else result_dict
-
+            logger.debug(f"Result from get_call_group: {result_dict}")
+            return result_dict
         except Exception as e:
-            logger.error(f"Error in get_grouped_calls_metrics: {e}", exc_info=True)
-            return {"error": f"Failed to get grouped calls metrics: {e!s}"}
+            logger.error(f"Error in get_call_group: {e}")
+            return {"error": f"Failed to get grouped call: {e!s}"}
+
 
     @register_as_tool
+    @with_header_auth(ApplicationAnalyzeApi)
     async def get_correlated_traces(
         self,
         correlation_id: str,
+        api_client = None,
         ctx=None
     ) -> Dict[str, Any]:
         """
@@ -397,7 +606,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 logger.warning(error_msg)
                 return {"error": error_msg}
 
-            result = self.analyze_api.get_correlated_traces(
+            result = api_client.get_correlated_traces(
                 correlation_id=correlation_id
             )
 
