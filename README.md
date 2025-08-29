@@ -207,7 +207,7 @@ uv run src/core/server.py [OPTIONS]
 - `--log-level <level>`: Set the logging level (choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
 - `--list-tools`: List all available tool categories and exit
-- `--port <port>`: Port to listen on (default: 8000)
+- `--port <port>`: Port to listen on (default: 8080)
 - `--help`: Show help message and exit
 
 ### Starting in Streamable HTTP Mode
@@ -256,8 +256,8 @@ uv run src/core/server.py --transport streamable-http --log-level DEBUG --tools 
 - Uses HTTP headers for authentication (no environment variables needed)
 - Supports different credentials per request
 - Better suited for shared environments
-- Default port: 8000
-- Endpoint: `http://0.0.0.0:8000/mcp/`
+- Default port: 8080
+- Endpoint: `http://0.0.0.0:8080/mcp/`
 
 ### Starting in Stdio Mode
 
@@ -334,7 +334,7 @@ Once started, you can verify the server is running:
 **For Streamable HTTP mode:**
 ```bash
 # Check server health
-curl http://0.0.0.0:8000/mcp/
+curl http://0.0.0.0:8080/mcp/
 
 # Or with custom port
 curl http://0.0.0.0:9000/mcp/
@@ -353,7 +353,7 @@ If you encounter SSL certificate errors, ensure your Python environment has acce
 ```
 
 **Port Already in Use:**
-If port 8000 is already in use, specify a different port:
+If port 8080 is already in use, specify a different port:
 ```bash
 uv run src/core/server.py --transport streamable-http --port 9000
 ```
@@ -394,7 +394,7 @@ Configure Claude Desktop to pass Instana credentials via headers:
     "Instana MCP Server": {
       "command": "npx",
       "args": [
-        "mcp-remote", "http://0.0.0.0:8000/mcp/",
+        "mcp-remote", "http://0.0.0.0:8080/mcp/",
         "--allow-http",
         "--header", "instana-base-url: https://your-instana-instance.instana.io",
         "--header", "instana-api-token: your_instana_api_token"
@@ -486,7 +486,7 @@ You can directly create or update `.vscode/mcp.json` with the following configur
     "Instana MCP Server": {
       "command": "npx",
       "args": [
-        "mcp-remote", "http://0.0.0.0:8000/mcp/",
+        "mcp-remote", "http://0.0.0.0:8080/mcp/",
         "--allow-http",
         "--header", "instana-base-url: https://your-instana-instance.instana.io",
         "--header", "instana-api-token: your_instana_api_token"
