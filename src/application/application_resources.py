@@ -10,7 +10,9 @@ from typing import Any, Dict, List, Optional
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.application_resources_api import ApplicationResourcesApi
+    from instana_client.api.application_resources_api import (
+        ApplicationResourcesApi,
+    )
 
 except ImportError as e:
     import logging

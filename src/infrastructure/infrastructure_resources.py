@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.infrastructure_resources_api import (
+    from instana_client.api.infrastructure_resources_api import (  #type: ignore
         InfrastructureResourcesApi,
     )
     # Check if GetSnapshotsQuery exists, otherwise we'll handle it differently
@@ -411,7 +411,9 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             logger.debug(f"Using to_time={to_time}, window_size={window_size}")
 
             if has_get_snapshots_query:
-                from instana_client.models.get_snapshots_query import GetSnapshotsQuery
+                from instana_client.models.get_snapshots_query import (
+                    GetSnapshotsQuery,  #type: ignore
+                )
 
                 query_obj = GetSnapshotsQuery(
                     snapshot_ids=snapshot_ids,
@@ -594,8 +596,8 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
                     # Limit the number of items to return
                     if items_count > 10:
-                        result_dict['summary'] = f"Showing 10 of {items_count} items"
-                        result_dict['items'] = result_dict['items'][:10]
+                        result_dict['summary'] = f"Showing 10 of {items_count} items" #type: ignore
+                        result_dict['items'] = result_dict['items'][:10] #type: ignore
 
                 # If tagTree exists, extract tag names
                 if 'tagTree' in result_dict and isinstance(result_dict['tagTree'], list):
@@ -612,7 +614,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                                     })
 
                     # Replace the large tagTree with the extracted tag names
-                    result_dict['tagNames'] = tag_names
+                    result_dict['tagNames'] = tag_names #type: ignore
                     del result_dict['tagTree']
 
             return result_dict

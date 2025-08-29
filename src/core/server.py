@@ -131,7 +131,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MCPState]:
         # Yield empty state if client creation failed
         yield MCPState()
 
-def create_app(token: str, base_url: str, port: int = 8000, enabled_categories: str = "all") -> tuple[FastMCP, int]:
+def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "8080")), enabled_categories: str = "all") -> tuple[FastMCP, int]:
     """Create and configure the MCP server with the given credentials."""
     try:
         server = FastMCP(name="Instana MCP Server", host="0.0.0.0", port=port)
@@ -234,6 +234,8 @@ def get_client_categories():
         from src.application.application_resources import ApplicationResourcesMCPTools
         from src.application.application_settings import ApplicationSettingsMCPTools
         from src.application.application_topology import ApplicationTopologyMCPTools
+        from src.automation.action_catalog import ActionCatalogMCPTools
+        from src.automation.action_history import ActionHistoryMCPTools
         from src.event.events_tools import AgentMonitoringEventsMCPTools
         from src.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzeMCPTools,
@@ -274,6 +276,10 @@ def get_client_categories():
         ],
         "events": [
             ('events_client', AgentMonitoringEventsMCPTools),
+        ],
+        "automation": [
+            ('action_catalog_client', ActionCatalogMCPTools),
+            ('action_history_client', ActionHistoryMCPTools),
         ]
     }
 
@@ -389,7 +395,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -399,8 +405,8 @@ def main():
         parser.add_argument(
             "--port",
             type=int,
-            default=8000,
-            help="Port to listen on (default: 8000)"
+            default=int(os.getenv("PORT", "8080")),
+            help="Port to listen on (default: 8080, can be overridden with PORT env var)"
         )
         # Check for help arguments before parsing
         if len(sys.argv) > 1 and any(arg in ['-h','--h','--help','-help'] for arg in sys.argv[1:]):
@@ -436,7 +442,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"infra", "app", "events"}
+        all_categories = {"infra", "app", "events", "automation"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -498,6 +504,8 @@ def main():
         # Create and configure the MCP server
         try:
             enabled_categories = ",".join(enabled)
+            # Ensure create_app is always called, even if credentials are missing
+            # This is needed for test_main_function_missing_token
             app, registered_tool_count = create_app(INSTANA_API_TOKEN, INSTANA_BASE_URL, args.port, enabled_categories)
         except Exception as e:
             print(f"Failed to create MCP server: {e}", file=sys.stderr)

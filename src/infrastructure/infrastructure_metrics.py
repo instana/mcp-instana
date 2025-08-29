@@ -18,8 +18,12 @@ from src.core.utils import (
 )
 
 try:
-    from instana_client.api.infrastructure_metrics_api import InfrastructureMetricsApi
-    from instana_client.models.get_combined_metrics import GetCombinedMetrics
+    from instana_client.api.infrastructure_metrics_api import (
+        InfrastructureMetricsApi,
+    )
+    from instana_client.models.get_combined_metrics import (
+        GetCombinedMetrics,
+    )
 except ImportError as e:
     import logging
     logger = logging.getLogger(__name__)

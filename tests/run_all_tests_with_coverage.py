@@ -10,7 +10,7 @@ import os
 import sys
 from typing import List, Optional
 
-import coverage  # type: ignore
+import coverage
 
 # Import the run_all_tests function from run_all_tests.py
 from tests.run_all_tests import run_all_tests

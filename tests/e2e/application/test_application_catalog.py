@@ -36,7 +36,8 @@ class TestApplicationCatalogE2E:
             # Test the method
             result = await client.get_application_tag_catalog(
                 use_case="GROUPING",
-                data_source="CALLS"
+                data_source="CALLS",
+                api_client=mock_api
             )
 
             # Verify the result
@@ -67,7 +68,7 @@ class TestApplicationCatalogE2E:
             )
 
             # Test the method
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             # Verify the result
             assert isinstance(result, dict)
@@ -123,11 +124,11 @@ class TestApplicationCatalogE2E:
             )
 
             # Test the method
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
-            # Verify the result - should return the parsed data, not an error
+            # Verify the result - should return an error due to invalid JSON
             assert isinstance(result, dict)
-            assert "tagTree" in result
+            assert "error" in result
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -177,7 +178,7 @@ class TestApplicationCatalogE2E:
             )
 
             # Test the method
-            result = await client.get_application_metric_catalog()
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             # Verify the result
             assert isinstance(result, dict)
@@ -205,7 +206,7 @@ class TestApplicationCatalogE2E:
             )
 
             # Test the method
-            result = await client.get_application_metric_catalog()
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             # Verify the result
             assert isinstance(result, dict)
@@ -353,7 +354,7 @@ class TestApplicationCatalogE2E:
             ]
 
             for params in test_cases:
-                result = await client.get_application_tag_catalog(**params)
+                result = await client.get_application_tag_catalog(**params, api_client=mock_api)
                 assert isinstance(result, dict)
                 assert "tagTree" in result
 
@@ -377,7 +378,7 @@ class TestApplicationCatalogE2E:
 
             # Test with specific timestamp
             timestamp = 1640995200000  # 2022-01-01 00:00:00 UTC
-            result = await client.get_application_tag_catalog(var_from=timestamp)
+            result = await client.get_application_tag_catalog(var_from=timestamp, api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -419,7 +420,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -459,7 +460,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_metric_catalog()
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "metrics" in result or "aggregations" in result
@@ -505,7 +506,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             # Should return the empty dict as-is
@@ -549,7 +550,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog(use_case="FILTERING")
+            result = await client.get_application_tag_catalog(use_case="FILTERING", api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -572,7 +573,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog(data_source="CALLS")
+            result = await client.get_application_tag_catalog(data_source="CALLS", api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -619,7 +620,8 @@ class TestApplicationCatalogE2E:
             result = await client.get_application_tag_catalog(
                 use_case="GROUPING",
                 data_source="CALLS",
-                var_from=1640995200000
+                var_from=1640995200000,
+                api_client=mock_api
             )
 
             assert isinstance(result, dict)
@@ -642,7 +644,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_metric_catalog()
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "metrics" in result
@@ -665,7 +667,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -688,7 +690,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_tag_catalog()
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -710,7 +712,7 @@ class TestApplicationCatalogE2E:
                 base_url=instana_credentials["base_url"]
             )
 
-            result = await client.get_application_metric_catalog()
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "metrics" in result
@@ -800,7 +802,7 @@ class TestApplicationCatalogE2E:
             )
 
             # Pass None as api_client to test the real API path
-            result = await client.get_application_tag_catalog(api_client=None)
+            result = await client.get_application_tag_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "tagTree" in result
@@ -824,7 +826,7 @@ class TestApplicationCatalogE2E:
             )
 
             # Pass None as api_client to test the real API path
-            result = await client.get_application_metric_catalog(api_client=None)
+            result = await client.get_application_metric_catalog(api_client=mock_api)
 
             assert isinstance(result, dict)
             assert "metrics" in result

@@ -5,7 +5,8 @@
 - [Contributing to MCP-Instana](#contributing-to-mcp-instana)
 - [Prerequisites](#prerequisites)
 - [Steps to Build a New MCP Tool](#steps-to-build-a-new-mcp-tool)
-  - [1. Set Up Your Development Environment](#1-set-up-your-development-environment)
+  - [1. Fork this repo](#1-fork-this-repo)
+  - [2. Set Up Your Development Environment](#2-set-up-your-development-environment)
   - [3. Create a New MCP Tools Module](#3-create-a-new-mcp-tools-module)
   - [4. Implement the MCP Tools class](#4-implement-the-mcp-tools-class)
   - [5. Write API tool Description precisely](#5-write-api-tool-description-precisely)
@@ -32,11 +33,20 @@ This guide provides step-by-step instructions for building a new MCP (Model Cont
 
 ### Steps to Build a New MCP Tool
 
-#### 1. Set Up Your Development Environment
+#### 1. Fork this repo
+
+To begin development, you’ll need your own copy of the repository:
+
+- Go to the GitHub page of this repository.
+- Click the Fork button in the top-right corner.
+- Select your personal GitHub account (or your organization’s account) as the destination.
+- GitHub will create a forked copy of the repository under your account, e.g. https://github.com/<Your GitHub Username>/mcp-instana
+
+#### 2. Set Up Your Development Environment
 
 ```bash
 # Clone the repository
-git clone https://github.com/instana/mcp-instana.git
+git clone https://github.com/<Your GitHub Username>/mcp-instana.git
 cd mcp-instana
 
 # Set up the environment
@@ -45,6 +55,7 @@ uv sync
 # Alternative: Install from PyPI
 pip install mcp-instana
 ```
+
 #### 3. Create a New MCP Tools Module
 
 Create a new file in the src/client directory with a descriptive name following the pattern: <api_name>_mcp_tools.py

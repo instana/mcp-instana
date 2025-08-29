@@ -10,9 +10,11 @@ from typing import Any, Dict, Optional
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.infrastructure_topology_api import InfrastructureTopologyApi
-    from instana_client.api_client import ApiClient
-    from instana_client.configuration import Configuration
+    from instana_client.api.infrastructure_topology_api import (
+        InfrastructureTopologyApi,  #type: ignore
+    )
+    from instana_client.api_client import ApiClient  #type: ignore
+    from instana_client.configuration import Configuration  #type: ignore
 
 except ImportError:
     import logging

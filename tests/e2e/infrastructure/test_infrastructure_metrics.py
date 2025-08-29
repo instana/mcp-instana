@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+import pytest  #type: ignore
 
 from src.core.server import MCPState, execute_tool
 from src.infrastructure.infrastructure_metrics import InfrastructureMetricsMCPTools
@@ -64,7 +64,8 @@ class TestInfrastructureMetricsE2E:
             result = await client.get_infrastructure_metrics(
                 metrics=metrics,
                 plugin=plugin,
-                query=query
+                query=query,
+                api_client=mock_api
             )
 
             # Verify the result
@@ -124,7 +125,8 @@ class TestInfrastructureMetricsE2E:
                 query=query,
                 time_frame=time_frame,
                 rollup=rollup,
-                offline=offline
+                offline=offline,
+                api_client=mock_api
             )
 
             # Verify the result
@@ -306,7 +308,8 @@ class TestInfrastructureMetricsE2E:
             result = await client.get_infrastructure_metrics(
                 metrics=metrics,
                 plugin=plugin,
-                query=query
+                query=query,
+                api_client=mock_api
             )
 
             # Verify the result is properly formatted
@@ -464,7 +467,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_snapshot_ids_string(self, instana_credentials):
+    async def test_snapshot_ids_string(self, instana_credentials): #type: ignore
         """Test get_infrastructure_metrics with snapshot_ids as a string."""
 
         # Mock the API response
@@ -509,7 +512,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_snapshot_ids_invalid_type(self, instana_credentials):
+    async def test_snapshot_ids_invalid_type(self, instana_credentials): #type: ignore
         """Test get_infrastructure_metrics with invalid snapshot_ids type."""
 
         with patch('src.infrastructure.infrastructure_metrics.InfrastructureMetricsApi.get_infrastructure_metrics',
@@ -542,7 +545,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_result_conversion_dict(self, instana_credentials):
+    async def test_result_conversion_dict(self, instana_credentials): #type: ignore
         """Test result conversion when result is already a dict."""
 
         # Mock the API response as a dict
@@ -585,7 +588,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_result_conversion_other_type(self, instana_credentials):
+    async def test_result_conversion_other_type(self, instana_credentials): #type: ignore
         """Test result conversion when result is neither dict, list, nor has to_dict method."""
 
         # Mock the API response as a string
@@ -657,7 +660,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_nested_structure_limiting(self, instana_credentials):
+    async def test_nested_structure_limiting(self, instana_credentials): #type: ignore
         """Test limiting of nested structures in the result."""
 
         # Mock the API response with nested lists
@@ -694,7 +697,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_json_serialization_error(self, instana_credentials):
+    async def test_json_serialization_error(self, instana_credentials): #type: ignore
         """Test handling of JSON serialization errors."""
 
         # Create a mock result that can't be JSON serialized
@@ -735,7 +738,7 @@ class TestInfrastructureMetricsE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_exception_handling(self, instana_credentials):
+    async def test_exception_handling(self, instana_credentials): #type: ignore
         """Test exception handling in get_infrastructure_metrics."""
 
         with patch('src.infrastructure.infrastructure_metrics.InfrastructureMetricsApi.get_infrastructure_metrics',

@@ -10,7 +10,9 @@ from typing import Any, Dict, Optional, Union
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.infrastructure_analyze_api import InfrastructureAnalyzeApi
+    from instana_client.api.infrastructure_analyze_api import (
+        InfrastructureAnalyzeApi,
+    )
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
     from instana_client.models.get_available_metrics_query import (
@@ -22,7 +24,9 @@ try:
     from instana_client.models.get_infrastructure_groups_query import (
         GetInfrastructureGroupsQuery,
     )
-    from instana_client.models.get_infrastructure_query import GetInfrastructureQuery
+    from instana_client.models.get_infrastructure_query import (
+        GetInfrastructureQuery,
+    )
 except ImportError as e:
     import logging
     logger = logging.getLogger(__name__)
@@ -271,7 +275,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
             # Create the GetInfrastructureQuery object
             try:
                 # Create the query object directly from the request body
-                get_infra_query = GetInfrastructureQuery(**request_body)
+                get_infra_query = GetInfrastructureQuery(**request_body) #type: ignore
                 logger.debug("Successfully created GetInfrastructureQuery object")
             except Exception as model_error:
                 error_msg = f"Failed to create GetInfrastructureQuery object: {model_error}"

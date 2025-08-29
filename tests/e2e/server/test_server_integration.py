@@ -594,14 +594,14 @@ class TestMCPServerIntegrationE2E:
                 mock_state.app_resource_client.get_applications = MagicMock()
                 mock_create_clients.return_value = mock_state
 
-                with patch('src.core.server.register_prompts') as mock_register_prompts:
-                    server, tool_count = create_app(
-                        instana_credentials["api_token"],
-                        instana_credentials["base_url"]
-                    )
+                server, tool_count = create_app(
+                    instana_credentials["api_token"],
+                    instana_credentials["base_url"]
+                )
 
-                    assert server is not None
-                    mock_register_prompts.assert_called_once_with(mock_server)
+                assert server is not None
+                # Verify that add_prompt was called on the server (prompt registration happens internally)
+                mock_server.add_prompt.assert_called()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -830,6 +830,8 @@ class TestMCPServerIntegrationE2E:
         """Test create_app when prompt registration fails."""
         with patch('src.core.server.FastMCP') as mock_fastmcp:
             mock_server = MagicMock()
+            # Make add_prompt raise an exception to simulate prompt registration failure
+            mock_server.add_prompt.side_effect = Exception("Prompt registration failed")
             mock_fastmcp.return_value = mock_server
 
             with patch('src.core.server.create_clients') as mock_create_clients:
@@ -838,14 +840,13 @@ class TestMCPServerIntegrationE2E:
                 mock_state.app_resource_client.get_applications = MagicMock()
                 mock_create_clients.return_value = mock_state
 
-                with patch('src.core.server.register_prompts', side_effect=Exception("Prompt registration failed")):
-                    server, tool_count = create_app(
-                        instana_credentials["api_token"],
-                        instana_credentials["base_url"]
-                    )
+                server, tool_count = create_app(
+                    instana_credentials["api_token"],
+                    instana_credentials["base_url"]
+                )
 
-                    assert server is not None
-                    assert isinstance(tool_count, int)
+                assert server is not None
+                assert isinstance(tool_count, int)
 
     @pytest.mark.asyncio
     @pytest.mark.mocked

@@ -414,7 +414,8 @@ class TestApplicationTopologyE2E:
 
         # Verify that the module has proper import error handling
         assert "try:" in source_code
-        assert "from instana_client.api.application_topology_api import ApplicationTopologyApi" in source_code
+        assert "from instana_client.api.application_topology_api import (" in source_code
+        assert "ApplicationTopologyApi" in source_code
         assert "except ImportError as e:" in source_code
         assert "logger.error(f\"Error importing Instana SDK: {e}\"" in source_code
         assert "traceback.print_exc" in source_code

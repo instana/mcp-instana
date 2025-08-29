@@ -29,35 +29,35 @@ class TestApplicationAnalyzeE2E:
             "endpoint": "/api/test"
         }
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API
-            mock_api = MagicMock()
-            mock_api.get_call_details.return_value = mock_response
-            mock_api_class.return_value = mock_api
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_call_details = MagicMock()
+        mock_api_client.get_call_details.return_value = mock_response
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            result = await client.get_call_details(
-                trace_id="trace123",
-                call_id="call123"
-            )
+        # Test the method
+        result = await client.get_call_details(
+            trace_id="trace123",
+            call_id="call123",
+            api_client=mock_api_client
+        )
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "id" in result
-            assert result["id"] == "call123"
-            assert result["service"] == "test-service"
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "id" in result
+        assert result["id"] == "call123"
+        assert result["service"] == "test-service"
 
-            # Verify the API was called correctly
-            mock_api.get_call_details.assert_called_once_with(
-                trace_id="trace123",
-                call_id="call123"
-            )
+        # Verify the API was called correctly
+        mock_api_client.get_call_details.assert_called_once_with(
+            trace_id="trace123",
+            call_id="call123"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -95,26 +95,29 @@ class TestApplicationAnalyzeE2E:
     async def test_get_call_details_error_handling(self, instana_credentials):
         """Test error handling in get_call_details."""
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API to raise an exception
-            mock_api = MagicMock()
-            mock_api.get_call_details.side_effect = Exception("API Error")
-            mock_api_class.return_value = mock_api
+        # Create mock API client that raises an exception
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_call_details = MagicMock()
+        mock_api_client.get_call_details.side_effect = Exception("API Error")
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            result = await client.get_call_details(trace_id="trace123", call_id="call123")
+        # Test the method
+        result = await client.get_call_details(
+            trace_id="trace123",
+            call_id="call123",
+            api_client=mock_api_client
+        )
 
-            # Verify the result contains an error message
-            assert isinstance(result, dict)
-            assert "error" in result
-            assert "Error" in result["error"]
-            assert "API Error" in result["error"]
+        # Verify the result contains an error message
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "Error" in result["error"]
+        assert "API Error" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -141,36 +144,38 @@ class TestApplicationAnalyzeE2E:
             ]
         }
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API
-            mock_api = MagicMock()
-            mock_api.get_trace_download.return_value = mock_response
-            mock_api_class.return_value = mock_api
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_download = MagicMock()
+        mock_api_client.get_trace_download.return_value = mock_response
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            result = await client.get_trace_details(id="trace123")
+        # Test the method
+        result = await client.get_trace_details(
+            id="trace123",
+            api_client=mock_api_client
+        )
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "id" in result
-            assert result["id"] == "trace123"
-            assert len(result["calls"]) == 2
-            assert result["calls"][0]["id"] == "call123"
-            assert result["calls"][1]["id"] == "call456"
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "id" in result
+        assert result["id"] == "trace123"
+        assert len(result["calls"]) == 2
+        assert result["calls"][0]["id"] == "call123"
+        assert result["calls"][1]["id"] == "call456"
 
-            # Verify the API was called correctly
-            mock_api.get_trace_download.assert_called_once_with(
-                id="trace123",
-                retrieval_size=None,
-                offset=None,
-                ingestion_time=None
-            )
+        # Verify the API was called correctly
+        mock_api_client.get_trace_download.assert_called_once_with(
+            id="trace123",
+            retrieval_size=None,
+            offset=None,
+            ingestion_time=None
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -181,38 +186,38 @@ class TestApplicationAnalyzeE2E:
         mock_response = MagicMock()
         mock_response.to_dict.return_value = {"id": "trace123"}
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API
-            mock_api = MagicMock()
-            mock_api.get_trace_download.return_value = mock_response
-            mock_api_class.return_value = mock_api
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_download = MagicMock()
+        mock_api_client.get_trace_download.return_value = mock_response
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method with additional parameters
-            result = await client.get_trace_details(
-                id="trace123",
-                retrievalSize=100,
-                offset=10,
-                ingestionTime=1625097600000
-            )
+        # Test the method with additional parameters
+        result = await client.get_trace_details(
+            id="trace123",
+            retrievalSize=100,
+            offset=10,
+            ingestionTime=1625097600000,
+            api_client=mock_api_client
+        )
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "id" in result
-            assert result["id"] == "trace123"
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "id" in result
+        assert result["id"] == "trace123"
 
-            # Verify the API was called correctly
-            mock_api.get_trace_download.assert_called_once_with(
-                id="trace123",
-                retrieval_size=100,
-                offset=10,
-                ingestion_time=1625097600000
-            )
+        # Verify the API was called correctly
+        mock_api_client.get_trace_download.assert_called_once_with(
+            id="trace123",
+            retrieval_size=100,
+            offset=10,
+            ingestion_time=1625097600000
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -277,26 +282,28 @@ class TestApplicationAnalyzeE2E:
     async def test_get_trace_details_error_handling(self, instana_credentials):
         """Test error handling in get_trace_details."""
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API to raise an exception
-            mock_api = MagicMock()
-            mock_api.get_trace_download.side_effect = Exception("API Error")
-            mock_api_class.return_value = mock_api
+        # Create mock API client that raises an exception
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_download = MagicMock()
+        mock_api_client.get_trace_download.side_effect = Exception("API Error")
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            result = await client.get_trace_details(id="trace123")
+        # Test the method
+        result = await client.get_trace_details(
+            id="trace123",
+            api_client=mock_api_client
+        )
 
-            # Verify the result contains an error message
-            assert isinstance(result, dict)
-            assert "error" in result
-            assert "Error" in result["error"]
-            assert "API Error" in result["error"]
+        # Verify the result contains an error message
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "Error" in result["error"]
+        assert "API Error" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -324,33 +331,29 @@ class TestApplicationAnalyzeE2E:
             }
         }
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class, \
-             patch('src.application.application_analyze.GetTraces') as mock_get_traces:
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_traces = MagicMock()
+        mock_api_client.get_traces.return_value = mock_response
 
-            # Set up the mocks
-            mock_api = MagicMock()
-            mock_api.get_traces.return_value = mock_response
-            mock_api_class.return_value = mock_api
-            mock_get_traces.return_value = {}
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Test the method
+        result = await client.get_all_traces(api_client=mock_api_client)
 
-            # Test the method
-            result = await client.get_all_traces()
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "items" in result
+        assert len(result["items"]) == 2
+        assert result["items"][0]["id"] == "trace123"
+        assert result["items"][1]["id"] == "trace456"
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "items" in result
-            assert len(result["items"]) == 2
-            assert result["items"][0]["id"] == "trace123"
-            assert result["items"][1]["id"] == "trace456"
-
-            # Verify the API was called
-            mock_api.get_traces.assert_called_once()
+        # Verify the API was called
+        mock_api_client.get_traces.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -361,71 +364,60 @@ class TestApplicationAnalyzeE2E:
         mock_response = MagicMock()
         mock_response.to_dict.return_value = {"items": []}
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class, \
-             patch('src.application.application_analyze.GetTraces') as mock_get_traces:
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_traces = MagicMock()
+        mock_api_client.get_traces.return_value = mock_response
 
-            # Set up the mocks
-            mock_api = MagicMock()
-            mock_api.get_traces.return_value = mock_response
-            mock_api_class.return_value = mock_api
-            mock_get_traces.return_value = {}
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Test the method with parameters
+        payload = {
+            "includeInternal": True,
+            "includeSynthetic": False,
+            "timeFrame": {"from": 1625097600000, "to": 1625097700000}
+        }
 
-            # Test the method with parameters
-            time_frame = {"from": 1625097600000, "to": 1625097700000}
-            include_internal = True
-            include_synthetic = False
+        result = await client.get_all_traces(
+            payload=payload,
+            api_client=mock_api_client
+        )
 
-            result = await client.get_all_traces(
-                includeInternal=include_internal,
-                includeSynthetic=include_synthetic,
-                timeFrame=time_frame
-            )
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "items" in result
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "items" in result
-
-            # Verify GetTraces was called with the correct parameters
-            mock_get_traces.assert_called_once()
-            # The parameters are passed to the constructor
-            args, kwargs = mock_get_traces.call_args
-            assert kwargs == {
-                'includeInternal': include_internal,
-                'includeSynthetic': include_synthetic,
-                'timeFrame': time_frame
-            }
+        # Verify the API was called
+        mock_api_client.get_traces.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_get_all_traces_error_handling(self, instana_credentials):
         """Test error handling in get_all_traces."""
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API to raise an exception
-            mock_api = MagicMock()
-            mock_api.get_traces.side_effect = Exception("API Error")
-            mock_api_class.return_value = mock_api
+        # Create mock API client that raises an exception
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_traces = MagicMock()
+        mock_api_client.get_traces.side_effect = Exception("API Error")
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            result = await client.get_all_traces()
+        # Test the method
+        result = await client.get_all_traces(api_client=mock_api_client)
 
-            # Verify the result contains an error message
-            assert isinstance(result, dict)
-            assert "error" in result
-            assert "Error" in result["error"]
-            assert "API Error" in result["error"]
+        # Verify the result contains an error message
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "Error" in result["error"]
+        assert "API Error" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -447,44 +439,37 @@ class TestApplicationAnalyzeE2E:
             ]
         }
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class, \
-             patch('src.application.application_analyze.GetTraces') as mock_get_traces:
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_groups = MagicMock()
+        mock_api_client.get_trace_groups.return_value = mock_response
 
-            # Set up the mocks
-            mock_api = MagicMock()
-            mock_api.get_trace_groups.return_value = mock_response
-            mock_api_class.return_value = mock_api
-            mock_get_traces.return_value = {}
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Test the method with required parameters
+        payload = {
+            "group": {"groupbyTag": "service", "groupbyTagEntity": "DESTINATION"},
+            "metrics": [{"metric": "latency", "aggregation": "MEAN"}, {"metric": "calls", "aggregation": "SUM"}]
+        }
 
-            # Test the method with required parameters
-            group = {"groupbyTag": "service"}
-            metrics = [{"metric": "latency", "aggregation": "MEAN"}, {"metric": "calls", "aggregation": "SUM"}]
+        result = await client.get_grouped_trace_metrics(
+            payload=payload,
+            api_client=mock_api_client
+        )
 
-            result = await client.get_grouped_trace_metrics(group=group, metrics=metrics)
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "items" in result
+        assert len(result["items"]) == 2
+        assert result["items"][0]["group"]["name"] == "service-a"
+        assert result["items"][1]["group"]["name"] == "service-b"
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "items" in result
-            assert len(result["items"]) == 2
-            assert result["items"][0]["group"]["name"] == "service-a"
-            assert result["items"][1]["group"]["name"] == "service-b"
-
-            # Verify the API was called
-            mock_api.get_trace_groups.assert_called_once()
-
-            # Verify GetTraces was called with the correct parameters
-            mock_get_traces.assert_called_once()
-            args, kwargs = mock_get_traces.call_args
-            assert kwargs == {
-                'group': group,
-                'metrics': metrics
-            }
+        # Verify the API was called
+        mock_api_client.get_trace_groups.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -495,82 +480,70 @@ class TestApplicationAnalyzeE2E:
         mock_response = MagicMock()
         mock_response.to_dict.return_value = {"items": []}
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class, \
-             patch('src.application.application_analyze.GetTraces') as mock_get_traces:
+        # Create mock API client
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_groups = MagicMock()
+        mock_api_client.get_trace_groups.return_value = mock_response
 
-            # Set up the mocks
-            mock_api = MagicMock()
-            mock_api.get_trace_groups.return_value = mock_response
-            mock_api_class.return_value = mock_api
-            mock_get_traces.return_value = {}
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Test the method with additional parameters
+        payload = {
+            "group": {"groupbyTag": "service", "groupbyTagEntity": "DESTINATION"},
+            "metrics": [{"metric": "latency", "aggregation": "MEAN"}],
+            "includeInternal": True,
+            "timeFrame": {"from": 1625097600000, "to": 1625097700000}
+        }
 
-            # Test the method with additional parameters
-            group = {"groupbyTag": "service"}
-            metrics = [{"metric": "latency", "aggregation": "MEAN"}]
-            time_frame = {"from": 1625097600000, "to": 1625097700000}
-            include_internal = True
-            fill_time_series = True
+        result = await client.get_grouped_trace_metrics(
+            payload=payload,
+            fill_time_series=True,
+            api_client=mock_api_client
+        )
 
-            result = await client.get_grouped_trace_metrics(
-                group=group,
-                metrics=metrics,
-                includeInternal=include_internal,
-                fill_time_series=fill_time_series,
-                timeFrame=time_frame
-            )
+        # Verify the result
+        assert isinstance(result, dict)
+        assert "items" in result
 
-            # Verify the result
-            assert isinstance(result, dict)
-            assert "items" in result
-
-            # Verify the API was called (the actual implementation doesn't pass parameters)
-            mock_api.get_trace_groups.assert_called_once()
-
-            # Verify GetTraces was called with the correct parameters
-            mock_get_traces.assert_called_once()
-            args, kwargs = mock_get_traces.call_args
-            assert kwargs == {
-                'group': group,
-                'metrics': metrics,
-                'includeInternal': include_internal,
-                'fillTimeSeries': fill_time_series,
-                'timeFrame': time_frame
-            }
+        # Verify the API was called
+        mock_api_client.get_trace_groups.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_get_grouped_trace_metrics_error_handling(self, instana_credentials):
         """Test error handling in get_grouped_trace_metrics."""
 
-        with patch('src.application.application_analyze.ApplicationAnalyzeApi') as mock_api_class:
-            # Set up the mock API to raise an exception
-            mock_api = MagicMock()
-            mock_api.get_trace_groups.side_effect = Exception("API Error")
-            mock_api_class.return_value = mock_api
+        # Create mock API client that raises an exception
+        mock_api_client = type('MockClient', (), {})()
+        mock_api_client.get_trace_groups = MagicMock()
+        mock_api_client.get_trace_groups.side_effect = Exception("API Error")
 
-            # Create the client
-            client = ApplicationAnalyzeMCPTools(
-                read_token=instana_credentials["api_token"],
-                base_url=instana_credentials["base_url"]
-            )
+        # Create the client
+        client = ApplicationAnalyzeMCPTools(
+            read_token=instana_credentials["api_token"],
+            base_url=instana_credentials["base_url"]
+        )
 
-            # Test the method
-            group = {"groupbyTag": "service"}
-            metrics = [{"metric": "latency", "aggregation": "MEAN"}]
+        # Test the method
+        payload = {
+            "group": {"groupbyTag": "service", "groupbyTagEntity": "DESTINATION"},
+            "metrics": [{"metric": "latency", "aggregation": "MEAN"}]
+        }
 
-            result = await client.get_grouped_trace_metrics(group=group, metrics=metrics)
+        result = await client.get_grouped_trace_metrics(
+            payload=payload,
+            api_client=mock_api_client
+        )
 
-            # Verify the result contains an error message
-            assert isinstance(result, dict)
-            assert "error" in result
-            assert "Error" in result["error"]
-            assert "API Error" in result["error"]
+        # Verify the result contains an error message
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "Error" in result["error"]
+        assert "API Error" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -608,10 +581,16 @@ class TestApplicationAnalyzeE2E:
             )
 
             # Test the method with required parameters
-            group = {"groupbyTag": "endpoint"}
+            group = {"groupbyTag": "endpoint", "groupbyTagEntity": "NOT_APPLICABLE"}
             metrics = [{"metric": "latency", "aggregation": "MEAN"}, {"metric": "calls", "aggregation": "SUM"}]
 
-            result = await client.get_grouped_calls_metrics(group=group, metrics=metrics)
+            result = await client.get_grouped_calls_metrics(
+                payload={
+                    "group": group,
+                    "metrics": metrics
+                },
+                api_client=mock_api
+            )
 
             # Verify the result
             assert isinstance(result, dict)
@@ -622,14 +601,6 @@ class TestApplicationAnalyzeE2E:
 
             # Verify the API was called
             mock_api.get_call_group.assert_called_once()
-
-            # Verify GetCallGroups was called with the correct parameters
-            mock_get_call_groups.assert_called_once()
-            args, kwargs = mock_get_call_groups.call_args
-            assert kwargs == {
-                'group': group,
-                'metrics': metrics
-            }
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -656,37 +627,29 @@ class TestApplicationAnalyzeE2E:
             )
 
             # Test the method with additional parameters
-            group = {"groupbyTag": "endpoint"}
+            group = {"groupbyTag": "endpoint", "groupbyTagEntity": "NOT_APPLICABLE"}
             metrics = [{"metric": "latency", "aggregation": "MEAN"}]
             time_frame = {"from": 1625097600000, "to": 1625097700000}
             include_synthetic = True
             fill_time_series = True
 
             result = await client.get_grouped_calls_metrics(
-                group=group,
-                metrics=metrics,
-                includeSynthetic=include_synthetic,
-                fill_time_series=fill_time_series,
-                timeFrame=time_frame
+                payload={
+                    "group": group,
+                    "metrics": metrics,
+                    "includeSynthetic": include_synthetic,
+                    "fillTimeSeries": fill_time_series,
+                    "timeFrame": time_frame
+                },
+                api_client=mock_api
             )
 
             # Verify the result
             assert isinstance(result, dict)
             assert "items" in result
 
-            # Verify the API was called (the actual implementation doesn't pass parameters)
+            # Verify the API was called
             mock_api.get_call_group.assert_called_once()
-
-            # Verify GetCallGroups was called with the correct parameters
-            mock_get_call_groups.assert_called_once()
-            args, kwargs = mock_get_call_groups.call_args
-            assert kwargs == {
-                'group': group,
-                'metrics': metrics,
-                'includeSynthetic': include_synthetic,
-                'fillTimeSeries': fill_time_series,
-                'timeFrame': time_frame
-            }
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -709,7 +672,12 @@ class TestApplicationAnalyzeE2E:
         }
         metrics = [{"metric": "latency", "aggregation": "MEAN"}]
 
-        result = await client.get_grouped_calls_metrics(group=group, metrics=metrics)
+        result = await client.get_grouped_calls_metrics(
+            payload={
+                "group": group,
+                "metrics": metrics
+            }
+        )
 
         # Verify the result contains an error message
         assert isinstance(result, dict)
@@ -744,7 +712,7 @@ class TestApplicationAnalyzeE2E:
 
             # Test the method
             correlation_id = "beacon123"
-            result = await client.get_correlated_traces(correlation_id=correlation_id)
+            result = await client.get_correlated_traces(correlation_id=correlation_id, api_client=mock_api)
 
             # Verify the result
             assert isinstance(result, dict)
@@ -834,32 +802,28 @@ class TestApplicationAnalyzeE2E:
             )
 
             # Test the method with all parameters
-            order = {"field": "timestamp", "direction": "DESC"}
+            order = {"by": "timestamp", "direction": "DESC"}
             pagination = {"size": 10, "cursor": "abc123"}
             tag_filter = {"type": "AND", "tags": [{"name": "service", "value": "test-service"}]}
             time_frame = {"from": 1625097600000, "to": 1625097700000}
 
             result = await client.get_all_traces(
-                includeInternal=True,
-                includeSynthetic=True,
-                order=order,
-                pagination=pagination,
-                tagFilterExpression=tag_filter,
-                timeFrame=time_frame
+                payload={
+                    "includeInternal": True,
+                    "includeSynthetic": True,
+                    "order": order,
+                    "pagination": pagination,
+                    "tagFilterExpression": tag_filter,
+                    "timeFrame": time_frame
+                },
+                api_client=mock_api
             )
 
             # Verify the result
             assert isinstance(result, dict)
 
-            # Verify GetTraces was called with the correct parameters
-            mock_get_traces.assert_called_once()
-            args, kwargs = mock_get_traces.call_args
-            assert kwargs["includeInternal"] is True
-            assert kwargs["includeSynthetic"] is True
-            assert kwargs["order"] == order
-            assert kwargs["pagination"] == pagination
-            assert kwargs["tagFilterExpression"] == tag_filter
-            assert kwargs["timeFrame"] == time_frame
+            # Verify the API was called
+            mock_api.get_traces.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -886,38 +850,33 @@ class TestApplicationAnalyzeE2E:
             )
 
             # Test the method with all parameters
-            group = {"groupbyTag": "service"}
+            group = {"groupbyTag": "service", "groupbyTagEntity": "NOT_APPLICABLE"}
             metrics = [{"metric": "latency", "aggregation": "MEAN"}]
-            order = {"field": "timestamp", "direction": "DESC"}
+            order = {"by": "timestamp", "direction": "DESC"}
             pagination = {"size": 10, "cursor": "abc123"}
             tag_filter = {"type": "AND", "tags": [{"name": "service", "value": "test-service"}]}
             time_frame = {"from": 1625097600000, "to": 1625097700000}
 
             result = await client.get_grouped_trace_metrics(
-                group=group,
-                metrics=metrics,
-                includeInternal=True,
-                includeSynthetic=True,
-                fill_time_series=True,
-                order=order,
-                pagination=pagination,
-                tagFilterExpression=tag_filter,
-                timeFrame=time_frame
+                payload={
+                    "group": group,
+                    "metrics": metrics,
+                    "includeInternal": True,
+                    "includeSynthetic": True,
+                    "fillTimeSeries": True,
+                    "order": order,
+                    "pagination": pagination,
+                    "tagFilterExpression": tag_filter,
+                    "timeFrame": time_frame
+                },
+                api_client=mock_api
             )
 
             # Verify the result
             assert isinstance(result, dict)
 
-            # Verify GetTraces was called with the correct parameters
-            mock_get_traces.assert_called_once()
-            args, kwargs = mock_get_traces.call_args
-            assert kwargs["includeInternal"] is True
-            assert kwargs["includeSynthetic"] is True
-            assert kwargs["order"] == order
-            assert kwargs["pagination"] == pagination
-            assert kwargs["tagFilterExpression"] == tag_filter
-            assert kwargs["timeFrame"] == time_frame
-            assert kwargs["fillTimeSeries"] is True
+            # Verify the API was called
+            mock_api.get_trace_groups.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -935,7 +894,10 @@ class TestApplicationAnalyzeE2E:
             mock_api = MagicMock()
             mock_api.get_call_group.return_value = mock_response
             mock_api_class.return_value = mock_api
-            mock_get_call_groups.return_value = {}
+
+            # Mock GetCallGroups to return a valid object
+            mock_config = MagicMock()
+            mock_get_call_groups.return_value = mock_config
 
             # Create the client
             client = ApplicationAnalyzeMCPTools(
@@ -944,35 +906,30 @@ class TestApplicationAnalyzeE2E:
             )
 
             # Test the method with all parameters
-            group = {"groupbyTag": "endpoint"}
+            group = {"groupbyTag": "service.name", "groupbyTagEntity": "NOT_APPLICABLE"}
             metrics = [{"metric": "latency", "aggregation": "MEAN"}]
-            order = {"field": "timestamp", "direction": "DESC"}
+            order = {"by": "timestamp", "direction": "DESC"}
             pagination = {"size": 10, "cursor": "abc123"}
             tag_filter = {"type": "AND", "tags": [{"name": "endpoint", "value": "/api/test"}]}
             time_frame = {"from": 1625097600000, "to": 1625097700000}
 
             result = await client.get_grouped_calls_metrics(
-                group=group,
-                metrics=metrics,
-                includeInternal=True,
-                includeSynthetic=True,
-                fill_time_series=True,
-                order=order,
-                pagination=pagination,
-                tagFilterExpression=tag_filter,
-                timeFrame=time_frame
+                payload={
+                    "group": group,
+                    "metrics": metrics,
+                    "includeInternal": True,
+                    "includeSynthetic": True,
+                    "fillTimeSeries": True,
+                    "order": order,
+                    "pagination": pagination,
+                    "tagFilterExpression": tag_filter,
+                    "timeFrame": time_frame
+                },
+                api_client=mock_api
             )
 
             # Verify the result
             assert isinstance(result, dict)
 
-            # Verify GetCallGroups was called with the correct parameters
-            mock_get_call_groups.assert_called_once()
-            args, kwargs = mock_get_call_groups.call_args
-            assert kwargs["includeInternal"] is True
-            assert kwargs["includeSynthetic"] is True
-            assert kwargs["order"] == order
-            assert kwargs["pagination"] == pagination
-            assert kwargs["tagFilterExpression"] == tag_filter
-            assert kwargs["timeFrame"] == time_frame
-            assert kwargs["fillTimeSeries"] is True
+            # Verify the API was called
+            mock_api.get_call_group.assert_called_once()

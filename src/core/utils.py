@@ -18,7 +18,7 @@ def register_as_tool(func):
     MCP_TOOLS[func.__name__] = func
     return func
 
-def with_header_auth(api_class, allow_mock=False):
+def with_header_auth(api_class, allow_mock=True):
     """
     Universal decorator for Instana MCP tools that provides flexible authentication.
 
@@ -34,7 +34,7 @@ def with_header_auth(api_class, allow_mock=False):
     Args:
         api_class: The Instana API class to instantiate (e.g., InfrastructureTopologyApi,
                   ApplicationMetricsApi, InfrastructureCatalogApi, etc.)
-        allow_mock: If True, allows mock clients to be passed directly (for testing)
+        allow_mock: If True, allows mock clients to be passed directly (for testing). Defaults to True.
 
     Usage:
         @with_header_auth(YourApiClass)

@@ -5,7 +5,7 @@ E2E tests for Application Metrics MCP Tools
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+import pytest  #type: ignore
 
 from src.application.application_metrics import ApplicationMetricsMCPTools
 from src.core.server import MCPState, execute_tool
@@ -22,23 +22,19 @@ class TestApplicationMetricsE2E:
         # Mock the API response
         mock_response = MagicMock()
         mock_response.to_dict.return_value = {
-            "items": [
-                {
-                    "metric": "latency",
-                    "aggregation": "MEAN",
-                    "granularity": 60000,
-                    "metrics": [
-                        {
-                            "timestamp": 1625097600000,
-                            "value": 150.5
-                        },
-                        {
-                            "timestamp": 1625097660000,
-                            "value": 155.2
-                        }
-                    ]
-                }
-            ]
+            "adjustedTimeframe": {"from": 1625097600000, "to": 1625184000000},
+            "metrics": {
+                "latency.mean": [
+                    {
+                        "timestamp": 1625097600000,
+                        "value": 150.5
+                    },
+                    {
+                        "timestamp": 1625097660000,
+                        "value": 155.2
+                    }
+                ]
+            }
         }
 
         with patch("src.application.application_metrics.ApplicationMetricsApi") as mock_api_class:
@@ -57,7 +53,7 @@ class TestApplicationMetricsE2E:
             time_frame = {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000}
 
             # Test the method with default parameters
-            result = await client.get_application_data_metrics_v2(time_frame=time_frame)
+            result = await client.get_application_data_metrics_v2(time_frame=time_frame, api_client=mock_api)
 
             # Verify the result
             assert isinstance(result, dict)

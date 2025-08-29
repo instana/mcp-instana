@@ -56,7 +56,8 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         self,
         trace_id: str,
         call_id: str,
-        ctx=None
+        ctx=None,
+        api_client=None
     ) -> Dict[str, Any]:
         """
         Get details of a specific call in a trace.
@@ -76,7 +77,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 return {"error": "Both trace_id and call_id must be provided"}
 
             logger.debug(f"Fetching call details for trace_id={trace_id}, call_id={call_id}")
-            result = self.analyze_api.get_call_details(
+            result = api_client.get_call_details(
                 trace_id=trace_id,
                 call_id=call_id
             )
@@ -104,7 +105,8 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         retrievalSize: Optional[int] = None,
         offset: Optional[int] = None,
         ingestionTime: Optional[int] = None,
-        ctx=None
+        ctx=None,
+        api_client=None
     ) -> Dict[str, Any]:
         """
         Get details of a specific trace.
@@ -134,7 +136,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 return {"error": "retrievalSize must be between 1 and 10000"}
 
             logger.debug(f"Fetching trace details for id={id}")
-            result = self.analyze_api.get_trace_download(
+            result = api_client.get_trace_download(
                 id=id,
                 retrieval_size=retrievalSize,
                 offset=offset,
@@ -552,11 +554,13 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 query_params = {}
                 if request_body and "group" in request_body:
                     query_params["group"] = request_body["group"]
+                if request_body and "metrics" in request_body:
+                    query_params["metrics"] = request_body["metrics"]
                 logger.debug(f"Creating GetCallGroups with params: {query_params}")
                 config_object = GetCallGroups(**query_params)
                 logger.debug("Successfully created endpoint config object")
             except Exception as e:
-                logger.debug(f"Error creating GetTraceGroups: {e}")
+                logger.error(f"Error creating GetCallGroups: {e}")
                 return {"error": f"Failed to create config object: {e!s}"}
 
             # Call the get_call_groups method from the SDK

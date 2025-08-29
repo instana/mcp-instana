@@ -10,8 +10,12 @@ from typing import Any, Dict, List, Optional
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.application_metrics_api import ApplicationMetricsApi
-    from instana_client.models.get_application_metrics import GetApplicationMetrics
+    from instana_client.api.application_metrics_api import (
+        ApplicationMetricsApi,
+    )
+    from instana_client.models.get_application_metrics import (
+        GetApplicationMetrics,
+    )
     from instana_client.models.get_applications import GetApplications
     from instana_client.models.get_endpoints import GetEndpoints
     from instana_client.models.get_services import GetServices

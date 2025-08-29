@@ -19,15 +19,25 @@ from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.application_settings_api import ApplicationSettingsApi
-    from instana_client.api_client import ApiClient
-    from instana_client.configuration import Configuration
-    from instana_client.models.application_config import ApplicationConfig
-    from instana_client.models.endpoint_config import EndpointConfig
-    from instana_client.models.manual_service_config import ManualServiceConfig
-    from instana_client.models.new_application_config import NewApplicationConfig
-    from instana_client.models.new_manual_service_config import NewManualServiceConfig
-    from instana_client.models.service_config import ServiceConfig
+    from instana_client.api.application_settings_api import (
+        ApplicationSettingsApi,  #type: ignore
+    )
+    from instana_client.api_client import ApiClient  #type: ignore
+    from instana_client.configuration import Configuration  #type: ignore
+    from instana_client.models.application_config import (
+        ApplicationConfig,  #type: ignore
+    )
+    from instana_client.models.endpoint_config import EndpointConfig  #type: ignore
+    from instana_client.models.manual_service_config import (
+        ManualServiceConfig,  #type: ignore
+    )
+    from instana_client.models.new_application_config import (
+        NewApplicationConfig,  #type: ignore
+    )
+    from instana_client.models.new_manual_service_config import (
+        NewManualServiceConfig,  #type: ignore
+    )
+    from instana_client.models.service_config import ServiceConfig  #type: ignore
 except ImportError as e:
     print(f"Error importing Instana SDK: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
@@ -267,7 +277,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             debug_print(f"Deleting application perspective with ID: {id}")
             # Call the delete_application_config method from the SDK
-            self.settings_api.delete_application_config(id=id)
+            api_client.delete_application_config(id=id)
 
             result_dict = {
                 "success": True,
@@ -1477,7 +1487,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 service_config=config_object
             )
 
-            # Convert the result to a dictionary
+            # Convert the result to a list of dictionaries
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
             else:
@@ -1617,7 +1627,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                             id: str,
                             payload: Union[Dict[str, Any], str],
                             ctx=None,
-                            api_client=None) -> List[Dict[str, Any]]:
+                            api_client=None) -> Dict[str, Any]:
         """
         This tool gives is used if one wants to update a particular custom service rule.
         Args:

@@ -18,7 +18,9 @@ from src.core.utils import (
 )
 
 try:
-    from instana_client.api.application_catalog_api import ApplicationCatalogApi
+    from instana_client.api.application_catalog_api import (
+        ApplicationCatalogApi,
+    )
 
 except ImportError as e:
     import logging

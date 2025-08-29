@@ -11,13 +11,17 @@ from typing import Any, Dict, Optional
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 try:
-    from instana_client.api.application_topology_api import ApplicationTopologyApi
+    from instana_client.api.application_topology_api import (
+        ApplicationTopologyApi,
+    )
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
 except ImportError as e:
     import logging
+    import traceback
     logger = logging.getLogger(__name__)
-    logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
+    logger.error(f"Error importing Instana SDK: {e}")
+    traceback.print_exc()
     raise
 
 # Configure logger for this module
