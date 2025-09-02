@@ -25,7 +25,7 @@ jobs:
         run: pip install uv
         
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --group dev
         
       - name: Run ruff check
         run: uv run ruff check .
