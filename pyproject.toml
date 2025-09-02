@@ -53,6 +53,8 @@ dev = [
     "uv==0.8.6",
 ]
 
+
+
 [project.scripts]
 mcp-instana = "src.core.server:main"
 test = "tests.run_all_tests:main"
