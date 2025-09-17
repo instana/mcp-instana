@@ -1,4 +1,4 @@
-# Stage 1: Build stage
+# Stage 1: Build stage with minimal runtime dependencies
 FROM python:3.11-slim AS builder
 
 # Install system dependencies needed for building
@@ -10,13 +10,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files and README.md needed for the build
-COPY pyproject.toml uv.lock README.md ./
+# Copy only the runtime dependency file and source code needed for the build
+COPY pyproject-runtime.toml pyproject.toml
+COPY src ./src
+COPY README.md ./
 
 # Install uv for dependency management
 RUN pip install --no-cache-dir uv
 
-# Install dependencies directly with uv using --system flag
+# Install only runtime dependencies using the minimal pyproject-runtime.toml
 RUN uv pip install --no-cache-dir --system .
 
 # Stage 2: Runtime stage
@@ -25,10 +27,10 @@ FROM python:3.11-slim AS runtime
 # Set working directory
 WORKDIR /app
 
-# Create a non-root user
+# Create a non-root user for security
 RUN groupadd -r mcpuser && useradd -r -g mcpuser mcpuser
 
-# Copy the Python packages from builder
+# Copy only the Python packages from builder (no source code needed)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
@@ -44,10 +46,14 @@ USER mcpuser
 # Expose the default port (configurable via PORT env var)
 EXPOSE 8080
 
-# Set environment variables
+# Set environment variables (no hardcoded secrets)
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
+
+# Health check using container's internal network
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)" || exit 1
 
 # Run the server
 ENTRYPOINT ["python", "-m", "src.core.server"]

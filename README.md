@@ -42,7 +42,34 @@
       - [Using Development Installation](#using-development-installation-4)
     - [Benefits of Tool Filtering](#benefits-of-tool-filtering)
   - [Example Prompts](#example-prompts)
+  - [Docker Deployment](#docker-deployment)
+    - [Docker Architecture](#docker-architecture)
+      - [**pyproject.toml** (Development)](#pyprojecttoml-development)
+      - [**pyproject-runtime.toml** (Production)](#pyproject-runtimetoml-production)
+    - [Building the Docker Image](#building-the-docker-image)
+      - [**Prerequisites**](#prerequisites)
+      - [**Build Command**](#build-command)
+      - [**What the Build Does**](#what-the-build-does)
+    - [Running the Docker Container](#running-the-docker-container)
+      - [**Basic Usage**](#basic-usage)
+      - [**Environment Variables**](#environment-variables)
+      - [**Docker Compose Example**](#docker-compose-example)
+    - [Docker Security Features](#docker-security-features)
+      - [**Security Best Practices Implemented**](#security-best-practices-implemented)
+      - [**Image Size Optimization**](#image-size-optimization)
+    - [Testing the Docker Container](#testing-the-docker-container)
+      - [**Health Check**](#health-check)
+      - [**MCP Inspector Testing**](#mcp-inspector-testing)
+      - [**Logs and Debugging**](#logs-and-debugging)
+    - [Production Deployment](#production-deployment)
+      - [**Recommended Production Setup**](#recommended-production-setup)
+      - [**Kubernetes Example**](#kubernetes-example)
   - [Troubleshooting](#troubleshooting)
+    - [**Docker Issues**](#docker-issues)
+      - [**Container Won't Start**](#container-wont-start)
+      - [**Connection Issues**](#connection-issues)
+      - [**Performance Issues**](#performance-issues)
+    - [**General Issues**](#general-issues)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -207,7 +234,7 @@ uv run src/core/server.py [OPTIONS]
 - `--log-level <level>`: Set the logging level (choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
 - `--list-tools`: List all available tool categories and exit
-- `--port <port>`: Port to listen on (default: 8000)
+- `--port <port>`: Port to listen on (default: 8080)
 - `--help`: Show help message and exit
 
 ### Starting in Streamable HTTP Mode
@@ -256,8 +283,8 @@ uv run src/core/server.py --transport streamable-http --log-level DEBUG --tools 
 - Uses HTTP headers for authentication (no environment variables needed)
 - Supports different credentials per request
 - Better suited for shared environments
-- Default port: 8000
-- Endpoint: `http://0.0.0.0:8000/mcp/`
+- Default port: 8080
+- Endpoint: `http://0.0.0.0:8080/mcp/`
 
 ### Starting in Stdio Mode
 
@@ -334,7 +361,7 @@ Once started, you can verify the server is running:
 **For Streamable HTTP mode:**
 ```bash
 # Check server health
-curl http://0.0.0.0:8000/mcp/
+curl http://0.0.0.0:8080/mcp/
 
 # Or with custom port
 curl http://0.0.0.0:9000/mcp/
@@ -353,7 +380,7 @@ If you encounter SSL certificate errors, ensure your Python environment has acce
 ```
 
 **Port Already in Use:**
-If port 8000 is already in use, specify a different port:
+If port 8080 is already in use, specify a different port:
 ```bash
 uv run src/core/server.py --transport streamable-http --port 9000
 ```
@@ -394,7 +421,7 @@ Configure Claude Desktop to pass Instana credentials via headers:
     "Instana MCP Server": {
       "command": "npx",
       "args": [
-        "mcp-remote", "http://0.0.0.0:8000/mcp/",
+        "mcp-remote", "http://0.0.0.0:8080/mcp/",
         "--allow-http",
         "--header", "instana-base-url: https://your-instana-instance.instana.io",
         "--header", "instana-api-token: your_instana_api_token"
@@ -486,7 +513,7 @@ You can directly create or update `.vscode/mcp.json` with the following configur
     "Instana MCP Server": {
       "command": "npx",
       "args": [
-        "mcp-remote", "http://0.0.0.0:8000/mcp/",
+        "mcp-remote", "http://0.0.0.0:8080/mcp/",
         "--allow-http",
         "--header", "instana-base-url: https://your-instana-instance.instana.io",
         "--header", "instana-api-token: your_instana_api_token"
@@ -920,7 +947,225 @@ The azureManagedHSM plugin provides three metrics that can help monitor service 
 3. Overall Service Availability: This metric measures the availability of the service.
 ```
 
+## Docker Deployment
+
+The MCP Instana server can be deployed using Docker for production environments. The Docker setup is optimized for security, performance, and minimal resource usage.
+
+### Docker Architecture
+
+The project uses a **two-file dependency management strategy**:
+
+#### **pyproject.toml** (Development)
+- **Purpose**: Full development environment with all tools
+- **Dependencies**: 20 essential + 8 development dependencies (pytest, ruff, coverage, etc.)
+- **Usage**: Local development, testing, and CI/CD
+- **Size**: Larger but includes all development tools
+
+#### **pyproject-runtime.toml** (Production)
+- **Purpose**: Minimal production runtime dependencies only
+- **Dependencies**: 20 essential dependencies only
+- **Usage**: Docker production builds
+- **Size**: Optimized for minimal image size and security
+
+### Building the Docker Image
+
+#### **Prerequisites**
+- Docker installed and running
+- Access to the project source code
+
+#### **Build Command**
+```bash
+# Build the optimized production image
+docker build -t mcp-instana .
+
+# Build with a specific tag
+docker build -t mcp-instana:v1.0.0 .
+```
+
+#### **What the Build Does**
+1. **Multi-stage build** for optimal size and security
+2. **Builder stage**: Installs only runtime dependencies from `pyproject-runtime.toml`
+3. **Runtime stage**: Creates minimal production image with non-root user
+4. **Security**: No hardcoded secrets, proper user permissions
+5. **Optimization**: Only essential dependencies (20 vs 95+ in development)
+
+### Running the Docker Container
+
+#### **Basic Usage**
+```bash
+# Run with environment variables (recommended)
+docker run -p 8080:8080 \
+  -e INSTANA_API_TOKEN=your_instana_token \
+  -e INSTANA_BASE_URL=https://your-instana-instance.instana.io \
+  mcp-instana
+
+# Run with custom port
+docker run -p 8081:8080 \
+  -e INSTANA_API_TOKEN=your_instana_token \
+  -e INSTANA_BASE_URL=https://your-instana-instance.instana.io \
+  mcp-instana
+```
+
+#### **Environment Variables**
+The container requires the following environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `INSTANA_API_TOKEN` | Your Instana API token | `your_instana_token` |
+| `INSTANA_BASE_URL` | Your Instana instance URL | `https://your-instana-instance.instana.io` |
+| `PORT` | Server port (optional, defaults to 8080) | `8080` |
+
+#### **Docker Compose Example**
+```yaml
+version: '3.8'
+services:
+  mcp-instana:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - INSTANA_API_TOKEN=${INSTANA_API_TOKEN}
+      - INSTANA_BASE_URL=${INSTANA_BASE_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### Docker Security Features
+
+#### **Security Best Practices Implemented**
+- ✅ **Non-root user**: Container runs as `mcpuser` (not root)
+- ✅ **No hardcoded secrets**: All credentials passed via environment variables
+- ✅ **Minimal dependencies**: Only 20 essential runtime dependencies
+- ✅ **Multi-stage build**: Build tools don't make it to final image
+- ✅ **Health checks**: Built-in container health monitoring
+- ✅ **Optimized base image**: Uses `python:3.11-slim`
+
+#### **Image Size Optimization**
+- **Original approach**: 95+ dependencies → ~1-2GB+ image
+- **Optimized approach**: 20 dependencies → ~266MB image
+- **Size reduction**: ~70-80% smaller images
+- **Benefits**: Faster deployments, lower storage costs, reduced attack surface
+
+### Testing the Docker Container
+
+#### **Health Check**
+```bash
+# Check if container is healthy
+docker ps
+
+# Test the MCP endpoint
+curl http://localhost:8080/mcp/
+```
+
+#### **MCP Inspector Testing**
+```bash
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
+```
+
+#### **Logs and Debugging**
+```bash
+# View container logs
+docker logs <container_id>
+
+# Follow logs in real-time
+docker logs -f <container_id>
+
+# Execute commands in running container
+docker exec -it <container_id> /bin/bash
+```
+
+### Production Deployment
+
+#### **Recommended Production Setup**
+1. **Use environment variables** for all secrets
+2. **Set up proper logging** and monitoring
+3. **Configure health checks** for container orchestration
+4. **Use container orchestration** (Kubernetes, Docker Swarm, etc.)
+5. **Implement proper backup** and disaster recovery
+
+#### **Kubernetes Example**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-instana
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mcp-instana
+  template:
+    metadata:
+      labels:
+        app: mcp-instana
+    spec:
+      containers:
+      - name: mcp-instana
+        image: mcp-instana:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: INSTANA_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: instana-secrets
+              key: api-token
+        - name: INSTANA_BASE_URL
+          value: "https://your-instana-instance.instana.io"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
 ## Troubleshooting
+
+### **Docker Issues**
+
+#### **Container Won't Start**
+```bash
+# Check container logs
+docker logs <container_id>
+
+# Common issues:
+# 1. Missing environment variables
+# 2. Port already in use
+# 3. Invalid Instana credentials
+```
+
+#### **Connection Issues**
+```bash
+# Test container connectivity
+docker exec -it <container_id> curl http://127.0.0.1:8080/health
+
+# Check port mapping
+docker port <container_id>
+```
+
+#### **Performance Issues**
+```bash
+# Check container resource usage
+docker stats <container_id>
+
+# Monitor container health
+docker inspect <container_id> | grep -A 10 Health
+```
+
+### **General Issues**
 
 - **GitHub Copilot**
   - If you encounter issues with GitHub Copilot, try starting/stopping/restarting the server in the `mcp.json` file and keep only one server running at a time.

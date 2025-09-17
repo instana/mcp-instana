@@ -78,6 +78,10 @@ class MCPState:
     app_analyze_client: Any = None
     app_settings_client: Any = None
     app_global_alert_client: Any = None
+    website_metrics_client: Any = None
+    website_catalog_client: Any = None
+    website_analyze_client: Any = None
+    website_configuration_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -252,6 +256,10 @@ def get_client_categories():
         from src.infrastructure.infrastructure_topology import (
             InfrastructureTopologyMCPTools,
         )
+        from src.website.website_analyze import WebsiteAnalyzeMCPTools
+        from src.website.website_catalog import WebsiteCatalogMCPTools
+        from src.website.website_configuration import WebsiteConfigurationMCPTools
+        from src.website.website_metrics import WebsiteMetricsMCPTools
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -280,6 +288,12 @@ def get_client_categories():
         "automation": [
             ('action_catalog_client', ActionCatalogMCPTools),
             ('action_history_client', ActionHistoryMCPTools),
+        ],
+        "website": [
+            ('website_metrics_client', WebsiteMetricsMCPTools),
+            ('website_catalog_client', WebsiteCatalogMCPTools),
+            ('website_analyze_client', WebsiteAnalyzeMCPTools),
+            ('website_configuration_client', WebsiteConfigurationMCPTools),
         ]
     }
 
@@ -309,6 +323,10 @@ def get_prompt_categories():
     from src.prompts.infrastructure.infrastructure_topology import (
         InfrastructureTopologyPrompts,
     )
+    from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
+    from src.prompts.website.website_catalog import WebsiteCatalogPrompts
+    from src.prompts.website.website_configuration import WebsiteConfigurationPrompts
+    from src.prompts.website.website_metrics import WebsiteMetricsPrompts
 
     # Use the get_prompts method to get all prompts from the classes
     infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()
@@ -322,6 +340,10 @@ def get_prompt_categories():
     app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
     app_topology_prompts = ApplicationTopologyPrompts.get_prompts()
     app_alert_prompts = ApplicationAlertsPrompts.get_prompts()
+    website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
+    website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
+    website_analyze_prompts = WebsiteAnalyzePrompts.get_prompts()
+    website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
 
     # Return the categories with their prompt groups
     return {
@@ -339,6 +361,12 @@ def get_prompt_categories():
             ('app_settings_prompts', app_settings_prompts),
             ('app_topology_prompts', app_topology_prompts),
             ('app_alert_prompts', app_alert_prompts),
+        ],
+        "website": [
+            ('website_metrics_prompts', website_metrics_prompts),
+            ('website_catalog_prompts', website_catalog_prompts),
+            ('website_analyze_prompts', website_analyze_prompts),
+            ('website_configuration_prompts', website_configuration_prompts),
         ],
     }
 
@@ -395,7 +423,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation,website). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -442,7 +470,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"infra", "app", "events", "automation"}
+        all_categories = {"infra", "app", "events", "automation", "website"}
 
         # Handle --list-tools option
         if args.list_tools:

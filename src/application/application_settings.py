@@ -19,25 +19,19 @@ from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.application_settings_api import (
+    from instana_client.api import (
         ApplicationSettingsApi,  #type: ignore
     )
     from instana_client.api_client import ApiClient  #type: ignore
     from instana_client.configuration import Configuration  #type: ignore
-    from instana_client.models.application_config import (
+    from instana_client.models import (
         ApplicationConfig,  #type: ignore
-    )
-    from instana_client.models.endpoint_config import EndpointConfig  #type: ignore
-    from instana_client.models.manual_service_config import (
+        EndpointConfig,  #type: ignore
         ManualServiceConfig,  #type: ignore
-    )
-    from instana_client.models.new_application_config import (
         NewApplicationConfig,  #type: ignore
-    )
-    from instana_client.models.new_manual_service_config import (
         NewManualServiceConfig,  #type: ignore
+        ServiceConfig,  #type: ignore
     )
-    from instana_client.models.service_config import ServiceConfig  #type: ignore
 except ImportError as e:
     print(f"Error importing Instana SDK: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
