@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from src.prompts import auto_register_prompt
 
@@ -8,7 +8,7 @@ class CustomDashboardPrompts:
 
     @auto_register_prompt
     @staticmethod
-    def create_dashboard(title: str, 
+    def create_dashboard(title: str,
                         widgets: Optional[List[Dict[str, Any]]] = None,
                         access_rules: Optional[List[Dict[str, Any]]] = None,
                         description: Optional[str] = None,

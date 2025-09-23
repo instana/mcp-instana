@@ -256,11 +256,11 @@ def get_client_categories():
         from src.infrastructure.infrastructure_topology import (
             InfrastructureTopologyMCPTools,
         )
+        from src.settings.custom_dashboard_tools import CustomDashboardMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
         from src.website.website_metrics import WebsiteMetricsMCPTools
-        from src.settings.custom_dashboard_tools import CustomDashboardMCPTools
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -327,11 +327,11 @@ def get_prompt_categories():
     from src.prompts.infrastructure.infrastructure_topology import (
         InfrastructureTopologyPrompts,
     )
+    from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
     from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
     from src.prompts.website.website_catalog import WebsiteCatalogPrompts
     from src.prompts.website.website_configuration import WebsiteConfigurationPrompts
     from src.prompts.website.website_metrics import WebsiteMetricsPrompts
-    from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
 
     # Use the get_prompts method to get all prompts from the classes
     infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()

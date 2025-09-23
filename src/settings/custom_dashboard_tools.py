@@ -17,7 +17,7 @@ from src.core.utils import (
 try:
     from instana_client.api.custom_dashboards_api import CustomDashboardsApi
     from instana_client.models.custom_dashboard import CustomDashboard
-    
+
 except ImportError as e:
     import logging
     logger = logging.getLogger(__name__)
