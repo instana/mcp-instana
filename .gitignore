@@ -178,3 +178,4 @@ cython_debug/
 # Ignore tooling dirs
 .Bob/
 .vscode/
+mcp-instana.mcpb

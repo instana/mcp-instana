@@ -1,0 +1,15 @@
+<svg id="Ibm-Instana--Streamline-Carbon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" height="16" width="16">
+  <desc>
+    Ibm Instana Streamline Icon: https://streamlinehq.com
+  </desc>
+  <defs></defs>
+  <path d="M4.5 6.5h1v3H4.5Z" fill="#000000" stroke-width="0.5"></path>
+  <path d="M10.5 6.5h1v3h-1Z" fill="#000000" stroke-width="0.5"></path>
+  <path d="M6.5 5.5h1v6.5h-1Z" fill="#000000" stroke-width="0.5"></path>
+  <path d="M8.5 4.5h1v6.5h-1Z" fill="#000000" stroke-width="0.5"></path>
+  <path d="M10 2.5a1 1 0 1 0 2 0 1 1 0 1 0 -2 0" fill="#000000" stroke-width="0.5"></path>
+  <path d="M4 13.5a1 1 0 1 0 2 0 1 1 0 1 0 -2 0" fill="#000000" stroke-width="0.5"></path>
+  <path d="M11.0458 14H7v-1h4.0458l2.9541 -5 -1.3496 -2.28395 0.86135 -0.5088 1.3496 2.28395c0.18505 0.3137 0.18505 0.70385 0 1.0176l-2.9546 5c-0.1787 0.30275 -0.5088 0.4912 -0.86085 0.4912Z" fill="#000000" stroke-width="0.5"></path>
+  <path d="m2.4884 10.79295 -1.3496 -2.2842c-0.18505 -0.3137 -0.18505 -0.70385 0 -1.0176l2.9546 -5c0.1792 -0.303 0.5088 -0.4912 0.86085 -0.4912h4.0458v1H4.95425l-2.9541 5 1.3496 2.2842 -0.86135 0.5088Z" fill="#000000" stroke-width="0.5"></path>
+  <path id="_Transparent_Rectangle_" d="M0 0h16v16H0Z" fill="none" stroke-width="0.5"></path>
+</svg>

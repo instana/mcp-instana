@@ -1,0 +1,100 @@
+{
+  "manifest_version": "0.2",
+  "name": "mcp-instana",
+  "display_name": "MCP Instana Server",
+  "version": "0.2.1",
+  "description": "MCP Instana Server for Observability",
+  "author": {
+    "name": "MCP Instana Team",
+    "email": "mcp-instana@ibm.com"
+  },
+  "homepage": "https://www.ibm.com/docs/en/instana-observability",
+  "support": "https://github.com/instana/mcp-instana/issues",
+  "icon": "assets/instana.svg",
+  "screenshots": [
+    "assets/mcpb-instana1.png",
+    "assets/mcpb-instana2.png",
+    "assets/mcpb-instana3.png",
+    "assets/mcpb-instana4.png",
+    "assets/mcpb-instana5.png",
+    "assets/mcpb-instana6.png",
+    "assets/mcpb-instana7.png",
+    "assets/mcpb-instana8.png",
+    "assets/mcpb-instana9.png",
+    "assets/mcpb-instana10.png",
+    "assets/mcpb-instana11.png",
+    "assets/mcpb-instana12.png",
+    "assets/mcpb-instana13.png",
+    "assets/mcpb-instana14.png",
+    "assets/mcpb-instana15.png"
+  ],
+  "server": {
+    "type": "python",
+    "entry_point": "mcp-instana",
+    "mcp_config": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "pipx",
+        "run",
+        "--spec",
+        "mcp-instana==${user_config.version}",
+        "mcp-instana",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "PYTHONPATH": "${__dirname}/lib",
+        "INSTANA_BASE_URL": "${user_config.instana_base_url}",
+        "INSTANA_API_TOKEN": "${user_config.instana_api_token}"
+      }
+    }
+  },
+  "user_config": {
+    "instana_base_url": {
+      "type": "string",
+      "title": "Instana Base URL",
+      "description": "Instana instance URL",
+      "default": "https://your-instana-url",
+      "required": true
+    },
+    "instana_api_token": {
+      "type": "string",
+      "title": "Instana API Token",
+      "description": "Your Instana API token",
+      "default": "",
+      "required": true,
+      "sensitive": true
+    },
+    "version": {
+      "type": "string",
+      "title": "Version",
+      "description": "Version of the mcp-instana package which is being installed.",
+      "default": "0.2.1",
+      "required": false
+    }
+  },
+  "keywords": [
+    "instana",
+    "obserability"
+  ],
+  "license": "Apache 2.0",
+  "privacy_policies": [
+    "https://github.com/instana/mcp-instana/blob/main/docs/PRIVACY.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/instana/mcp-instana"
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.13.0",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  }
+}
