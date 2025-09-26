@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server for Instana"
 authors = [
     {name = "Elina Priyadarshinee", email = "Elina.priyadarshinee1@ibm.com"},
@@ -15,7 +15,7 @@ authors = [
     {name = "Riya Kumari", email = "Riya.Kumari3@ibm.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 
 # ONLY dependencies that are actually imported/used in the code
@@ -65,7 +65,7 @@ packages = ["src"]
 
 [tool.ruff]
 # Target Python 3.11
-target-version = "py311"
+target-version = "py310"
 
 # Same as Black
 line-length = 88

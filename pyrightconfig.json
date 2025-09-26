@@ -8,7 +8,7 @@
     "**/__pycache__"
   ],
   "typeCheckingMode": "basic",
-  "pythonVersion": "3.9",
+  "pythonVersion": "3.10",
   
   // These settings help with mock-related issues
   "reportUnknownMemberType": "none",
