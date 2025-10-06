@@ -10,7 +10,7 @@
   },
   "homepage": "https://www.ibm.com/docs/en/instana-observability",
   "support": "https://github.com/instana/mcp-instana/issues",
-  "icon": "assets/instana.svg",
+  "icon": "assets/instana.png",
   "server": {
     "type": "python",
     "entry_point": "mcp-instana",
