@@ -1,0 +1,1 @@
+"""Events-specific prompts package."""

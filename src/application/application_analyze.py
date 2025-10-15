@@ -7,6 +7,10 @@ This module provides application analyze tool functionality for Instana monitori
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from mcp.types import ToolAnnotations
+
+from src.prompts import mcp
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_analyze_api import ApplicationAnalyzeApi
@@ -50,7 +54,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             logger.error(f"Error initializing ApplicationAnalyzeApi: {e}", exc_info=True)
             raise
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Call Details",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_call_details(
         self,
@@ -97,7 +104,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             logger.error(f"Error getting call details: {e}", exc_info=True)
             return {"error": f"Failed to get call details: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Trace Details",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_trace_details(
         self,
@@ -159,7 +169,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get trace details: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get All Traces",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_all_traces(
         self,
@@ -287,7 +300,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_traces: {e}")
             return {"error": f"Failed to get traces: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Grouped Trace Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_grouped_trace_metrics(
         self,
@@ -431,7 +447,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_grouped_trace_metrics: {e}")
             return {"error": f"Failed to get grouped trace metrics: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Grouped Calls Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_grouped_calls_metrics(
         self,
@@ -585,7 +604,10 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get grouped call: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Correlated Traces",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_correlated_traces(
         self,

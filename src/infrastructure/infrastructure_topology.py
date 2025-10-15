@@ -22,6 +22,8 @@ except ImportError:
     logger.error("Failed to import infrastructure topology API", exc_info=True)
     raise
 
+from mcp.types import ToolAnnotations
+
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Configure logger for this module
@@ -49,7 +51,10 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
         """Initialize the Infrastructure Topology MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Related Hosts",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureTopologyApi)
     async def get_related_hosts(self,
                                 snapshot_id: str,
@@ -110,7 +115,10 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_related_hosts: {e}", exc_info=True)
             return {"error": f"Failed to get related hosts: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Topology",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureTopologyApi)
     async def get_topology(self,
                            include_data: Optional[bool] = False,

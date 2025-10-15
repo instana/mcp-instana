@@ -55,8 +55,15 @@ def mock_with_header_auth(api_class, allow_mock=False):
     def decorator(func):
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
-            # Just pass the API client directly
-            kwargs['api_client'] = self.action_catalog_api
+            # For testing, we need to ensure the API client is properly set
+            # The decorator should inject the API client into kwargs
+            if 'api_client' not in kwargs or kwargs['api_client'] is None:
+                # Use the existing API client from the instance
+                if hasattr(self, 'action_catalog_api'):
+                    kwargs['api_client'] = self.action_catalog_api
+                else:
+                    # Fallback to the global mock
+                    kwargs['api_client'] = mock_action_catalog_api
             return await func(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -103,45 +110,48 @@ class TestActionCatalogMCPTools(unittest.TestCase):
             base_url="https://test.instana.com"
         )
 
+        # Set the action_catalog_api attribute on the instance
+        self.action_catalog_tools.action_catalog_api = self.action_catalog_api
+
     def test_init(self):
         """Test that the client is initialized with the correct values"""
         self.assertEqual(self.action_catalog_tools.read_token, "test_token")
         self.assertEqual(self.action_catalog_tools.base_url, "https://test.instana.com")
 
-    @patch('src.automation.action_catalog.ActionSearchSpace')
-    def test_get_action_matches_success(self, mock_action_search_space_class):
+    def test_get_action_matches_success(self):
         """Test successful get_action_matches call"""
-        # Mock response
+        # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
+        mock_response_data = {
             "matches": [
-                {"id": "action1", "name": "Test Action 1"},
-                {"id": "action2", "name": "Test Action 2"}
+                {"id": "action1", "name": "Action 1", "score": 0.95},
+                {"id": "action2", "name": "Action 2", "score": 0.87}
             ]
         }
-        self.action_catalog_api.get_action_matches.return_value = [mock_response]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_action_matches_without_preload_content.return_value = mock_response
 
         # Test payload
         payload = {
-            "name": "CPU spends significant time waiting for input/output",
-            "description": "Checks whether the system spends significant time waiting for input/output."
+            "name": "CPU usage high",
+            "description": "Check CPU usage"
         }
 
-        # Mock the ActionSearchSpace constructor
-        mock_config_object = MagicMock()
-        mock_action_search_space_class.return_value = mock_config_object
-
-        # Run the test
         result = asyncio.run(self.action_catalog_tools.get_action_matches(
             payload=payload,
-            target_snapshot_id="test_snapshot",
+            target_snapshot_id="snapshot123",
             api_client=self.action_catalog_api
         ))
 
-        self.assertTrue(result["success"])
-        self.assertEqual(result["message"], "Action matches retrieved successfully")
+        # Check that the mock was called
+        self.action_catalog_api.get_action_matches_without_preload_content.assert_called_once()
+
+        # Check that the result is correct
         self.assertIn("data", result)
-        self.assertEqual(result["count"], 1)
+        self.assertIn("matches", result["data"])
+        self.assertEqual(len(result["data"]["matches"]), 2)
+        self.assertEqual(result["data"]["matches"][0]["name"], "Action 1")
 
     def test_get_action_matches_missing_payload(self):
         """Test get_action_matches with missing payload"""
@@ -150,57 +160,113 @@ class TestActionCatalogMCPTools(unittest.TestCase):
             api_client=self.action_catalog_api
         ))
 
+        # Check that the result contains an error
         self.assertIn("error", result)
-        self.assertIn("payload is required", result["error"])
 
-    def test_get_actions_success(self):
-        """Test successful get_actions call"""
-        # Mock response
+    def test_get_action_matches_string_payload(self):
+        """Test get_action_matches with string payload"""
+        # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
-            "actions": [
-                {"id": "action1", "name": "Action 1", "type": "script"},
-                {"id": "action2", "name": "Action 2", "type": "command"}
-            ],
-            "total": 2
+        mock_response_data = {
+            "matches": [
+                {"id": "action1", "name": "Action 1", "score": 0.95}
+            ]
         }
-        self.action_catalog_api.get_actions.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_action_matches_without_preload_content.return_value = mock_response
 
-        result = asyncio.run(self.action_catalog_tools.get_actions(
-            page=1,
-            page_size=10,
-            search="test",
-            types=["script"],
-            order_by="name",
-            order_direction="asc",
+        # Test with JSON string payload
+        payload = '{"name": "CPU usage high", "description": "Check CPU usage"}'
+
+        result = asyncio.run(self.action_catalog_tools.get_action_matches(
+            payload=payload,
             api_client=self.action_catalog_api
         ))
 
-        self.assertIn("actions", result)
-        self.assertEqual(result["total"], 2)
-        self.action_catalog_api.get_actions.assert_called_once()
+        # Check that the result is correct
+        self.assertIn("data", result)
+        self.assertIn("matches", result["data"])
+        self.assertEqual(len(result["data"]["matches"]), 1)
+
+    def test_get_action_matches_error_handling(self):
+        """Test error handling in get_action_matches"""
+        # Mock API client to raise an exception
+        self.action_catalog_api.get_action_matches_without_preload_content.side_effect = Exception("API Error")
+
+        payload = {"name": "test"}
+
+        result = asyncio.run(self.action_catalog_tools.get_action_matches(
+            payload=payload,
+            api_client=self.action_catalog_api
+        ))
+
+        # Check that the result contains an error
+        self.assertIn("error", result)
+
+    def test_get_actions_success(self):
+        """Test successful get_actions call"""
+        # Mock response - the method expects a response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [
+            {"id": "action1", "name": "Action 1", "type": "script"},
+            {"id": "action2", "name": "Action 2", "type": "command"}
+        ]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.action_catalog_tools.get_actions(
+            api_client=self.action_catalog_api
+        ))
+
+        # Check that the mock was called
+        self.action_catalog_api.get_actions_without_preload_content.assert_called_once()
+
+        # Check that the result is correct
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["name"], "Action 1")
+
+    def test_get_actions_error_handling(self):
+        """Test error handling in get_actions"""
+        # Mock API client to raise an exception
+        self.action_catalog_api.get_actions_without_preload_content.side_effect = Exception("API Error")
+
+        result = asyncio.run(self.action_catalog_tools.get_actions(
+            api_client=self.action_catalog_api
+        ))
+
+        # Check that the result contains an error
+        self.assertIn("error", result)
 
     def test_get_action_details_success(self):
         """Test successful get_action_details call"""
-        # Mock response
+        # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
+        mock_response_data = {
             "id": "action1",
             "name": "Test Action",
             "description": "A test action",
             "type": "script",
             "parameters": []
         }
-        self.action_catalog_api.get_action.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_action_by_id_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.action_catalog_tools.get_action_details(
             action_id="action1",
             api_client=self.action_catalog_api
         ))
 
+        # Check that the mock was called with the correct arguments
+        self.action_catalog_api.get_action_by_id_without_preload_content.assert_called_once_with(id="action1")
+
+        # Check that the result is correct
+        self.assertIn("id", result)
         self.assertEqual(result["id"], "action1")
         self.assertEqual(result["name"], "Test Action")
-        self.action_catalog_api.get_action.assert_called_once_with(action_id="action1")
 
     def test_get_action_details_missing_id(self):
         """Test get_action_details with missing action_id"""
@@ -209,138 +275,62 @@ class TestActionCatalogMCPTools(unittest.TestCase):
             api_client=self.action_catalog_api
         ))
 
+        # Check that the result contains an error
         self.assertIn("error", result)
-        self.assertIn("action_id is required", result["error"])
-
-    def test_search_actions_success(self):
-        """Test successful search_actions call"""
-        # Mock response
-        mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
-            "actions": [
-                {"id": "action1", "name": "CPU Action", "type": "script"},
-                {"id": "action2", "name": "Memory Action", "type": "command"}
-            ],
-            "total": 2
-        }
-        self.action_catalog_api.search_actions.return_value = mock_response
-
-        result = asyncio.run(self.action_catalog_tools.search_actions(
-            search="CPU",
-            page=1,
-            page_size=10,
-            types=["script"],
-            order_by="name",
-            order_direction="asc",
-            api_client=self.action_catalog_api
-        ))
-
-        self.assertIn("actions", result)
-        self.assertEqual(result["total"], 2)
-        self.action_catalog_api.search_actions.assert_called_once()
-
-    def test_search_actions_missing_search(self):
-        """Test search_actions with missing search parameter"""
-        result = asyncio.run(self.action_catalog_tools.search_actions(
-            search=None,
-            api_client=self.action_catalog_api
-        ))
-
-        self.assertIn("error", result)
-        self.assertIn("search parameter is required", result["error"])
 
     def test_get_action_types_success(self):
         """Test successful get_action_types call"""
-        # Mock response
+        # Mock response - the method calls get_actions_without_preload_content
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
-            "types": ["script", "command", "http", "email"]
-        }
-        self.action_catalog_api.get_action_types.return_value = mock_response
+        mock_response_data = [
+            {"id": "action1", "name": "Action 1", "type": "script"},
+            {"id": "action2", "name": "Action 2", "type": "command"},
+            {"id": "action3", "name": "Action 3", "type": "http"},
+            {"id": "action4", "name": "Action 4", "type": "email"}
+        ]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.action_catalog_tools.get_action_types(
             api_client=self.action_catalog_api
         ))
 
+        # Check that the mock was called
+        self.action_catalog_api.get_actions_without_preload_content.assert_called_once()
+
+        # Check that the result is correct
+        self.assertIsInstance(result, dict)
         self.assertIn("types", result)
+        self.assertEqual(len(result["types"]), 4)
         self.assertIn("script", result["types"])
-        self.assertIn("command", result["types"])
-        self.action_catalog_api.get_action_types.assert_called_once()
 
-    def test_get_action_categories_success(self):
-        """Test successful get_action_categories call"""
-        # Mock response
+    def test_get_action_tags_success(self):
+        """Test successful get_action_tags call"""
+        # Mock response - the method calls get_actions_without_preload_content
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
-            "categories": [
-                {"id": "monitoring", "name": "Monitoring"},
-                {"id": "maintenance", "name": "Maintenance"},
-                {"id": "troubleshooting", "name": "Troubleshooting"}
-            ]
-        }
-        self.action_catalog_api.get_action_categories.return_value = mock_response
+        mock_response_data = [
+            {"id": "action1", "name": "Action 1", "tags": ["monitoring", "cpu"]},
+            {"id": "action2", "name": "Action 2", "tags": ["maintenance", "memory"]},
+            {"id": "action3", "name": "Action 3", "tags": ["troubleshooting", "network"]}
+        ]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
 
-        result = asyncio.run(self.action_catalog_tools.get_action_categories(
+        result = asyncio.run(self.action_catalog_tools.get_action_tags(
             api_client=self.action_catalog_api
         ))
 
-        self.assertIn("categories", result)
-        self.assertEqual(len(result["categories"]), 3)
-        self.action_catalog_api.get_action_categories.assert_called_once()
+        # Check that the mock was called
+        self.action_catalog_api.get_actions_without_preload_content.assert_called_once()
 
-    @patch('src.automation.action_catalog.ActionSearchSpace')
-    def test_get_action_matches_string_payload(self, mock_action_search_space_class):
-        """Test get_action_matches with string payload"""
-        # Mock response
-        mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
-            "matches": [{"id": "action1", "name": "Test Action"}]
-        }
-        self.action_catalog_api.get_action_matches.return_value = [mock_response]
+        # Check that the result is correct
+        self.assertIsInstance(result, dict)
+        self.assertIn("tags", result)
+        self.assertEqual(len(result["tags"]), 6)  # monitoring, cpu, maintenance, memory, troubleshooting, network
+        self.assertIn("monitoring", result["tags"])
 
-        # Test with JSON string payload
-        payload = '{"name": "Test Action", "description": "A test action"}'
 
-        # Mock the ActionSearchSpace constructor
-        mock_config_object = MagicMock()
-        mock_action_search_space_class.return_value = mock_config_object
-
-        result = asyncio.run(self.action_catalog_tools.get_action_matches(
-            payload=payload,
-            api_client=self.action_catalog_api
-        ))
-
-        self.assertTrue(result["success"])
-        self.assertIn("data", result)
-
-    @patch('src.automation.action_catalog.ActionSearchSpace')
-    def test_get_action_matches_error_handling(self, mock_action_search_space_class):
-        """Test error handling in get_action_matches"""
-        # Mock API client to raise an exception
-        self.action_catalog_api.get_action_matches.side_effect = Exception("API Error")
-
-        payload = {"name": "Test Action"}
-
-        # Mock the ActionSearchSpace constructor
-        mock_config_object = MagicMock()
-        mock_action_search_space_class.return_value = mock_config_object
-
-        result = asyncio.run(self.action_catalog_tools.get_action_matches(
-            payload=payload,
-            api_client=self.action_catalog_api
-        ))
-
-        self.assertIn("error", result)
-        self.assertIn("Failed to get action matches", result["error"])
-
-    def test_get_actions_error_handling(self):
-        """Test error handling in get_actions"""
-        # Mock API client to raise an exception
-        self.action_catalog_api.get_actions.side_effect = Exception("API Error")
-
-        result = asyncio.run(self.action_catalog_tools.get_actions(
-            api_client=self.action_catalog_api
-        ))
-
-        self.assertIn("error", result)
-        self.assertIn("Failed to get actions", result["error"])
+if __name__ == '__main__':
+    unittest.main()

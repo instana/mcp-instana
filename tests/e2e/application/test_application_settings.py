@@ -35,24 +35,24 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.get_application_configs = MagicMock()
 
-        # Mock response
-        mock_response = [
-            MagicMock(),
-            MagicMock()
+        # Mock response - the method expects a response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [
+            {
+                "id": "app-1",
+                "label": "Test App 1",
+                "scope": "INBOUND"
+            },
+            {
+                "id": "app-2",
+                "label": "Test App 2",
+                "scope": "OUTBOUND"
+            }
         ]
-        mock_response[0].to_dict.return_value = {
-            "id": "app-1",
-            "label": "Test App 1",
-            "scope": "INBOUND"
-        }
-        mock_response[1].to_dict.return_value = {
-            "id": "app-2",
-            "label": "Test App 2",
-            "scope": "OUTBOUND"
-        }
-        mock_api_client.get_application_configs.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        mock_api_client.get_application_configs_without_preload_content.return_value = mock_response
 
         # Create the client
         client = ApplicationSettingsMCPTools(
@@ -70,7 +70,7 @@ class TestApplicationSettingsE2E:
         assert result[1]["id"] == "app-2"
 
         # Verify the API was called correctly
-        mock_api_client.get_application_configs.assert_called_once()
+        mock_api_client.get_application_configs_without_preload_content.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -79,7 +79,7 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.get_application_configs.side_effect = Exception("API Error")
+        mock_api_client.get_application_configs_without_preload_content.side_effect = Exception("API Error")
 
         # Create the client
         client = ApplicationSettingsMCPTools(

@@ -22,8 +22,15 @@ def mock_with_header_auth(api_class, allow_mock=False):
     def decorator(func):
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
-            # Just pass the API client directly
-            kwargs['api_client'] = self.log_alert_api
+            # For testing, we need to ensure the API client is properly set
+            # The decorator should inject the API client into kwargs
+            if 'api_client' not in kwargs or kwargs['api_client'] is None:
+                # Use the existing API client from the instance
+                if hasattr(self, 'log_alert_api'):
+                    kwargs['api_client'] = self.log_alert_api
+                else:
+                    # Fallback to the global mock
+                    kwargs['api_client'] = mock_log_alert_config_api
             return await func(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -54,6 +61,8 @@ sys.modules['fastmcp'] = MagicMock()
 sys.modules['fastmcp.server'] = MagicMock()
 sys.modules['fastmcp.server.dependencies'] = MagicMock()
 sys.modules['pydantic'] = MagicMock()
+sys.modules['mcp'] = MagicMock()
+sys.modules['mcp.types'] = MagicMock()
 
 # Mock the get_http_headers function
 mock_get_http_headers = MagicMock(return_value={})
@@ -123,14 +132,10 @@ mock_log_alert_config_instance = MagicMock()
 mock_log_alert_config_instance.to_dict.return_value = {"id": "test_alert_id", "name": "Test Alert"}
 mock_log_alert_config.return_value = mock_log_alert_config_instance
 
-# Import the class to test first
-from src.log.log_alert_configuration import LogAlertConfigurationMCPTools
-
-# Now patch the decorator
+# Patch the decorator before importing the module
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-    # Re-import to get the patched version
-    import importlib
-    importlib.reload(sys.modules['src.log.log_alert_configuration'])
+    # Import the class to test first
+    from src.log.log_alert_configuration import LogAlertConfigurationMCPTools
 
 class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     """Test the LogAlertConfigurationMCPTools class"""
@@ -353,7 +358,12 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
             "enabled": True
         })
 
-        self.client.log_alert_api.find_active_log_alert_configs = MagicMock(return_value=[mock_config1, mock_config2])
+        # Mock response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [mock_config1.to_dict.return_value, mock_config2.to_dict.return_value]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method
         alert_ids = ["alert1", "alert2"]
@@ -361,7 +371,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.find_active_log_alert_configs(alert_ids=alert_ids))
 
         # Check that the mock was called with the correct arguments
-        self.client.log_alert_api.find_active_log_alert_configs.assert_called_once_with(alert_ids=alert_ids)
+        self.client.log_alert_api.find_active_log_alert_configs_without_preload_content.assert_called_once_with(alert_ids=alert_ids)
 
         # Check that the result is correct
         self.assertIn("configs", result)
@@ -379,13 +389,18 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
             "enabled": True
         })
 
-        self.client.log_alert_api.find_active_log_alert_configs = MagicMock(return_value=[mock_config])
+        # Mock response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [mock_config.to_dict.return_value]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method with no parameters
         result = asyncio.run(self.client.find_active_log_alert_configs())
 
         # Check that the mock was called with the correct arguments
-        self.client.log_alert_api.find_active_log_alert_configs.assert_called_once_with(alert_ids=None)
+        self.client.log_alert_api.find_active_log_alert_configs_without_preload_content.assert_called_once_with(alert_ids=None)
 
         # Check that the result is correct
         self.assertIn("configs", result)
@@ -395,7 +410,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_active_log_alert_configs_error(self):
         """Test find_active_log_alert_configs error handling"""
         # Set up the mock to raise an exception
-        self.client.log_alert_api.find_active_log_alert_configs = MagicMock(side_effect=Exception("Test error"))
+        self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(side_effect=Exception("Test error"))
 
         # Call the method
         result = asyncio.run(self.client.find_active_log_alert_configs())
@@ -417,7 +432,11 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
             "timeThreshold": 300000,
             "enabled": True
         })
-        self.client.log_alert_api.find_log_alert_config = MagicMock(return_value=mock_result)
+        # Mock response object with data attribute
+        mock_response = MagicMock()
+        import json
+        mock_response.data = json.dumps(mock_result.to_dict.return_value).encode('utf-8')
+        self.client.log_alert_api.find_log_alert_config_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method
         alert_id = "test_alert_id"
@@ -426,7 +445,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.find_log_alert_config(id=alert_id, valid_on=valid_on))
 
         # Check that the mock was called with the correct arguments
-        self.client.log_alert_api.find_log_alert_config.assert_called_once_with(
+        self.client.log_alert_api.find_log_alert_config_without_preload_content.assert_called_once_with(
             id=alert_id,
             valid_on=valid_on
         )
@@ -442,7 +461,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_log_alert_config_error(self):
         """Test find_log_alert_config error handling"""
         # Set up the mock to raise an exception
-        self.client.log_alert_api.find_log_alert_config = MagicMock(side_effect=Exception("Test error"))
+        self.client.log_alert_api.find_log_alert_config_without_preload_content = MagicMock(side_effect=Exception("Test error"))
 
         # Call the method
         alert_id = "test_alert_id"
@@ -471,7 +490,12 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
             "created": 1625184000000
         })
 
-        self.client.log_alert_api.find_log_alert_config_versions = MagicMock(return_value=[mock_version1, mock_version2])
+        # Mock response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [mock_version1.to_dict.return_value, mock_version2.to_dict.return_value]
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        self.client.log_alert_api.find_log_alert_config_versions_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method
         alert_id = "test_alert_id"
@@ -479,7 +503,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.find_log_alert_config_versions(id=alert_id))
 
         # Check that the mock was called with the correct arguments
-        self.client.log_alert_api.find_log_alert_config_versions.assert_called_once_with(id=alert_id)
+        self.client.log_alert_api.find_log_alert_config_versions_without_preload_content.assert_called_once_with(id=alert_id)
 
         # Check that the result is correct
         self.assertIn("versions", result)
@@ -492,7 +516,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_log_alert_config_versions_error(self):
         """Test find_log_alert_config_versions error handling"""
         # Set up the mock to raise an exception
-        self.client.log_alert_api.find_log_alert_config_versions = MagicMock(side_effect=Exception("Test error"))
+        self.client.log_alert_api.find_log_alert_config_versions_without_preload_content = MagicMock(side_effect=Exception("Test error"))
 
         # Call the method
         alert_id = "test_alert_id"

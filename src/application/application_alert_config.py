@@ -7,6 +7,11 @@ This module provides application alert configuration tools for Instana monitorin
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from mcp.types import ToolAnnotations
+
+from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.prompts import mcp
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_alert_configuration_api import (
@@ -18,8 +23,6 @@ except ImportError:
     logger.error("Failed to import application alert configuration API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
-
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
         """Initialize the Application Alert MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Find Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def find_application_alert_config(self,
                                             id: str,
@@ -78,7 +84,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get application alert config: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Find Application Alert Config Versions",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def find_application_alert_config_versions(self,
                                                      id: str,
@@ -126,7 +135,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_application_alert_config_versions: {e}", exc_info=True)
             return {"error": f"Failed to get application alert config versions: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Application Alert Configs",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def get_application_alert_configs(self,
                                             application_id: Optional[str] = None,
@@ -173,7 +185,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_application_alert_configs: {e}", exc_info=True)
             return {"error": f"Failed to get application alert configs: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Delete Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def delete_application_alert_config(self,
                                               id: str,
@@ -214,7 +229,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in delete_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to delete application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Enable Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def enable_application_alert_config(self,
                                               id: str,
@@ -259,7 +277,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in enable_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to enable application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Disable Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def disable_application_alert_config(self,
                                                id: str,
@@ -304,7 +325,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in disable_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to disable application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Restore Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def restore_application_alert_config(self,
                                                id: str,
@@ -354,7 +378,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in restore_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to restore application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Update Application Alert Config Baseline",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def update_application_alert_config_baseline(self,
                                                        id: str,
@@ -399,7 +426,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in update_application_alert_config_baseline: {e}", exc_info=True)
             return {"error": f"Failed to update application alert config baseline: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Create Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def create_application_alert_config(self,
                                               payload: Union[Dict[str, Any], str],
@@ -521,7 +551,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in create_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to create application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Update Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(ApplicationAlertConfigurationApi)
     async def update_application_alert_config(self,
                                               id: str,

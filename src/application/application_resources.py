@@ -8,6 +8,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from mcp.types import ToolAnnotations
+
+from src.prompts import mcp
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_resources_api import (
@@ -32,7 +36,10 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         """Initialize the Application Resources MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Application Endpoints",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationResourcesApi)
     async def get_application_endpoints(self,
                                         name_filter: Optional[str] = None,
@@ -99,7 +106,10 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_application_endpoints: {e}", exc_info=True)
             return {"error": f"Failed to get application endpoints: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Application Services",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationResourcesApi)
     async def get_application_services(self,
                                        name_filter: Optional[str] = None,
@@ -203,7 +213,10 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get application services: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Applications",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationResourcesApi)
     async def get_applications(self,
                                name_filter: Optional[str] = None,
@@ -282,7 +295,10 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             return [f"Error: Failed to get applications: {e!s}"]
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Services",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationResourcesApi)
     async def get_services(self,
                            name_filter: Optional[str] = None,

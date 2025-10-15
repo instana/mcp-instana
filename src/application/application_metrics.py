@@ -8,6 +8,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from mcp.types import ToolAnnotations
+
+from src.prompts import mcp
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_metrics_api import (
@@ -37,7 +41,10 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
         """Initialize the Application Metrics MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Application Data Metrics V2",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationMetricsApi)
     async def get_application_data_metrics_v2(self,
                                               metrics: Optional[List[Dict[str, Any]]] = None,
@@ -121,7 +128,10 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_application_data_metrics_v2: {e}", exc_info=True)
             return {"error": f"Failed to get application data metrics: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Application Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationMetricsApi)
     async def get_application_metrics(self,
                                       application_ids: Optional[List[str]] = None,
@@ -199,7 +209,10 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_application_metrics: {e}", exc_info=True)
             return {"error": f"Failed to get application metrics: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Endpoints Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationMetricsApi)
     async def get_endpoints_metrics(self,
                                     endpoint_ids: Optional[List[str]] = None,
@@ -277,7 +290,10 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_endpoints_metrics: {e}", exc_info=True)
             return {"error": f"Failed to get endpoints metrics: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Services Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ApplicationMetricsApi)
     async def get_services_metrics(self,
                                    service_ids: Optional[List[str]] = None,

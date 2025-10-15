@@ -37,7 +37,7 @@ class TestInstanaClientBaseE2E:
 
         try:
             # Define a test function and register it
-            @register_as_tool
+            @register_as_tool()
             async def test_tool(ctx=None):
                 return {"result": "success"}
 

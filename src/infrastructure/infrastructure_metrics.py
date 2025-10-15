@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from mcp.types import ToolAnnotations
 from pydantic import StrictBool
 
 from src.core.utils import (
@@ -40,7 +41,10 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
         """Initialize the Infrastructure Analyze MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Infrastructure Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureMetricsApi)
     async def get_infrastructure_metrics(self,
                                          offline: Optional[StrictBool] = False,

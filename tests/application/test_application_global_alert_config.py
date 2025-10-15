@@ -135,17 +135,19 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
             alert_ids=None
         )
 
-        # Check that the result is correct
-        self.assertEqual(result, mock_result)
+        # Check that the result is correct (method returns a list)
+        self.assertEqual(result, [mock_result])
 
     def test_find_active_global_application_alert_configs_missing_app_id(self):
         """Test find_active_global_application_alert_configs with missing application ID"""
         # Call the method without application ID
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id=None))
 
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "application_id is required")
+        # Check that the result contains an error message (method returns a list)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertIn("error", result[0])
+        self.assertEqual(result[0]["error"], "application_id is required")
 
     def test_find_active_global_application_alert_configs_error(self):
         """Test find_active_global_application_alert_configs error handling"""
@@ -155,9 +157,11 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
         # Call the method
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
 
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("Failed to get active global application alert config", result["error"])
+        # Check that the result contains an error message (method returns a list)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertIn("error", result[0])
+        self.assertIn("Failed to get active global application alert config", result[0]["error"])
 
     def test_find_global_application_alert_config_versions_success(self):
         """Test find_global_application_alert_config_versions with successful response"""

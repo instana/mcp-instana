@@ -7,6 +7,11 @@ This module provides application alert configuration tools for Instana monitorin
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from mcp.types import ToolAnnotations
+
+from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.prompts import mcp
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.global_application_alert_configuration_api import (
@@ -18,8 +23,6 @@ except ImportError:
     logger.error("Failed to import application alert configuration API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
-
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
@@ -30,12 +33,15 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
         """Initialize the Application Alert MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Find Active Global Application Alert Configs",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def find_active_global_application_alert_configs(self,
                                             application_id: str,
                                             alert_ids: Optional[List[str]] = None,
-                                            ctx=None, api_client=None) -> Dict[str, Any]:
+                                            ctx=None, api_client=None) -> List[Dict[str, Any]]:
         """
         Get All Global Smart Alert Configuration.
 
@@ -57,7 +63,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
 
             # Validate required parameters
             if not application_id:
-                return {"error": "application_id is required"}
+                return [{"error": "application_id is required"}]
 
             # Call the find_active_global_application_alert_configs method from the SDK
             logger.debug(f"Calling find_active_global_application_alert_configs with application_id={application_id}, alert_ids={alert_ids}")
@@ -66,21 +72,33 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 alert_ids=alert_ids
             )
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
+            # Convert the result to a list format
+            if isinstance(result, list):
+                # If it's already a list, convert each item to dict if needed
+                result_list = []
+                for item in result:
+                    if hasattr(item, 'to_dict'):
+                        result_list.append(item.to_dict())
+                    else:
+                        result_list.append(item)
+            elif hasattr(result, 'to_dict'):
+                # If it's a single object, wrap it in a list
+                result_list = [result.to_dict()]
             else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result
+                # If it's already a dict or other format, wrap it in a list
+                result_list = [result] if result else []
 
-            logger.debug(f"Result from find_active_global_application_alert_configs: {result_dict}")
-            return result_dict
+            logger.debug(f"Result from find_active_global_application_alert_configs: {result_list}")
+            return result_list
         except Exception as e:
             logger.error(f"Error in find_active_global_application_alert_configs: {e}", exc_info=True)
-            return {"error": f"Failed to get active global application alert config: {e!s}"}
+            return [{"error": f"Failed to get active global application alert config: {e!s}"}]
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Find Global Application Alert Config Versions",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def find_global_application_alert_config_versions(self,
                                                      id: str,
@@ -128,7 +146,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_global_application_alert_config_versions: {e}", exc_info=True)
             return {"error": f"Failed to get global application alert config versions: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Find Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def find_global_application_alert_config(self,
                                             id: Optional[str] = None,
@@ -174,7 +195,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to get global application alert configs: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Delete Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def delete_global_application_alert_config(self,
                                               id: str,
@@ -215,7 +239,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in delete_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to delete global application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Enable Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def enable_global_application_alert_config(self,
                                               id: str,
@@ -260,7 +287,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in enable_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to enable global application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Disable Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def disable_global_application_alert_config(self,
                                                id: str,
@@ -305,7 +335,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in disable_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to disable global application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Restore Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def restore_global_application_alert_config(self,
                                                id: str,
@@ -355,7 +388,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in restore_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to restore global application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Create Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def create_global_application_alert_config(self,
                                               payload: Union[Dict[str, Any], str],
@@ -497,7 +533,10 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             logger.error(f"Error in create_global_application_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to create global application alert config: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Update Global Application Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
     async def update_global_application_alert_config(self,
                                               id: str,

@@ -151,7 +151,13 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                     client = getattr(clients_state, attr_name, None)
                     if client and hasattr(client, tool_name):
                         bound_method = getattr(client, tool_name)
-                        server.tool()(bound_method)
+
+                        # Use the stored metadata (all tools now have metadata)
+                        server.tool(
+                            title=bound_method._mcp_title,
+                            annotations=bound_method._mcp_annotations
+                        )(bound_method)
+
                         tools_registered += 1
                         break
             except Exception as e:
@@ -256,6 +262,7 @@ def get_client_categories():
         from src.infrastructure.infrastructure_topology import (
             InfrastructureTopologyMCPTools,
         )
+        from src.settings.custom_dashboard_tools import CustomDashboardMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
@@ -294,6 +301,9 @@ def get_client_categories():
             ('website_catalog_client', WebsiteCatalogMCPTools),
             ('website_analyze_client', WebsiteAnalyzeMCPTools),
             ('website_configuration_client', WebsiteConfigurationMCPTools),
+        ],
+        "settings": [
+            ('custom_dashboard_client', CustomDashboardMCPTools),
         ]
     }
 
@@ -323,6 +333,7 @@ def get_prompt_categories():
     from src.prompts.infrastructure.infrastructure_topology import (
         InfrastructureTopologyPrompts,
     )
+    from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
     from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
     from src.prompts.website.website_catalog import WebsiteCatalogPrompts
     from src.prompts.website.website_configuration import WebsiteConfigurationPrompts
@@ -344,6 +355,7 @@ def get_prompt_categories():
     website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
     website_analyze_prompts = WebsiteAnalyzePrompts.get_prompts()
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
+    custom_dashboard_prompts = CustomDashboardPrompts.get_prompts()
 
     # Return the categories with their prompt groups
     return {
@@ -367,6 +379,9 @@ def get_prompt_categories():
             ('website_catalog_prompts', website_catalog_prompts),
             ('website_analyze_prompts', website_analyze_prompts),
             ('website_configuration_prompts', website_configuration_prompts),
+        ],
+        "settings": [
+            ('custom_dashboard_prompts', custom_dashboard_prompts),
         ],
     }
 
@@ -423,7 +438,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation,website). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation,website, settings). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -470,7 +485,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"infra", "app", "events", "automation", "website"}
+        all_categories = {"infra", "app", "events", "automation", "website", "settings"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -498,7 +513,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: infra, app, events")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: infra, app, events, automation, website, settings")
             sys.exit(2)
 
         # Print enabled tools for user information

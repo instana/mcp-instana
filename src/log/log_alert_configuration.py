@@ -22,7 +22,9 @@ except ImportError:
     logger.error("Failed to import Instana client modules", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool
+from mcp.types import ToolAnnotations
+
+from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 
 class LogAlertConfigurationMCPTools(BaseInstanaClient):
@@ -51,8 +53,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error initializing LogAlertConfigurationApi: {e}", exc_info=True)
             raise
 
-    @register_as_tool
-    async def create_log_alert_config(self, config: Dict[str, Any], ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Create Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def create_log_alert_config(self, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Create a new log alert configuration.
 
@@ -81,8 +87,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API
-                result = self.log_alert_api.create_log_alert_config(log_alert_config=log_alert_config)
+                result = api_client.create_log_alert_config(log_alert_config=log_alert_config)
                 logger.debug(f"Result from create_log_alert_config: {result}")
+
                 return self._convert_to_dict(result)
             except Exception as e:
                 logger.error(f"Error calling create_log_alert_config API: {e}", exc_info=True)
@@ -91,8 +98,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in create_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to create log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def delete_log_alert_config(self, id: str, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Delete Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def delete_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Delete a log alert configuration.
 
@@ -107,7 +118,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_log_alert_config called with id={id}")
 
             try:
-                self.log_alert_api.delete_log_alert_config(id=id)
+                api_client.delete_log_alert_config(id=id)
                 logger.debug(f"Successfully deleted log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} deleted successfully"}
             except Exception as e:
@@ -117,8 +128,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in delete_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to delete log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def disable_log_alert_config(self, id: str, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Disable Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def disable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Disable a log alert configuration.
 
@@ -133,7 +148,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"disable_log_alert_config called with id={id}")
 
             try:
-                self.log_alert_api.disable_log_alert_config(id=id)
+                api_client.disable_log_alert_config(id=id)
                 logger.debug(f"Successfully disabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} disabled successfully"}
             except Exception as e:
@@ -143,8 +158,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in disable_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to disable log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def enable_log_alert_config(self, id: str, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Enable Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def enable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Enable a log alert configuration.
 
@@ -159,7 +178,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"enable_log_alert_config called with id={id}")
 
             try:
-                self.log_alert_api.enable_log_alert_config(id=id)
+                api_client.enable_log_alert_config(id=id)
                 logger.debug(f"Successfully enabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} enabled successfully"}
             except Exception as e:
@@ -169,8 +188,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in enable_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to enable log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def find_active_log_alert_configs(self, alert_ids: Optional[List[str]] = None, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Find Active Log Alert Configs",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def find_active_log_alert_configs(self, alert_ids: Optional[List[str]] = None, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Get all active log alert configurations.
 
@@ -185,9 +208,21 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"find_active_log_alert_configs called with alert_ids={alert_ids}")
 
             try:
-                result = self.log_alert_api.find_active_log_alert_configs(alert_ids=alert_ids)
+                # Call the API with raw JSON response to avoid Pydantic validation issues
+                result = api_client.find_active_log_alert_configs_without_preload_content(alert_ids=alert_ids)
                 logger.debug(f"Result from find_active_log_alert_configs: {result}")
-                return {"configs": [self._convert_to_dict(config) for config in result]}
+
+                # Parse the JSON response manually
+                import json
+                try:
+                    response_text = result.data.decode('utf-8')
+                    result_list = json.loads(response_text)
+                    logger.debug("Successfully retrieved active log alert configurations")
+                    return {"configs": result_list}
+                except (json.JSONDecodeError, AttributeError) as json_err:
+                    error_message = f"Failed to parse JSON response: {json_err}"
+                    logger.error(error_message)
+                    return {"error": error_message}
             except Exception as e:
                 logger.error(f"Error calling find_active_log_alert_configs API: {e}", exc_info=True)
                 return {"error": f"Failed to find active log alert configurations: {e!s}"}
@@ -195,8 +230,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_active_log_alert_configs: {e}", exc_info=True)
             return {"error": f"Failed to find active log alert configurations: {e!s}"}
 
-    @register_as_tool
-    async def find_log_alert_config(self, id: str, valid_on: Optional[int] = None, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Find Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def find_log_alert_config(self, id: str, valid_on: Optional[int] = None, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Get a specific log alert configuration by ID.
 
@@ -212,9 +251,21 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"find_log_alert_config called with id={id}, valid_on={valid_on}")
 
             try:
-                result = self.log_alert_api.find_log_alert_config(id=id, valid_on=valid_on)
+                # Call the API with raw JSON response to avoid Pydantic validation issues
+                result = api_client.find_log_alert_config_without_preload_content(id=id, valid_on=valid_on)
                 logger.debug(f"Result from find_log_alert_config: {result}")
-                return self._convert_to_dict(result)
+
+                # Parse the JSON response manually
+                import json
+                try:
+                    response_text = result.data.decode('utf-8')
+                    result_dict = json.loads(response_text)
+                    logger.debug("Successfully retrieved log alert configuration")
+                    return result_dict
+                except (json.JSONDecodeError, AttributeError) as json_err:
+                    error_message = f"Failed to parse JSON response: {json_err}"
+                    logger.error(error_message)
+                    return {"error": error_message}
             except Exception as e:
                 logger.error(f"Error calling find_log_alert_config API: {e}", exc_info=True)
                 return {"error": f"Failed to find log alert configuration: {e!s}"}
@@ -222,8 +273,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to find log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def find_log_alert_config_versions(self, id: str, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Find Log Alert Config Versions",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def find_log_alert_config_versions(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Get all versions of a log alert configuration.
 
@@ -238,9 +293,21 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"find_log_alert_config_versions called with id={id}")
 
             try:
-                result = self.log_alert_api.find_log_alert_config_versions(id=id)
+                # Call the API with raw JSON response to avoid Pydantic validation issues
+                result = api_client.find_log_alert_config_versions_without_preload_content(id=id)
                 logger.debug(f"Result from find_log_alert_config_versions: {result}")
-                return {"versions": [self._convert_to_dict(version) for version in result]}
+
+                # Parse the JSON response manually
+                import json
+                try:
+                    response_text = result.data.decode('utf-8')
+                    result_list = json.loads(response_text)
+                    logger.debug("Successfully retrieved log alert configuration versions")
+                    return {"versions": result_list}
+                except (json.JSONDecodeError, AttributeError) as json_err:
+                    error_message = f"Failed to parse JSON response: {json_err}"
+                    logger.error(error_message)
+                    return {"error": error_message}
             except Exception as e:
                 logger.error(f"Error calling find_log_alert_config_versions API: {e}", exc_info=True)
                 return {"error": f"Failed to find log alert configuration versions: {e!s}"}
@@ -248,8 +315,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in find_log_alert_config_versions: {e}", exc_info=True)
             return {"error": f"Failed to find log alert configuration versions: {e!s}"}
 
-    @register_as_tool
-    async def restore_log_alert_config(self, id: str, created: int, ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Restore Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def restore_log_alert_config(self, id: str, created: int, ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Restore a log alert configuration to a previous version.
 
@@ -265,7 +336,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"restore_log_alert_config called with id={id}, created={created}")
 
             try:
-                self.log_alert_api.restore_log_alert_config(id=id, created=created)
+                api_client.restore_log_alert_config(id=id, created=created)
                 logger.debug(f"Successfully restored log alert configuration with ID {id}")
                 return {
                     "success": True,
@@ -278,8 +349,12 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in restore_log_alert_config: {e}", exc_info=True)
             return {"error": f"Failed to restore log alert configuration: {e!s}"}
 
-    @register_as_tool
-    async def update_log_alert_config(self, id: str, config: Dict[str, Any], ctx=None) -> Dict[str, Any]:
+    @register_as_tool(
+        title="Update Log Alert Config",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    )
+    @with_header_auth(LogAlertConfigurationApi)
+    async def update_log_alert_config(self, id: str, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Update a log alert configuration.
 
@@ -303,7 +378,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API
-                result = self.log_alert_api.update_log_alert_config(id=id, log_alert_config=log_alert_config)
+                result = api_client.update_log_alert_config(id=id, log_alert_config=log_alert_config)
                 logger.debug(f"Result from update_log_alert_config: {result}")
                 return self._convert_to_dict(result)
             except Exception as e:

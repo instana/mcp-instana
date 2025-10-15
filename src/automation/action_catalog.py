@@ -18,6 +18,8 @@ except ImportError:
     logger.error("Failed to import application alert configuration API", exc_info=True)
     raise
 
+from mcp.types import ToolAnnotations
+
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Configure logger for this module
@@ -30,7 +32,10 @@ class ActionCatalogMCPTools(BaseInstanaClient):
         """Initialize the Application Alert MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Action Matches",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ActionCatalogApi)
     async def get_action_matches(self,
                             payload: Union[Dict[str, Any], str],
@@ -118,125 +123,106 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 logger.debug(f"Error creating ActionSearchSpace: {e}")
                 return {"error": f"Failed to create config object: {e!s}"}
 
-            # Call the get_action_matches method from the SDK
-            logger.debug("Calling get_action_matches with config object")
-            result = api_client.get_action_matches(
+            # Call the get_action_matches_without_preload_content method from the SDK to avoid Pydantic validation issues
+            logger.debug("Calling get_action_matches_without_preload_content with config object")
+            result = api_client.get_action_matches_without_preload_content(
                 action_search_space=config_object,
                 target_snapshot_id=target_snapshot_id,
             )
 
-            # Convert the result to a dictionary
-            if isinstance(result, list):
-                # Convert list of ActionMatch objects to list of dictionaries
-                result_dict = []
-                for action_match in result:
-                    try:
-                        if hasattr(action_match, 'to_dict'):
-                            result_dict.append(action_match.to_dict())
-                        else:
-                            result_dict.append(action_match)
-                    except Exception as e:
-                        logger.warning(f"Failed to convert action match to dict: {e}")
-                        # Add a fallback representation
-                        result_dict.append({
-                            "error": f"Failed to serialize action match: {e}",
-                            "raw_data": str(action_match)
-                        })
+            # Parse the JSON response manually
+            import json
+            try:
+                # The result from get_action_matches_without_preload_content is a response object
+                # We need to read the response data and parse it as JSON
+                response_text = result.data.decode('utf-8')
+                result_dict = json.loads(response_text)
+                logger.debug("Successfully retrieved action matches data")
 
-                logger.debug(f"Result from get_action_matches: {result_dict}")
-                return {
-                    "success": True,
-                    "message": "Action matches retrieved successfully",
-                    "data": result_dict,
-                    "count": len(result_dict)
-                }
-            elif hasattr(result, 'to_dict'):
-                try:
-                    result_dict = result.to_dict()
+                # Handle the parsed JSON data
+                if isinstance(result_dict, list):
+                    logger.debug(f"Result from get_action_matches: {result_dict}")
+                    return {
+                        "success": True,
+                        "message": "Action matches retrieved successfully",
+                        "data": result_dict,
+                        "count": len(result_dict)
+                    }
+                else:
                     logger.debug(f"Result from get_action_matches: {result_dict}")
                     return {
                         "success": True,
                         "message": "Action match retrieved successfully",
                         "data": result_dict
                     }
-                except Exception as e:
-                    logger.warning(f"Failed to convert result to dict: {e}")
-                    return {
-                        "success": False,
-                        "message": "Failed to serialize result",
-                        "error": str(e),
-                        "raw_data": str(result)
-                    }
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Get action matches"
-                }
-                logger.debug(f"Result from get_action_matches: {result_dict}")
-                return result_dict
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
         except Exception as e:
             logger.error(f"Error in get_action_matches: {e}")
             return {"error": f"Failed to get action matches: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Actions",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ActionCatalogApi)
     async def get_actions(self,
-                         page: Optional[int] = None,
-                         page_size: Optional[int] = None,
-                         search: Optional[str] = None,
-                         types: Optional[List[str]] = None,
-                         order_by: Optional[str] = None,
-                         order_direction: Optional[str] = None,
                          ctx=None,
-                         api_client=None) -> Dict[str, Any]:
+                         api_client=None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Get a list of available automation actions from the action catalog.
 
+        Note: The SDK get_actions method does not support pagination or filtering parameters.
+
         Args:
-            page: Page number for pagination (optional)
-            page_size: Number of actions per page (optional)
-            search: Search term to filter actions by name or description (optional)
-            types: List of action types to filter by (optional)
-            order_by: Field to order results by (optional)
-            order_direction: Sort direction ('asc' or 'desc') (optional)
             ctx: Optional[Dict[str, Any]]: The context for the action retrieval
             api_client: Optional[ActionCatalogApi]: The API client for action catalog
 
         Returns:
-            Dict[str, Any]: The list of available automation actions
+            Union[List[Dict[str, Any]], Dict[str, Any]]: The list of available automation actions or error dict
         """
         try:
             logger.debug("get_actions called")
 
-            # Call the get_actions method from the SDK
-            result = api_client.get_actions(
-                page=page,
-                page_size=page_size,
-                search=search,
-                types=types,
-                order_by=order_by,
-                order_direction=order_direction
-            )
+            # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
+            result = api_client.get_actions_without_preload_content()
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
+            # Parse the JSON response manually
+            import json
+            try:
+                # The result from get_actions_without_preload_content is a response object
+                # We need to read the response data and parse it as JSON
+                response_text = result.data.decode('utf-8')
+                result_dict = json.loads(response_text)
+                logger.debug("Successfully retrieved actions data")
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
+
+            # Handle the case where the API returns a list directly
+            if isinstance(result_dict, list):
+                # Return the list directly
+                logger.debug(f"Result from get_actions: {result_dict}")
+                return result_dict
+            elif isinstance(result_dict, dict) and "actions" in result_dict:
+                logger.debug(f"Result from get_actions: {result_dict['actions']}")
+                return result_dict["actions"]
             else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Actions retrieved successfully"
-                }
-
-            logger.debug(f"Result from get_actions: {result_dict}")
-            return result_dict
+                # Return as is if it's already a list or other format
+                logger.debug(f"Result from get_actions: {result_dict}")
+                return result_dict
 
         except Exception as e:
             logger.error(f"Error in get_actions: {e}")
             return {"error": f"Failed to get actions: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Action Details",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ActionCatalogApi)
     async def get_action_details(self,
                                 action_id: str,
@@ -259,18 +245,21 @@ class ActionCatalogMCPTools(BaseInstanaClient):
 
             logger.debug(f"get_action_details called with action_id: {action_id}")
 
-            # Call the get_action method from the SDK
-            result = api_client.get_action(action_id=action_id)
+            # Call the get_action_by_id_without_preload_content method from the SDK to avoid Pydantic validation issues
+            result = api_client.get_action_by_id_without_preload_content(id=action_id)
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Action details retrieved successfully"
-                }
+            # Parse the JSON response manually
+            import json
+            try:
+                # The result from get_action_by_id_without_preload_content is a response object
+                # We need to read the response data and parse it as JSON
+                response_text = result.data.decode('utf-8')
+                result_dict = json.loads(response_text)
+                logger.debug("Successfully retrieved action details")
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
 
             logger.debug(f"Result from get_action: {result_dict}")
             return result_dict
@@ -279,67 +268,10 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_action_details: {e}")
             return {"error": f"Failed to get action details: {e!s}"}
 
-    @register_as_tool
-    @with_header_auth(ActionCatalogApi)
-    async def search_actions(self,
-                            search: str,
-                            page: Optional[int] = None,
-                            page_size: Optional[int] = None,
-                            types: Optional[List[str]] = None,
-                            order_by: Optional[str] = None,
-                            order_direction: Optional[str] = None,
-                            ctx=None,
-                            api_client=None) -> Dict[str, Any]:
-        """
-        Search for automation actions in the action catalog.
-
-        Args:
-            search: Search term to find actions by name, description, or other attributes (required)
-            page: Page number for pagination (optional)
-            page_size: Number of actions per page (optional)
-            types: List of action types to filter by (optional)
-            order_by: Field to order results by (optional)
-            order_direction: Sort direction ('asc' or 'desc') (optional)
-            ctx: Optional[Dict[str, Any]]: The context for the action search
-            api_client: Optional[ActionCatalogApi]: The API client for action catalog
-
-        Returns:
-            Dict[str, Any]: The search results for automation actions
-        """
-        try:
-            if not search:
-                return {"error": "search parameter is required"}
-
-            logger.debug(f"search_actions called with search: {search}")
-
-            # Call the search_actions method from the SDK
-            result = api_client.search_actions(
-                search=search,
-                page=page,
-                page_size=page_size,
-                types=types,
-                order_by=order_by,
-                order_direction=order_direction
-            )
-
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Action search completed successfully"
-                }
-
-            logger.debug(f"Result from search_actions: {result_dict}")
-            return result_dict
-
-        except Exception as e:
-            logger.error(f"Error in search_actions: {e}")
-            return {"error": f"Failed to search actions: {e!s}"}
-
-    @register_as_tool
+    @register_as_tool(
+        title="Get Action Types",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ActionCatalogApi)
     async def get_action_types(self,
                               ctx=None,
@@ -357,18 +289,33 @@ class ActionCatalogMCPTools(BaseInstanaClient):
         try:
             logger.debug("get_action_types called")
 
-            # Call the get_action_types method from the SDK
-            result = api_client.get_action_types()
+            # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
+            result = api_client.get_actions_without_preload_content()
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Action types retrieved successfully"
+            # Parse the JSON response manually
+            import json
+            try:
+                # The result from get_actions_without_preload_content is a response object
+                # We need to read the response data and parse it as JSON
+                response_text = result.data.decode('utf-8')
+                actions_list = json.loads(response_text)
+                logger.debug("Successfully retrieved actions data")
+
+                # Extract unique types from actions
+                types = set()
+                if isinstance(actions_list, list):
+                    for action in actions_list:
+                        if isinstance(action, dict) and 'type' in action:
+                            types.add(action['type'])
+
+                result_dict = {
+                    "types": list(types),
+                    "total_types": len(types)
                 }
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
 
             logger.debug(f"Result from get_action_types: {result_dict}")
             return result_dict
@@ -377,40 +324,70 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_action_types: {e}")
             return {"error": f"Failed to get action types: {e!s}"}
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Action Tags",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(ActionCatalogApi)
-    async def get_action_categories(self,
-                                   ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+    async def get_action_tags(self,
+                             ctx=None,
+                             api_client=None) -> Dict[str, Any]:
         """
-        Get a list of available action categories in the action catalog.
+        Get a list of available action tags from the action catalog.
+
+        This method extracts unique 'tags' fields from all actions.
 
         Args:
-            ctx: Optional[Dict[str, Any]]: The context for the action categories retrieval
+            ctx: Optional[Dict[str, Any]]: The context for the action tags retrieval
             api_client: Optional[ActionCatalogApi]: The API client for action catalog
 
         Returns:
-            Dict[str, Any]: The list of available action categories
+            Dict[str, Any]: The list of available action tags
         """
         try:
-            logger.debug("get_action_categories called")
+            logger.debug("get_action_tags called")
 
-            # Call the get_action_categories method from the SDK
-            result = api_client.get_action_categories()
+            # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
+            result = api_client.get_actions_without_preload_content()
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "Action categories retrieved successfully"
-                }
+            # Parse the JSON response manually
+            import json
+            try:
+                # The result from get_actions_without_preload_content is a response object
+                # We need to read the response data and parse it as JSON
+                response_text = result.data.decode('utf-8')
+                actions_list = json.loads(response_text)
+                logger.debug("Successfully retrieved actions data")
 
-            logger.debug(f"Result from get_action_categories: {result_dict}")
+                # Extract tags from the actions list
+                if isinstance(actions_list, list):
+                    # Extract unique tags from actions
+                    tags = set()
+                    for action in actions_list:
+                        if isinstance(action, dict):
+                            # Extract tags field
+                            if 'tags' in action and isinstance(action['tags'], list):
+                                tags.update(action['tags'])
+
+                    result_dict = {
+                        "tags": list(tags),
+                        "total_tags": len(tags)
+                    }
+                else:
+                    # If it's not a list, return as is
+                    result_dict = {
+                        "tags": [],
+                        "total_tags": 0
+                    }
+
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
+
+            logger.debug(f"Result from get_action_tags: {result_dict}")
             return result_dict
 
         except Exception as e:
-            logger.error(f"Error in get_action_categories: {e}")
-            return {"error": f"Failed to get action categories: {e!s}"}
+            logger.error(f"Error in get_action_tags: {e}")
+            return {"error": f"Failed to get action tags: {e!s}"}

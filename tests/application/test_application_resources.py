@@ -138,10 +138,12 @@ sys.modules['instana_client.models.get_available_plugins_query'].GetAvailablePlu
 sys.modules['instana_client.models.get_infrastructure_query'].GetInfrastructureQuery = mock_infra_query
 sys.modules['instana_client.models.get_infrastructure_groups_query'].GetInfrastructureGroupsQuery = mock_groups_query
 
-# Patch the with_header_auth decorator
+# Patch the with_header_auth decorator before importing the module
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test
     from src.application.application_resources import ApplicationResourcesMCPTools
+
+
 class TestApplicationResourcesMCPTools(unittest.TestCase):
     """Test the ApplicationResourcesMCPTools class"""
 
@@ -156,15 +158,16 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         # Store references to the global mocks
         self.mock_configuration = mock_configuration
         self.mock_api_client = mock_api_client
-        self.app_resources_api = mock_app_resources_api
+        self.app_resources_api = MagicMock()
 
         # Create the client
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"
+
         self.client = ApplicationResourcesMCPTools(read_token=self.read_token, base_url=self.base_url)
 
         # Set up the client's API attribute
-        self.client.resources_api = mock_app_resources_api
+        self.client.resources_api = self.app_resources_api
 
         # Patch the logger to prevent logging during tests
         patcher = patch('src.application.application_resources.logger')

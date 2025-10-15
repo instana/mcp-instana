@@ -52,11 +52,8 @@ def mock_with_header_auth(api_class, allow_mock=False):
     def decorator(func):
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
-            # Check if the original function expects ctx
-            if 'ctx' in func.__code__.co_varnames:
-                # Only add api_client if the function expects it
-                if 'api_client' in func.__code__.co_varnames:
-                    kwargs['api_client'] = self.analyze_api
+            # Just pass the API client directly
+            kwargs['api_client'] = self.analyze_api
             return await func(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -105,10 +102,11 @@ sys.modules['instana_client.models.get_traces'].GetTraces = mock_get_traces
 sys.modules['instana_client.models.get_trace_groups'].GetTraceGroups = mock_get_trace_groups
 sys.modules['instana_client.models.group'].Group = mock_group  # Add Group to modules
 
-# Patch the with_header_auth decorator
+# Patch the with_header_auth decorator before importing the module
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test
     from src.application.application_analyze import ApplicationAnalyzeMCPTools
+
 
 class TestApplicationAnalyzeMCPTools(unittest.TestCase):
     """Test the ApplicationAnalyzeMCPTools class"""
@@ -123,15 +121,16 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         # Store references to the global mocks
         self.mock_configuration = mock_configuration
         self.mock_api_client = mock_api_client
-        self.app_analyze_api = mock_app_analyze_api
+        self.app_analyze_api = MagicMock()
 
         # Create the client
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"
+
         self.client = ApplicationAnalyzeMCPTools(read_token=self.read_token, base_url=self.base_url)
 
         # Set up the client's API attribute
-        self.client.analyze_api = mock_app_analyze_api
+        self.client.analyze_api = self.app_analyze_api
 
         # Patch the logger to prevent logging during tests
         patcher = patch('src.application.application_analyze.logger')
@@ -371,6 +370,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         # Set up the mock response
         mock_result = MagicMock()
         mock_result.to_dict = MagicMock(return_value={"correlated_traces": "data"})
+        # Mock the method on the analyze_api object
         self.client.analyze_api.get_correlated_traces = MagicMock(return_value=mock_result)
 
         # Call the method with a correlation ID

@@ -45,16 +45,7 @@ traceback.print_exception = custom_print_exception
 traceback.print_exc = custom_print_exc
 
 
-# Create a mock for the with_header_auth decorator
-def mock_with_header_auth(api_class, allow_mock=False):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(self, *args, **kwargs):
-            # Just pass the API client directly
-            kwargs['api_client'] = self.topology_api
-            return await func(self, *args, **kwargs)
-        return wrapper
-    return decorator
+# No need for with_header_auth mock since the method doesn't use it
 
 # Create mock modules and classes
 sys.modules['instana_client'] = MagicMock()
@@ -76,9 +67,9 @@ sys.modules['instana_client.api_client'].ApiClient = mock_api_client
 sys.modules['instana_client.api.application_topology_api'].ApplicationTopologyApi = mock_topology_api
 
 # Patch the with_header_auth decorator
-with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-    # Import the class to test
-    from src.application.application_topology import ApplicationTopologyMCPTools
+# Import the class to test
+from src.application.application_topology import ApplicationTopologyMCPTools
+
 
 class TestApplicationTopologyMCPTools(unittest.TestCase):
     """Test cases for ApplicationTopologyMCPTools class."""
@@ -105,9 +96,9 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
 
     def test_get_application_topology(self):
         """Test get_application_topology method."""
-        # Mock response data
+        # Mock response data - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict = MagicMock(return_value={
+        mock_response_data = {
             "nodes": [
                 {
                     "id": "service-1",
@@ -127,10 +118,12 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
                     "calls": 150
                 }
             ]
-        })
+        }
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
 
         # Configure the mock
-        self.client.topology_api.get_services_map = MagicMock(return_value=mock_response)
+        self.client.topology_api.get_services_map_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method
         result = asyncio.run(self.client.get_application_topology(
@@ -141,8 +134,8 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
         ))
 
         # Verify the API was called with correct parameters
-        self.client.topology_api.get_services_map.assert_called_once()
-        call_args = self.client.topology_api.get_services_map.call_args[1]
+        self.client.topology_api.get_services_map_without_preload_content.assert_called_once()
+        call_args = self.client.topology_api.get_services_map_without_preload_content.call_args[1]
         self.assertEqual(call_args["window_size"], 3600000)
         self.assertEqual(call_args["application_id"], "app-123")
         self.assertEqual(call_args["application_boundary_scope"], "INBOUND")
@@ -159,19 +152,21 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
         """Test get_application_topology method with default parameters."""
         # Mock response data
         mock_response = MagicMock()
-        mock_response.to_dict = MagicMock(return_value={"nodes": [], "edges": []})
+        mock_response_data = {"nodes": [], "edges": []}
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
 
         # Configure the mock
-        self.client.topology_api.get_services_map = MagicMock(return_value=mock_response)
+        self.client.topology_api.get_services_map_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method with minimal parameters
         result = asyncio.run(self.client.get_application_topology())
 
         # Verify the API was called
-        self.client.topology_api.get_services_map.assert_called_once()
+        self.client.topology_api.get_services_map_without_preload_content.assert_called_once()
 
         # Verify default values were used
-        call_args = self.client.topology_api.get_services_map.call_args[1]
+        call_args = self.client.topology_api.get_services_map_without_preload_content.call_args[1]
         self.assertEqual(call_args["window_size"], 3600000)  # Default 1 hour
 
         # Verify the result structure
@@ -181,7 +176,7 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
     def test_get_application_topology_error_handling(self):
         """Test error handling in get_application_topology method."""
         # Configure the mock to raise an exception
-        self.client.topology_api.get_services_map = MagicMock(side_effect=Exception("API Error"))
+        self.client.topology_api.get_services_map_without_preload_content = MagicMock(side_effect=Exception("API Error"))
 
         # Call the method
         result = asyncio.run(self.client.get_application_topology())
@@ -192,11 +187,14 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
 
     def test_get_application_topology_dict_result(self):
         """Test get_application_topology with a result that's already a dict."""
-        # Mock response data as a dict directly
+        # Mock response data as a response object with data attribute
+        mock_response = MagicMock()
         mock_result = {"nodes": [], "edges": []}
+        import json
+        mock_response.data = json.dumps(mock_result).encode('utf-8')
 
         # Configure the mock
-        self.client.topology_api.get_services_map = MagicMock(return_value=mock_result)
+        self.client.topology_api.get_services_map_without_preload_content = MagicMock(return_value=mock_response)
 
         # Call the method
         result = asyncio.run(self.client.get_application_topology())

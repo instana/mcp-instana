@@ -120,7 +120,6 @@ def should_run_real_api_tests():
 
 
 # Markers for different test types
-pytest_plugins = ["pytest_asyncio"]
 
 
 def pytest_configure(config):

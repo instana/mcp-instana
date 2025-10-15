@@ -20,9 +20,9 @@ class TestApplicationTopologyE2E:
     async def test_get_application_topology_mocked(self, instana_credentials):
         """Test getting application topology with mocked responses."""
 
-        # Mock the API response
+        # Mock the API response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
+        mock_response_data = {
             "services": [
                 {
                     "id": "service-1",
@@ -50,11 +50,13 @@ class TestApplicationTopologyE2E:
                 }
             ]
         }
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
 
         with patch('src.application.application_topology.ApplicationTopologyApi') as mock_api_class:
             # Set up the mock API
             mock_api = MagicMock()
-            mock_api.get_services_map.return_value = mock_response
+            mock_api.get_services_map_without_preload_content.return_value = mock_response
             mock_api_class.return_value = mock_api
 
             # Create the client
@@ -77,7 +79,7 @@ class TestApplicationTopologyE2E:
             assert result["connections"][0]["source"] == "service-1"
 
             # Verify the API was called with default parameters
-            mock_api.get_services_map.assert_called_once_with(
+            mock_api.get_services_map_without_preload_content.assert_called_once_with(
                 window_size=3600000,  # Default 1 hour
                 to=pytest.approx(int(datetime.now().timestamp() * 1000), abs=10000),
                 application_id=None,
@@ -89,17 +91,19 @@ class TestApplicationTopologyE2E:
     async def test_get_application_topology_with_params(self, instana_credentials):
         """Test getting application topology with custom parameters."""
 
-        # Mock the API response
+        # Mock the API response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
+        mock_response_data = {
             "services": [],
             "connections": []
         }
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
 
         with patch('src.application.application_topology.ApplicationTopologyApi') as mock_api_class:
             # Set up the mock API
             mock_api = MagicMock()
-            mock_api.get_services_map.return_value = mock_response
+            mock_api.get_services_map_without_preload_content.return_value = mock_response
             mock_api_class.return_value = mock_api
 
             # Create the client
@@ -128,7 +132,7 @@ class TestApplicationTopologyE2E:
             assert "connections" in result
 
             # Verify the API was called with the correct parameters
-            mock_api.get_services_map.assert_called_once_with(
+            mock_api.get_services_map_without_preload_content.assert_called_once_with(
                 window_size=window_size,
                 to=to_timestamp,
                 application_id=application_id,
@@ -143,7 +147,7 @@ class TestApplicationTopologyE2E:
         with patch('src.application.application_topology.ApplicationTopologyApi') as mock_api_class:
             # Set up the mock API to raise an exception
             mock_api = MagicMock()
-            mock_api.get_services_map.side_effect = Exception("API Error")
+            mock_api.get_services_map_without_preload_content.side_effect = Exception("API Error")
             mock_api_class.return_value = mock_api
 
             # Create the client
@@ -184,13 +188,14 @@ class TestApplicationTopologyE2E:
     async def test_get_application_topology_non_dict_response(self, instana_credentials):
         """Test handling of non-dict response from API."""
 
-        # Mock the API response to return an object without to_dict method
-        mock_response = "Invalid response"
+        # Mock the API response to return an object with data attribute containing invalid JSON
+        mock_response = MagicMock()
+        mock_response.data = "Invalid JSON response".encode('utf-8')
 
         with patch('src.application.application_topology.ApplicationTopologyApi') as mock_api_class:
             # Set up the mock API
             mock_api = MagicMock()
-            mock_api.get_services_map.return_value = mock_response
+            mock_api.get_services_map_without_preload_content.return_value = mock_response
             mock_api_class.return_value = mock_api
 
             # Create the client
@@ -202,28 +207,30 @@ class TestApplicationTopologyE2E:
             # Test the method
             result = await client.get_application_topology()
 
-            # Verify the result is returned as is
+            # Verify the result contains an error due to invalid JSON
             assert isinstance(result, dict)
-        assert "data" in result
-        assert result["data"] == "Invalid response"
+            assert "error" in result
+            assert "Failed to parse JSON response" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_get_application_topology_debug_print(self, instana_credentials):
         """Test debug print functionality."""
 
-        # Mock the API response
+        # Mock the API response - the method expects a response object with data attribute
         mock_response = MagicMock()
-        mock_response.to_dict.return_value = {
+        mock_response_data = {
             "services": [],
             "connections": []
         }
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
 
         with patch('src.application.application_topology.ApplicationTopologyApi') as mock_api_class:
 
             # Set up the mock API
             mock_api = MagicMock()
-            mock_api.get_services_map.return_value = mock_response
+            mock_api.get_services_map_without_preload_content.return_value = mock_response
             mock_api_class.return_value = mock_api
 
             # Create the client
@@ -237,7 +244,7 @@ class TestApplicationTopologyE2E:
 
             # Verify the method was called successfully
             # debug_print is not exported from the module, so we just verify the method execution
-            assert mock_api.get_services_map.called
+            assert mock_api.get_services_map_without_preload_content.called
 
     # Integration tests with MCP server
 

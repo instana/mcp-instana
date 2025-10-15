@@ -20,6 +20,8 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
+from mcp.types import ToolAnnotations
+
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Configure logger for this module
@@ -32,7 +34,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         """Initialize the Infrastructure Catalog MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Available Payload Keys By Plugin ID",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_available_payload_keys_by_plugin_id(self,
                                                       plugin_id: str,
@@ -123,7 +128,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get payload keys: {e!s}", "plugin_id": plugin_id}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Infrastructure Catalog Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_infrastructure_catalog_metrics(self,
                                                  plugin: str,
@@ -160,10 +168,22 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
             # Handle different response types
             if isinstance(result, list):
-                # If it's a list of metric names, limit to first 50
-                limited_metrics = result[:50]
-                logger.debug(f"Received {len(result)} metrics for plugin {plugin}, returning first {len(limited_metrics)}")
-                return limited_metrics
+                # If it's a list of metric objects or names, extract metric names
+                metric_names = []
+                for item in result[:50]:  # Limit to first 50
+                    if isinstance(item, str):
+                        # Already a string (metric name)
+                        metric_names.append(item)
+                    elif isinstance(item, dict):
+                        # Extract metric name from metric object
+                        metric_name = item.get('metricId') or item.get('label') or str(item)
+                        metric_names.append(metric_name)
+                    else:
+                        # Convert to string
+                        metric_names.append(str(item))
+
+                logger.debug(f"Received {len(result)} metrics for plugin {plugin}, returning first {len(metric_names)}")
+                return metric_names
 
             elif hasattr(result, 'to_dict'):
                 # If it's an SDK object with to_dict method
@@ -171,14 +191,35 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
                 # Check if the dict contains a list of metrics
                 if isinstance(result_dict, list):
-                    limited_metrics = result_dict[:50]
-                    logger.debug(f"Received {len(result_dict)} metrics for plugin {plugin}, returning first {len(limited_metrics)}")
-                    return limited_metrics
+                    metric_names = []
+                    for item in result_dict[:50]:  # Limit to first 50
+                        if isinstance(item, str):
+                            metric_names.append(item)
+                        elif isinstance(item, dict):
+                            metric_name = item.get('metricId') or item.get('label') or str(item)
+                            metric_names.append(metric_name)
+                        else:
+                            metric_names.append(str(item))
+
+                    logger.debug(f"Received {len(result_dict)} metrics for plugin {plugin}, returning first {len(metric_names)}")
+                    return metric_names
                 elif isinstance(result_dict, dict):
                     # Try to extract metric names from dict structure
                     if 'metrics' in result_dict:
-                        metrics = result_dict['metrics'][:50] if isinstance(result_dict['metrics'], list) else []
-                        return metrics
+                        metrics_list = result_dict['metrics']
+                        if isinstance(metrics_list, list):
+                            metric_names = []
+                            for item in metrics_list[:50]:  # Limit to first 50
+                                if isinstance(item, str):
+                                    metric_names.append(item)
+                                elif isinstance(item, dict):
+                                    metric_name = item.get('metricId') or item.get('label') or str(item)
+                                    metric_names.append(metric_name)
+                                else:
+                                    metric_names.append(str(item))
+                            return metric_names
+                        else:
+                            return [f"Metrics field is not a list for plugin {plugin}"]
                     else:
                         return [f"Unexpected dict structure for plugin {plugin}"]
                 else:
@@ -193,7 +234,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return [f"Error: Failed to get metric catalog for plugin '{plugin}': {e!s}"]
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Infrastructure Catalog Plugins",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_infrastructure_catalog_plugins(self, ctx=None, api_client=None) -> Dict[str, Any]:
         """
@@ -263,7 +307,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Infrastructure Catalog Plugins With Custom Metrics",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_infrastructure_catalog_plugins_with_custom_metrics(self, ctx=None, api_client=None) -> Dict[str, Any] | List[Dict[str, Any]]:
         """
@@ -303,7 +350,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get plugins with custom metrics: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Tag Catalog",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_tag_catalog(self, plugin: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
@@ -388,7 +438,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get tag catalog: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Tag Catalog All",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_tag_catalog_all(self, ctx=None, api_client=None) -> Dict[str, Any]:
         """
@@ -507,7 +560,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         return summary
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Infrastructure Catalog Search Fields",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(InfrastructureCatalogApi)
     async def get_infrastructure_catalog_search_fields(self, ctx=None, api_client=None) -> List[str] | Dict[str, Any]:
         """

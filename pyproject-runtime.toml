@@ -15,7 +15,7 @@ authors = [
     {name = "Riya Kumari", email = "Riya.Kumari3@ibm.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 
 # Minimal runtime dependencies only

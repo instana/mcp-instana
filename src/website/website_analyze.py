@@ -34,6 +34,8 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
+from mcp.types import ToolAnnotations
+
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 # Configure logger for this module
@@ -47,7 +49,10 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         """Initialize the Website Analyze MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Website Beacon Groups",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(WebsiteAnalyzeApi)
     async def get_website_beacon_groups(self,
                                        payload: Optional[Union[Dict[str, Any], str]] = None,
@@ -263,7 +268,10 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get website beacon groups: {e!s}"}
 
 
-    @register_as_tool
+    @register_as_tool(
+        title="Get Website Beacons",
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    )
     @with_header_auth(WebsiteAnalyzeApi)
     async def get_website_beacons(self,
                                  payload: Optional[Union[Dict[str, Any], str]] = None,

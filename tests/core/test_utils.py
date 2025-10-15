@@ -34,7 +34,7 @@ class TestRegisterAsTool(unittest.TestCase):
         """Test that the register_as_tool decorator adds functions to the MCP_TOOLS registry"""
 
         # Define a test function
-        @register_as_tool
+        @register_as_tool()
         def test_function():
             return "test"
 
@@ -50,7 +50,7 @@ class TestRegisterAsTool(unittest.TestCase):
         """Test that the register_as_tool decorator works with async functions"""
 
         # Define an async test function
-        @register_as_tool
+        @register_as_tool()
         async def async_test_function():
             return "async_test"
 
@@ -66,7 +66,7 @@ class TestRegisterAsTool(unittest.TestCase):
         """Test that the register_as_tool decorator works with functions that have parameters"""
 
         # Define a test function with parameters
-        @register_as_tool
+        @register_as_tool()
         def test_function_with_params(param1, param2):
             return f"{param1}_{param2}"
 
@@ -658,7 +658,7 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_register_as_tool_with_class_method(self):
         """Test register_as_tool with a class method"""
         class TestClass:
-            @register_as_tool
+            @register_as_tool()
             def class_method(self):
                 return "class_method_result"
 
@@ -674,7 +674,7 @@ class TestBaseInstanaClient(unittest.TestCase):
         """Test register_as_tool with a static method"""
         class TestClass:
             @staticmethod
-            @register_as_tool
+            @register_as_tool()
             def static_method():
                 return "static_method_result"
 
@@ -688,7 +688,7 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_register_as_tool_with_lambda(self):
         """Test register_as_tool with a lambda function"""
         # This should work but is unusual
-        register_as_tool(lambda: "lambda_result")
+        register_as_tool()(lambda: "lambda_result")
 
         # Check that the function was added to the registry
         self.assertIn("<lambda>", MCP_TOOLS)
@@ -699,7 +699,7 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_register_as_tool_with_generator(self):
         """Test register_as_tool with a generator function"""
-        @register_as_tool
+        @register_as_tool()
         def generator_func():
             yield "generator_result"
 
