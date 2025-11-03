@@ -14,12 +14,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, fields
 from typing import Any
 
+
 from dotenv import load_dotenv
 
 from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
 
+from src.observability import workflow, task
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Default level, can be overridden
@@ -404,6 +406,7 @@ def get_enabled_client_configs(enabled_categories: str):
             logger.warning(f"Unknown category '{category}'")
     return enabled_configs
 
+@workflow(name="instana_mcp_workflow")
 def main():
     """Main entry point for the MCP server."""
     try:

@@ -31,7 +31,8 @@ dependencies = [
     # Environment loading - imported in src/core/server.py
     "python-dotenv==1.1.0",
     # Data validation - imported in src/infrastructure/infrastructure_metrics.py
-    "pydantic==2.11.7"
+    "pydantic==2.11.7",
+    "traceloop-sdk>=0.47.5",
 ]
 
 # Development dependencies for testing, linting, and development
