@@ -14,14 +14,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, fields
 from typing import Any
 
-
 from dotenv import load_dotenv
 
 from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
 
-from src.observability import workflow, task
+from src.observability import task, workflow
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Default level, can be overridden

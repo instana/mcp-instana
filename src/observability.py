@@ -1,6 +1,7 @@
 import os
 import sys
 
+
 def workflow(name=None):
     def decorator(func):
         return func
@@ -16,7 +17,8 @@ TRACELOOP_ENABLED = os.getenv("ENABLE_MCP_OBSERVABILITY", "false").lower() in ("
 if TRACELOOP_ENABLED:
     try:
         from traceloop.sdk import Traceloop
-        from traceloop.sdk.decorators import workflow as traceloop_workflow, task as traceloop_task
+        from traceloop.sdk.decorators import task as traceloop_task
+        from traceloop.sdk.decorators import workflow as traceloop_workflow
         Traceloop.init(app_name="Instana-MCP-Server")
         print("Traceloop enabled and initialized for MCP Client", file=sys.stderr)
         # Override the no-op decorators with real ones
