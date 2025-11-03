@@ -64,6 +64,9 @@
     - [Production Deployment](#production-deployment)
       - [**Recommended Production Setup**](#recommended-production-setup)
       - [**Kubernetes Example**](#kubernetes-example)
+  - [MCP Observability](#mcp-observability)
+    - [Enabling Observability](#enabling-observability)
+    - [Disabling Observability](#disabling-observability)
   - [Troubleshooting](#troubleshooting)
     - [**Docker Issues**](#docker-issues)
       - [**Container Won't Start**](#container-wont-start)
@@ -1159,6 +1162,36 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
 ```
+
+## MCP Observability
+
+The MCP server supports optional observability features powered by Traceloop SDK. This feature allows you to monitor and trace MCP server operations.
+
+### Enabling Observability
+
+Set the `ENABLE_MCP_OBSERVABILITY` environment variable to enable the observability feature:
+
+```bash
+# Enable observability
+export ENABLE_MCP_OBSERVABILITY=true
+
+# Or when starting the server
+ENABLE_MCP_OBSERVABILITY=true uv run src/core/server.py --transport streamable-http
+
+# For PyPI installation
+ENABLE_MCP_OBSERVABILITY=true mcp-instana --transport streamable-http
+```
+### Disabling Observability
+
+By default, observability is disabled. To explicitly disable it:
+
+```bash
+export ENABLE_MCP_OBSERVABILITY=false
+```
+
+Or simply unset the environment variable.
+
+**Note:** The observability feature flag accepts values: `true`, `1`, `yes`, or `on` (case-insensitive) to enable. Any other value or omission will disable the feature.
 
 ## Troubleshooting
 
