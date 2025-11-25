@@ -69,7 +69,7 @@ class MCPState:
     events_client: Any = None
     infra_client: Any = None
     app_resource_client: Any = None
-    app_metrics_client: Any = None
+    #app_metrics_client: Any = None
     app_alert_client: Any = None
     infra_catalog_client: Any = None
     infra_topo_client: Any = None
@@ -84,6 +84,8 @@ class MCPState:
     website_catalog_client: Any = None
     website_analyze_client: Any = None
     website_configuration_client: Any = None
+    # application_entities_insight_client: Any = None
+    application_metrics_insight_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -161,9 +163,12 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                         )(bound_method)
 
                         tools_registered += 1
+                        logger.debug(f"✓ Registered tool: {tool_name} (title: {bound_method._mcp_title})")
                         break
             except Exception as e:
                 logger.error(f"Failed to register tool {tool_name}: {e}", exc_info=True)
+        
+        logger.info(f"Total tools registered: {tools_registered}")
 
         # Register prompts from the prompt registry
         # Get enabled prompt categories - use the same categories as tools
@@ -242,8 +247,8 @@ def get_client_categories():
         from src.application.application_global_alert_config import (
             ApplicationGlobalAlertMCPTools,
         )
-        from src.application.application_metrics import ApplicationMetricsMCPTools
-        from src.application.application_resources import ApplicationResourcesMCPTools
+        # from src.application.application_metrics import ApplicationMetricsMCPTools
+        # from src.application.application_resources import ApplicationResourcesMCPTools
         from src.application.application_settings import ApplicationSettingsMCPTools
         from src.application.application_topology import ApplicationTopologyMCPTools
         from src.automation.action_catalog import ActionCatalogMCPTools
@@ -269,6 +274,8 @@ def get_client_categories():
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
         from src.website.website_metrics import WebsiteMetricsMCPTools
+        # from src.insights.entities_insight import ApplicationEntitiesInsightMCPTools
+        from src.insights.application_metrics_insight import ApplicationMetricsInsightMCPTools
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -282,8 +289,8 @@ def get_client_categories():
             ('infra_metrics_client', InfrastructureMetricsMCPTools),
         ],
         "app": [
-            ('app_resource_client', ApplicationResourcesMCPTools),
-            ('app_metrics_client', ApplicationMetricsMCPTools),
+            # ('app_resource_client', ApplicationResourcesMCPTools),
+            # ('app_metrics_client', ApplicationMetricsMCPTools),
             ('app_alert_client', ApplicationAlertMCPTools),
             ('app_catalog_client', ApplicationCatalogMCPTools),
             ('app_topology_client', ApplicationTopologyMCPTools),
@@ -306,7 +313,11 @@ def get_client_categories():
         ],
         "settings": [
             ('custom_dashboard_client', CustomDashboardMCPTools),
-        ]
+        ],
+        "insights": [
+            # ('application_entities_insight_client', ApplicationEntitiesInsightMCPTools),
+            ('application_metrics_insight_client', ApplicationMetricsInsightMCPTools),
+        ],
     }
 
 def get_prompt_categories():
@@ -441,7 +452,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation,website, settings). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
+            help="Comma-separated list of tool categories to enable (--tools infra,app,events,automation,website,settings,insights). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -488,7 +499,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"infra", "app", "events", "automation", "website", "settings"}
+        all_categories = {"infra", "app", "events", "automation", "website", "settings", "insights"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -516,7 +527,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: infra, app, events, automation, website, settings")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: infra, app, events, automation, website, settings, insights")
             sys.exit(2)
 
         # Print enabled tools for user information

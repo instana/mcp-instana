@@ -222,16 +222,31 @@ class BaseInstanaClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = self.get_headers()
 
+        # Log the request details
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"API Request: {method} {url}")
+        if params:
+            logger.debug(f"  Params: {params}")
+        if json:
+            logger.debug(f"  JSON: {json}")
+
         try:
             if method.upper() == "GET":
                 response = requests.get(url, headers=headers, params=params, verify=False)
             elif method.upper() == "POST":
-                # Use the json parameter if provided, otherwise use params
-                data_to_send = json if json is not None else params
-                response = requests.post(url, headers=headers, json=data_to_send, verify=False)
+                # For POST, send json as body and params as query string
+                if json is not None:
+                    response = requests.post(url, headers=headers, json=json, params=params, verify=False)
+                else:
+                    # If no json body, use params as body (legacy behavior)
+                    response = requests.post(url, headers=headers, json=params, verify=False)
             elif method.upper() == "PUT":
-                data_to_send = json if json is not None else params
-                response = requests.put(url, headers=headers, json=data_to_send, verify=False)
+                # For PUT, send json as body and params as query string
+                if json is not None:
+                    response = requests.put(url, headers=headers, json=json, params=params, verify=False)
+                else:
+                    response = requests.put(url, headers=headers, json=params, verify=False)
             elif method.upper() == "DELETE":
                 response = requests.delete(url, headers=headers, params=params, verify=False)
             else:
