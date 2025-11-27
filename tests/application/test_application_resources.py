@@ -205,6 +205,9 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         expected_window_size = 60 * 60 * 1000  # 1 hour in milliseconds
 
         self.client.resources_api.get_application_endpoints.assert_called_once_with(
+            app_id=None,
+            service_id=None,
+            endpoint_id=None,
             name_filter=None,
             types=None,
             technologies=None,
@@ -215,8 +218,11 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             application_boundary_scope=None
         )
 
-        # Check that the result is correct
-        self.assertEqual(result, mock_result)
+        # Check that the result is correct (should be wrapped with type)
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "endpoint_list")
+        self.assertIn("data", result)
+        self.assertEqual(result["data"], mock_result)
 
     def test_get_application_endpoints_with_params(self):
         """Test get_application_endpoints with specific parameters"""
@@ -254,6 +260,9 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
 
         # Check that the mock was called with the correct arguments
         self.client.resources_api.get_application_endpoints.assert_called_once_with(
+            app_id=None,
+            service_id=None,
+            endpoint_id=None,
             name_filter=name_filter,
             types=types,
             technologies=technologies,
@@ -264,8 +273,11 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             application_boundary_scope=application_boundary_scope
         )
 
-        # Check that the result is correct
-        self.assertEqual(result, mock_result)
+        # Check that the result is correct (should be wrapped with type)
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "endpoint_list")
+        self.assertIn("data", result)
+        self.assertEqual(result["data"], mock_result)
 
     def test_get_application_endpoints_error(self):
         """Test get_application_endpoints error handling"""
@@ -309,6 +321,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         expected_window_size = 60 * 60 * 1000  # 1 hour in milliseconds
 
         self.client.resources_api.get_application_services.assert_called_once_with(
+            app_id=None,
+            service_id=None,
             name_filter=None,
             window_size=expected_window_size,
             to=expected_to_time,
@@ -319,6 +333,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         )
 
         # Check that the result contains the expected data
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "service_list")
         self.assertIn("message", result)
         self.assertIn("service_labels", result)
         self.assertIn("services", result)
@@ -363,6 +379,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
 
         # Check that the mock was called with the correct arguments
         self.client.resources_api.get_application_services.assert_called_once_with(
+            app_id=None,
+            service_id=None,
             name_filter=name_filter,
             window_size=window_size,
             to=to_time,
@@ -373,6 +391,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         )
 
         # Check that the result contains the expected data
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "service_list")
         self.assertIn("services", result)
         self.assertEqual(len(result["services"]), 1)
         self.assertEqual(result["services"][0]["label"], "Service A")
@@ -590,6 +610,55 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         # Check that the result contains an error message
         self.assertIn("Error: Failed to get services", result)
         self.assertIn("Test error", result)
+
+    def test_get_application_endpoints_single_endpoint(self):
+        """Test get_application_endpoints returns single endpoint when all IDs provided"""
+        # Set up the mock response for a single endpoint
+        mock_result = {
+            "id": "endpoint1",
+            "name": "Endpoint 1",
+            "type": "HTTP",
+            "service_id": "service1",
+            "app_id": "app1"
+        }
+        self.client.resources_api.get_application_endpoints = MagicMock(return_value=mock_result)
+
+        # Call the method with all IDs
+        result = asyncio.run(self.client.get_application_endpoints(
+            app_id="app1",
+            service_id="service1",
+            endpoint_id="endpoint1"
+        ))
+
+        # Check that the result is wrapped as a single endpoint
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "single_endpoint")
+        self.assertIn("endpoint", result)
+        self.assertEqual(result["endpoint"]["id"], "endpoint1")
+
+    def test_get_application_services_single_service(self):
+        """Test get_application_services returns single service when both IDs provided"""
+        # Set up the mock response for a single service
+        mock_result = {
+            "id": "service1",
+            "label": "Service A",
+            "technologies": ["Java"],
+            "app_id": "app1"
+        }
+        self.client.resources_api.get_application_services = MagicMock(return_value=mock_result)
+
+        # Call the method with both IDs
+        result = asyncio.run(self.client.get_application_services(
+            app_id="app1",
+            service_id="service1"
+        ))
+
+        # Check that the result is wrapped as a single service
+        self.assertIn("type", result)
+        self.assertEqual(result["type"], "single_service")
+        self.assertIn("service", result)
+        self.assertEqual(result["service"]["id"], "service1")
+        self.assertEqual(result["service"]["label"], "Service A")
 
 
 if __name__ == '__main__':

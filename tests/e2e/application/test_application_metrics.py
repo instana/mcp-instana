@@ -220,7 +220,7 @@ class TestApplicationMetricsE2E:
         get_applications_dict = {
             "metrics": [{"metric": "calls", "aggregation": "SUM"}],
             "timeFrame": {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000},
-            "applicationIds": ["app-1", "app-2"]
+            "applicationId": "app-1"
         }
 
         with patch('src.application.application_metrics.ApplicationMetricsApi') as mock_api_class, \
@@ -237,14 +237,14 @@ class TestApplicationMetricsE2E:
             )
 
             # Test parameters
-            application_ids = ["app-1", "app-2"]
+            application_id = "app-1"
             metrics = [{"metric": "calls", "aggregation": "SUM"}]
             time_frame = {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000}
             fill_time_series = False
 
             # Test the method with custom parameters
             result = await client.get_application_metrics(
-                application_ids=application_ids,
+                application_id=application_id,
                 metrics=metrics,
                 time_frame=time_frame,
                 fill_time_series=fill_time_series
@@ -401,7 +401,7 @@ class TestApplicationMetricsE2E:
         get_endpoints_dict = {
             "metrics": [{"metric": "calls", "aggregation": "SUM"}],
             "timeFrame": {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000},
-            "endpointIds": ["endpoint-1", "endpoint-2"]
+            "endpointId": "endpoint-1"
         }
 
         with patch('src.application.application_metrics.ApplicationMetricsApi') as mock_api_class, \
@@ -418,13 +418,13 @@ class TestApplicationMetricsE2E:
             )
 
             # Test parameters
-            endpoint_ids = ["endpoint-1", "endpoint-2"]
+            endpoint_id = "endpoint-1"
             metrics = [{"metric": "calls", "aggregation": "SUM"}]
             time_frame = {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000}
 
             # Test the method with custom parameters
             result = await client.get_endpoints_metrics(
-                endpoint_ids=endpoint_ids,
+                endpoint_id=endpoint_id,
                 metrics=metrics,
                 time_frame=time_frame,
                 fill_time_series=False
@@ -475,7 +475,7 @@ class TestApplicationMetricsE2E:
         get_services_dict = {
             "metrics": [{"metric": "calls", "aggregation": "SUM"}],
             "timeFrame": {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000},
-            "serviceIds": ["service-1"]
+            "serviceId": "service-1"
         }
 
         with patch('src.application.application_metrics.ApplicationMetricsApi') as mock_api_class, \
@@ -492,13 +492,13 @@ class TestApplicationMetricsE2E:
             )
 
             # Test parameters
-            service_ids = ["service-1"]
+            service_id = "service-1"
             include_snapshot_ids = True
             time_frame = {"from": 1625097600000, "to": 1625184000000, "windowSize": 86400000}
 
             # Test the method with custom parameters
             result = await client.get_services_metrics(
-                service_ids=service_ids,
+                service_id=service_id,
                 include_snapshot_ids=include_snapshot_ids,
                 time_frame=time_frame,
             )
@@ -637,7 +637,7 @@ class TestApplicationMetricsE2E:
 
         # Create tool parameters
         tool_params = {
-            "service_ids": ["service-1", "service-2"]
+            "service_id": "service-1"
         }
 
         # Execute the tool
@@ -662,7 +662,7 @@ class TestApplicationMetricsE2E:
 
         # Verify the tool was called with the correct parameters
         mock_client.get_services_metrics.assert_called_once_with(
-            service_ids=["service-1", "service-2"]
+            service_id="service-1"
         )
 
     @pytest.mark.asyncio

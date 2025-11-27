@@ -41,7 +41,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
     async def find_active_global_application_alert_configs(self,
                                             application_id: str,
                                             alert_ids: Optional[List[str]] = None,
-                                            ctx=None, api_client=None) -> List[Dict[str, Any]]:
+                                            ctx=None, api_client=None) -> Dict[str, Any]:
         """
         Get All Global Smart Alert Configuration.
 
@@ -63,36 +63,37 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
 
             # Validate required parameters
             if not application_id:
-                return [{"error": "application_id is required"}]
+                return {"error": "application_id is required"}
 
             # Call the find_active_global_application_alert_configs method from the SDK
             logger.debug(f"Calling find_active_global_application_alert_configs with application_id={application_id}, alert_ids={alert_ids}")
-            result = api_client.find_active_global_application_alert_configs(
+            response = api_client.find_active_global_application_alert_configs_without_preload_content(
                 application_id=application_id,
                 alert_ids=alert_ids
             )
 
-            # Convert the result to a list format
-            if isinstance(result, list):
-                # If it's already a list, convert each item to dict if needed
-                result_list = []
-                for item in result:
-                    if hasattr(item, 'to_dict'):
-                        result_list.append(item.to_dict())
-                    else:
-                        result_list.append(item)
-            elif hasattr(result, 'to_dict'):
-                # If it's a single object, wrap it in a list
-                result_list = [result.to_dict()]
-            else:
-                # If it's already a dict or other format, wrap it in a list
-                result_list = [result] if result else []
+            import json
 
-            logger.debug(f"Result from find_active_global_application_alert_configs: {result_list}")
-            return result_list
+            raw_data = response.data.decode('utf-8')
+            logger.debug(f"Raw data: {raw_data}")
+
+            try:
+                result = json.loads(raw_data)
+                logger.debug(f"Parsed JSON result: {result}")
+
+                if isinstance(result, list):
+                    return {"configs": result}
+                else:
+                    return {"configs": [result] if result else []}
+
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse response JSON: {e}"
+                logger.error(error_msg)
+                return {"error": error_msg}
+
         except Exception as e:
             logger.error(f"Error in find_active_global_application_alert_configs: {e}", exc_info=True)
-            return [{"error": f"Failed to get active global application alert config: {e!s}"}]
+            return {"error": f"Failed to get active global application alert config: {e!s}"}
 
 
     @register_as_tool(

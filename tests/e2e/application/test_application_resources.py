@@ -66,9 +66,12 @@ class TestApplicationResourcesE2E:
 
             # Verify the result
             assert isinstance(result, dict)
-            assert "endpoints" in result
-            assert result["endpoints"][0]["id"] == "endpoint-1"
-            assert result["endpoints"][0]["name"] == "Test Endpoint"
+            assert "type" in result
+            assert result["type"] == "endpoint_list"
+            assert "data" in result
+            assert "endpoints" in result["data"]
+            assert result["data"]["endpoints"][0]["id"] == "endpoint-1"
+            assert result["data"]["endpoints"][0]["name"] == "Test Endpoint"
             mock_method.assert_called_once()
 
     @pytest.mark.asyncio
@@ -108,6 +111,9 @@ class TestApplicationResourcesE2E:
             mock_method.assert_called_once()
             # Check that parameters were passed correctly
             args, kwargs = mock_method.call_args
+            assert kwargs["app_id"] is None
+            assert kwargs["service_id"] is None
+            assert kwargs["endpoint_id"] is None
             assert kwargs["name_filter"] == "test-endpoint"
             assert kwargs["types"] == ["HTTP", "GRPC"]
             assert kwargs["technologies"] == ["Java", "Python"]
@@ -356,6 +362,8 @@ class TestApplicationResourcesE2E:
 
             # Verify the result
             assert isinstance(result, dict)
+            assert "type" in result
+            assert result["type"] == "service_list"
             assert "services" in result
             assert "service_labels" in result
             assert "message" in result
@@ -402,6 +410,8 @@ class TestApplicationResourcesE2E:
 
             # Verify the result
             assert isinstance(result, dict)
+            assert "type" in result
+            assert result["type"] == "service_list"
             assert "services" in result
             assert len(result["services"]) == 2
             assert result["services"][0]["id"] == "service-1"
@@ -448,6 +458,8 @@ class TestApplicationResourcesE2E:
             mock_method.assert_called_once()
             # Check that parameters were passed correctly
             args, kwargs = mock_method.call_args
+            assert kwargs["app_id"] is None
+            assert kwargs["service_id"] is None
             assert kwargs["name_filter"] == "test-service"
             assert kwargs["window_size"] == 3600000
             assert kwargs["to"] == 1234567890
@@ -694,4 +706,94 @@ class TestApplicationResourcesE2E:
             service_lines = [line for line in lines if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.'))]
             assert len(service_lines) == 10
             mock_method.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.mocked
+    async def test_get_application_endpoints_single_endpoint(self, instana_credentials):
+        """Test get_application_endpoints returns single endpoint when all IDs provided."""
+        # Patch the actual API method at the module level
+        with patch('instana_client.api.application_resources_api.ApplicationResourcesApi.get_application_endpoints') as mock_method:
+            # Set up the mock response for a single endpoint
+            mock_response = MagicMock()
+            mock_response.to_dict.return_value = {
+                "id": "endpoint-1",
+                "name": "Test Endpoint",
+                "type": "HTTP"
+            }
+            mock_method.return_value = mock_response
+
+            # Import and create the client
+            from src.application.application_resources import (
+                ApplicationResourcesMCPTools,
+            )
+            client = ApplicationResourcesMCPTools(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
+            )
+
+            # Call the method with all IDs
+            result = await client.get_application_endpoints(
+                app_id="app-1",
+                service_id="service-1",
+                endpoint_id="endpoint-1"
+            )
+
+            # Verify the result
+            assert isinstance(result, dict)
+            assert "type" in result
+            assert result["type"] == "single_endpoint"
+            assert "endpoint" in result
+            assert result["endpoint"]["id"] == "endpoint-1"
+            assert result["endpoint"]["name"] == "Test Endpoint"
+            mock_method.assert_called_once()
+
+            # Check that parameters were passed correctly
+            args, kwargs = mock_method.call_args
+            assert kwargs["app_id"] == "app-1"
+            assert kwargs["service_id"] == "service-1"
+            assert kwargs["endpoint_id"] == "endpoint-1"
+
+    @pytest.mark.asyncio
+    @pytest.mark.mocked
+    async def test_get_application_services_single_service(self, instana_credentials):
+        """Test get_application_services returns single service when both IDs provided."""
+        # Patch the actual API method at the module level
+        with patch('instana_client.api.application_resources_api.ApplicationResourcesApi.get_application_services') as mock_method:
+            # Set up the mock response for a single service
+            mock_response = MagicMock()
+            mock_response.to_dict.return_value = {
+                "id": "service-1",
+                "label": "Test Service",
+                "technologies": ["Java", "Spring"]
+            }
+            mock_method.return_value = mock_response
+
+            # Import and create the client
+            from src.application.application_resources import (
+                ApplicationResourcesMCPTools,
+            )
+            client = ApplicationResourcesMCPTools(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
+            )
+
+            # Call the method with both IDs
+            result = await client.get_application_services(
+                app_id="app-1",
+                service_id="service-1"
+            )
+
+            # Verify the result
+            assert isinstance(result, dict)
+            assert "type" in result
+            assert result["type"] == "single_service"
+            assert "service" in result
+            assert result["service"]["id"] == "service-1"
+            assert result["service"]["label"] == "Test Service"
+            mock_method.assert_called_once()
+
+            # Check that parameters were passed correctly
+            args, kwargs = mock_method.call_args
+            assert kwargs["app_id"] == "app-1"
+            assert kwargs["service_id"] == "service-1"
 

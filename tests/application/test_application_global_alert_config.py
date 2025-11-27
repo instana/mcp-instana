@@ -120,48 +120,51 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
 
     def test_find_active_global_application_alert_configs_success(self):
         """Test find_active_global_application_alert_configs with successful response"""
-        # Set up the mock response
-        mock_result = {"id": "alert1", "name": "Test Alert"}
-        mock_obj = MagicMock()
-        mock_obj.to_dict.return_value = mock_result
-        self.alert_config_api.find_active_global_application_alert_configs.return_value = mock_obj
+        # Set up the mock response with encoded JSON data
+        import json
+        mock_data = [{"id": "alert1", "name": "Test Alert"}]
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
 
         # Check that the mock was called with the correct arguments
-        self.alert_config_api.find_active_global_application_alert_configs.assert_called_once_with(
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.assert_called_once_with(
             application_id="app1",
             alert_ids=None
         )
 
-        # Check that the result is correct (method returns a list)
-        self.assertEqual(result, [mock_result])
+        # Check that the result is correct (method returns a dict with configs key)
+        self.assertIsInstance(result, dict)
+        self.assertIn("configs", result)
+        self.assertEqual(result["configs"], mock_data)
 
     def test_find_active_global_application_alert_configs_missing_app_id(self):
         """Test find_active_global_application_alert_configs with missing application ID"""
         # Call the method without application ID
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id=None))
 
-        # Check that the result contains an error message (method returns a list)
-        self.assertIsInstance(result, list)
-        self.assertEqual(len(result), 1)
-        self.assertIn("error", result[0])
-        self.assertEqual(result[0]["error"], "application_id is required")
+        # Check that the result contains an error message (method returns a dict)
+        self.assertIsInstance(result, dict)
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "application_id is required")
 
     def test_find_active_global_application_alert_configs_error(self):
         """Test find_active_global_application_alert_configs error handling"""
         # Set up the mock to raise an exception
-        self.alert_config_api.find_active_global_application_alert_configs.side_effect = Exception("Test error")
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.side_effect = Exception("Test error")
 
         # Call the method
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
 
-        # Check that the result contains an error message (method returns a list)
-        self.assertIsInstance(result, list)
-        self.assertEqual(len(result), 1)
-        self.assertIn("error", result[0])
-        self.assertIn("Failed to get active global application alert config", result[0]["error"])
+        # Check that the result contains an error message (method returns a dict)
+        self.assertIsInstance(result, dict)
+        self.assertIn("error", result)
+        self.assertIn("Failed to get active global application alert config", result["error"])
 
     def test_find_global_application_alert_config_versions_success(self):
         """Test find_global_application_alert_config_versions with successful response"""

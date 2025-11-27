@@ -34,6 +34,8 @@ try:
         NewApplicationConfig,  #type: ignore
         NewManualServiceConfig,  #type: ignore
         ServiceConfig,  #type: ignore
+        TagFilter,  #type: ignore
+        TagFilterExpression,  #type: ignore
     )
 except ImportError as e:
     print(f"Error importing Instana SDK: {e}", file=sys.stderr)
@@ -231,6 +233,40 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             except ImportError as e:
                 logger.debug(f"Error importing NewApplicationConfig: {e}")
                 return {"error": f"Failed to import NewApplicationConfig: {e!s}"}
+
+            # Convert nested tagFilterExpression to model objects
+            if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
+                try:
+                    tag_expr = request_body['tagFilterExpression']
+                    logger.debug(f"Converting tagFilterExpression: {tag_expr}")
+
+                    # If it's an EXPRESSION type with elements, convert each element
+                    if tag_expr.get('type') == 'EXPRESSION' and 'elements' in tag_expr:
+                        converted_elements = []
+                        for element in tag_expr['elements']:
+                            if isinstance(element, dict):
+                                # Remove conflicting fields before creating TagFilter
+                                element_copy = element.copy()
+                                element_copy.pop('value', None)
+                                element_copy.pop('key', None)
+                                converted_elements.append(TagFilter(**element_copy))
+                            else:
+                                converted_elements.append(element)
+                        tag_expr['elements'] = converted_elements
+                        request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
+                    # If it's a TAG_FILTER type, convert directly
+                    elif tag_expr.get('type') == 'TAG_FILTER':
+                        tag_expr_copy = tag_expr.copy()
+                        tag_expr_copy.pop('value', None)
+                        tag_expr_copy.pop('key', None)
+                        request_body['tagFilterExpression'] = TagFilter(**tag_expr_copy)
+                    else:
+                        request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
+
+                    logger.debug("Successfully converted tagFilterExpression to model objects")
+                except Exception as e:
+                    logger.debug(f"Error converting tagFilterExpression: {e}")
+                    return {"error": f"Failed to convert tagFilterExpression: {e!s}"}
 
             # Create an NewApplicationConfig object from the request body
             try:
@@ -466,6 +502,40 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ApplicationConfig: {e}")
                 return {"error": f"Failed to import ApplicationConfig: {e!s}"}
 
+            # Convert nested tagFilterExpression to model objects
+            if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
+                try:
+                    tag_expr = request_body['tagFilterExpression']
+                    logger.debug(f"Converting tagFilterExpression: {tag_expr}")
+
+                    # If it's an EXPRESSION type with elements, convert each element
+                    if tag_expr.get('type') == 'EXPRESSION' and 'elements' in tag_expr:
+                        converted_elements = []
+                        for element in tag_expr['elements']:
+                            if isinstance(element, dict):
+                                # Remove conflicting fields before creating TagFilter
+                                element_copy = element.copy()
+                                element_copy.pop('value', None)
+                                element_copy.pop('key', None)
+                                converted_elements.append(TagFilter(**element_copy))
+                            else:
+                                converted_elements.append(element)
+                        tag_expr['elements'] = converted_elements
+                        request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
+                    # If it's a TAG_FILTER type, convert directly
+                    elif tag_expr.get('type') == 'TAG_FILTER':
+                        tag_expr_copy = tag_expr.copy()
+                        tag_expr_copy.pop('value', None)
+                        tag_expr_copy.pop('key', None)
+                        request_body['tagFilterExpression'] = TagFilter(**tag_expr_copy)
+                    else:
+                        request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
+
+                    logger.debug("Successfully converted tagFilterExpression to model objects")
+                except Exception as e:
+                    logger.debug(f"Error converting tagFilterExpression: {e}")
+                    return {"error": f"Failed to convert tagFilterExpression: {e!s}"}
+
             # Create an ApplicationConfig object from the request body
             try:
                 logger.debug(f"Creating ApplicationConfig with params: {request_body}")
@@ -517,16 +587,23 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         try:
             debug_print("Fetching all endpoint configs")
-            result = api_client.get_endpoint_configs()
+            result = api_client.get_endpoint_configs_without_preload_content()
             # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result
-
-            debug_print(f"Result from get_endpoint_configs: {result_dict}")
-            return result_dict
+            import json
+            try:
+                response_text=result.data.decode('utf-8')
+                json_data=json.loads(response_text)
+                if isinstance(json_data, list):
+                    result_dict=json_data
+                else:
+                    # If it's a single object, wrap it in a list
+                    result_dict=[json_data] if json_data else []
+                debug_print("Successfully retrieved endpoint configs data")
+                return result_dict
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return [{"error": error_message}]
 
         except Exception as e:
             debug_print(f"Error in get_endpoint_configs: {e}")
@@ -870,16 +947,24 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         try:
             debug_print("Fetching all manual configs")
-            result = api_client.get_all_manual_service_configs()
+            result = api_client.get_all_manual_service_configs_without_preload_content()
             # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result
-
-            debug_print(f"Result from get_all_manual_service_configs: {result_dict}")
-            return result_dict
+            import json
+            try:
+                response_text=result.data.decode('utf-8')
+                json_data=json.loads(response_text)
+                logger.debug("Successfully retrieved manual service configs data")
+                if isinstance(json_data, list):
+                    result_dict=json_data
+                else:
+                    # If it's a single object, wrap it in a list
+                    result_dict=[json_data] if json_data else []
+                    debug_print("Successfully retrieved manual service configs data")
+                return result_dict
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return [{"error": error_message}]
 
         except Exception as e:
             debug_print(f"Error in get_all_manual_service_configs: {e}")
@@ -975,20 +1060,38 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing NewManualServiceConfig: {e}")
                 return {"error": f"Failed to import NewManualServiceConfig: {e!s}"}
 
-            # Create an NewManualServiceConfig object from the request body
+            # Convert tagFilterExpression dict to TagFilter object with all required fields
+            if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
+                try:
+                    tag_filter_dict = request_body['tagFilterExpression']
+                    logger.debug(f"Converting tagFilterExpression to TagFilter object: {tag_filter_dict}")
+
+                    # Use TagFilter.from_dict() which properly handles all fields including aliases
+                    tag_filter = TagFilter.from_dict(tag_filter_dict)
+                    request_body['tagFilterExpression'] = tag_filter
+                    logger.debug("Successfully converted tagFilterExpression to TagFilter object")
+                except Exception as e:
+                    logger.debug(f"Error converting tagFilterExpression: {e}")
+                    return {"error": f"Failed to convert tagFilterExpression: {e!s}"}
+
+            # Create NewManualServiceConfig object
+            logger.debug("Creating NewManualServiceConfig object")
             try:
-                logger.debug(f"Creating NewManualServiceConfig with params: {request_body}")
                 config_object = NewManualServiceConfig(**request_body)
-                logger.debug("Successfully created manual service config object")
+                logger.debug("Successfully created NewManualServiceConfig object")
             except Exception as e:
                 logger.debug(f"Error creating NewManualServiceConfig: {e}")
                 return {"error": f"Failed to create config object: {e!s}"}
 
-            # Call the add_manual_service_config method from the SDK
+            # Call the add_manual_service_config method from the SDK with the config object
             logger.debug("Calling add_manual_service_config with config object")
-            result = api_client.add_manual_service_config(
-                new_manual_service_config=config_object
-            )
+            try:
+                result = api_client.add_manual_service_config(
+                    new_manual_service_config=config_object
+                )
+            except Exception as e:
+                logger.debug(f"Error calling add_manual_service_config: {e}")
+                return {"error": f"Failed to create config object: {e!s}"}
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -1141,21 +1244,20 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ManualServiceConfig: {e}")
                 return {"error": f"Failed to import ManualServiceConfig: {e!s}"}
 
-            # Create an ManualServiceConfig object from the request body
-            try:
-                logger.debug(f"Creating ManualServiceConfig with params: {request_body}")
-                config_object = ManualServiceConfig(**request_body)
-                logger.debug("Successfully update manual service config object")
-            except Exception as e:
-                logger.debug(f"Error creating ManualServiceConfig: {e}")
-                return {"error": f"Failed to update manual config object: {e!s}"}
+            # Keep tagFilterExpression as dictionary - SDK will handle serialization
+            if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
+                logger.debug(f"tagFilterExpression will be passed as dict: {request_body['tagFilterExpression']}")
 
-            # Call the update_manual_service_config method from the SDK
-            logger.debug("Calling update_manual_service_config with config object")
-            result = api_client.update_manual_service_config(
-                id=id,
-                manual_service_config=config_object
-            )
+            # Call the update_manual_service_config method from the SDK directly with dict
+            logger.debug("Calling update_manual_service_config with request body")
+            try:
+                result = api_client.update_manual_service_config(
+                    id=id,
+                    manual_service_config=request_body
+                )
+            except Exception as e:
+                logger.debug(f"Error calling update_manual_service_config: {e}")
+                return {"error": f"Failed to update manual config object: {e!s}"}
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -1421,7 +1523,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             # Create an ServiceConfig object from the request body
             try:
                 logger.debug(f"Creating ServiceConfig with params: {request_body}")
-                config_object = ServiceConfig(**request_body)
+                request_body_with_id = dict(request_body)
+                request_body_with_id.setdefault("id", "temp-id")
+                config_object = ServiceConfig(**request_body_with_id)
                 logger.debug("Successfully add service config object")
             except Exception as e:
                 logger.debug(f"Error creating ServiceConfig: {e}")
@@ -1432,7 +1536,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             result = api_client.add_service_config(
                 service_config=config_object
             )
-
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -1495,7 +1598,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                         request_body = parsed_payload
                     except json.JSONDecodeError as e:
                         logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
-
                         # Try replacing single quotes with double quotes
                         fixed_payload = payload.replace("'", "\"")
                         try:
@@ -1533,7 +1635,10 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             # Create an ServiceConfig object from the request body
             try:
                 logger.debug(f"Creating ServiceConfig with params: {request_body}")
-                config_object = [ServiceConfig(**request_body)]
+                configs = request_body.get("serviceConfigs")
+                if not isinstance(configs, list):
+                    return [{"error": "serviceConfigs must be a list"}]
+                config_object = [ServiceConfig(**item) for item in configs]
                 logger.debug("Successfully replace all manual service config object")
             except Exception as e:
                 logger.debug(f"Error creating ServiceConfig: {e}")
@@ -1541,22 +1646,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             # Call the replace_all method from the SDK
             logger.debug("Calling replace_all with config object")
-            result = api_client.replace_all(
+            result = api_client.replace_all_without_preload_content(
                 service_config=config_object
             )
 
             # Convert the result to a list of dictionaries
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result or {
-                    "success": True,
-                    "message": "replace all service config"
-                }
+            import json
+            try:
+                response_text = result.data.decode('utf-8')
+                result_dict = json.loads(response_text)
+                logger.debug("Successfully replaced all service configs.")
+                return result_dict
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return [{"error": error_message}]
 
-            logger.debug(f"Result from replace_all: {result_dict}")
-            return [result_dict]
         except Exception as e:
             logger.error(f"Error in replace_all: {e}")
             return [{"error": f"Failed to replace all service config: {e!s}"}]
@@ -1590,14 +1695,33 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             if not request_body:
                 return {"error": "The list of service configuration IDs cannot be empty."}
 
-            result = api_client.order_service_config(
-                request_body=request_body
+            response = api_client.order_service_config_with_http_info(
+                request_body=request_body,
+                _content_type='application/json',
             )
 
-            # Convert result to dict if needed
-            if hasattr(result, 'to_dict'):
-                return result.to_dict()
-            return result
+            status = getattr(response, 'status', None)
+            data = getattr(response, 'data', None)
+
+            if hasattr(data, 'to_dict'):
+                payload = data.to_dict()
+            elif data is None:
+                payload = None
+            else:
+                payload = data
+
+            if status == 204 or payload is None:
+                return {
+                    "success": True,
+                    "status": status,
+                    "message": "Service configs reordered successfully"
+                }
+
+            return {
+                "success": True,
+                "status": status,
+                "data": payload
+            }
 
         except Exception as e:
             debug_print(f"Error in order_service_config: {e}")
@@ -1725,7 +1849,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         try:
             if not payload or not id:
-                return [{"error": "missing arguments"}]
+                return {"error": "missing arguments"}
 
             # Parse the payload if it's a string
             if isinstance(payload, str):
@@ -1754,10 +1878,10 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                 request_body = parsed_payload
                             except (SyntaxError, ValueError) as e2:
                                 logger.debug(f"Failed to parse payload string: {e2}")
-                                return [{"error": f"Invalid payload format: {e2}", "payload": payload}]
+                                return {"error": f"Invalid payload format: {e2}", "payload": payload}
                 except Exception as e:
                     logger.debug(f"Error parsing payload string: {e}")
-                    return [{"error": f"Failed to parse payload: {e}", "payload": payload}]
+                    return {"error": f"Failed to parse payload: {e}", "payload": payload}
             else:
                 # If payload is already a dictionary, use it directly
                 logger.debug("Using provided payload dictionary")
@@ -1771,16 +1895,16 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 logger.debug("Successfully imported ServiceConfig")
             except ImportError as e:
                 logger.debug(f"Error importing ServiceConfig: {e}")
-                return [{"error": f"Failed to import ServiceConfig: {e!s}"}]
+                return {"error": f"Failed to import ServiceConfig: {e!s}"}
 
             # Create an ServiceConfig object from the request body
             try:
                 logger.debug(f"Creating ServiceConfig with params: {request_body}")
-                config_object = [ServiceConfig(**request_body)]
+                config_object = ServiceConfig(**request_body)
                 logger.debug("Successfully update service config object")
             except Exception as e:
                 logger.debug(f"Error creating ServiceConfig: {e}")
-                return [{"error": f"Failed to replace all manual config object: {e!s}"}]
+                return {"error": f"Failed to update service config object: {e!s}"}
 
             # Call the put_service_config method from the SDK
             logger.debug("Calling put_service_config with config object")
@@ -1800,8 +1924,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 }
 
             logger.debug(f"Result from put_service_config: {result_dict}")
-            return [result_dict]
+            return result_dict
         except Exception as e:
             logger.error(f"Error in put_service_config: {e}")
-            return [{"error": f"Failed to update service config: {e!s}"}]
+            return {"error": f"Failed to update service config: {e!s}"}
 

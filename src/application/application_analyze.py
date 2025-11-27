@@ -84,21 +84,24 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 return {"error": "Both trace_id and call_id must be provided"}
 
             logger.debug(f"Fetching call details for trace_id={trace_id}, call_id={call_id}")
-            result = api_client.get_call_details(
+            result = api_client.get_call_details_without_preload_content(
                 trace_id=trace_id,
                 call_id=call_id
             )
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                # If it's already a dict or another format, use it as is
-                result_dict = result
+            import json
 
-            logger.debug(f"Result from get_call_details: {result_dict}")
-            # Ensure we return a dictionary
-            return dict(result_dict) if not isinstance(result_dict, dict) else result_dict
+            try:
+                response_text = result.data.decode('utf-8')
+                result_dict = json.loads(response_text)
+                logger.debug("Successfully retrieved call details")
+                return result_dict
+
+            # Convert the result to a dictionary
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                logger.error(error_message)
+                return {"error": error_message}
 
         except Exception as e:
             logger.error(f"Error getting call details: {e}", exc_info=True)

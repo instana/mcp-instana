@@ -31,8 +31,21 @@ class TestApplicationAnalyzeE2E:
 
         # Create mock API client
         mock_api_client = type('MockClient', (), {})()
-        mock_api_client.get_call_details = MagicMock()
-        mock_api_client.get_call_details.return_value = mock_response
+        mock_api_client.get_call_details_without_preload_content = MagicMock()
+
+        # Mock the response to have a data attribute with encoded JSON
+        import json
+        mock_response_data = MagicMock()
+        mock_response_data.data = json.dumps({
+            "id": "call123",
+            "traceId": "trace123",
+            "timestamp": 1625097600000,
+            "duration": 150,
+            "erroneous": False,
+            "service": "test-service",
+            "endpoint": "/api/test"
+        }).encode('utf-8')
+        mock_api_client.get_call_details_without_preload_content.return_value = mock_response_data
 
         # Create the client
         client = ApplicationAnalyzeMCPTools(
@@ -54,7 +67,7 @@ class TestApplicationAnalyzeE2E:
         assert result["service"] == "test-service"
 
         # Verify the API was called correctly
-        mock_api_client.get_call_details.assert_called_once_with(
+        mock_api_client.get_call_details_without_preload_content.assert_called_once_with(
             trace_id="trace123",
             call_id="call123"
         )
@@ -97,8 +110,8 @@ class TestApplicationAnalyzeE2E:
 
         # Create mock API client that raises an exception
         mock_api_client = type('MockClient', (), {})()
-        mock_api_client.get_call_details = MagicMock()
-        mock_api_client.get_call_details.side_effect = Exception("API Error")
+        mock_api_client.get_call_details_without_preload_content = MagicMock()
+        mock_api_client.get_call_details_without_preload_content.side_effect = Exception("API Error")
 
         # Create the client
         client = ApplicationAnalyzeMCPTools(

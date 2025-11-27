@@ -134,18 +134,18 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
     )
     @with_header_auth(ApplicationMetricsApi)
     async def get_application_metrics(self,
-                                      application_ids: Optional[List[str]] = None,
+                                      application_id: Optional[str] = None,
                                       metrics: Optional[List[Dict[str, str]]] = None,
                                       time_frame: Optional[Dict[str, int]] = None,
                                       fill_time_series: Optional[bool] = True,
                                       ctx=None, api_client=None) -> Dict[str, Any]:
         """
-        Get metrics for specific applications.
+        Get metrics for a specific application.
 
         This API endpoint retrieves one or more supported aggregations of metrics for an Application Perspective.
 
         Args:
-            application_ids: List of application IDs to get metrics for
+            application_id: Application ID to get metrics for (single application)
             metrics: List of metrics to retrieve with their aggregations
                 Example: [{"metric": "latency", "aggregation": "MEAN"}]
             time_frame: Dictionary with 'from' and 'to' timestamps in milliseconds
@@ -157,7 +157,7 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             Dictionary containing application metrics data or error information
         """
         try:
-            logger.debug(f"get_application_metrics called with application_ids={application_ids}")
+            logger.debug(f"get_application_metrics called with application_id={application_id}")
 
             # Set default time range if not provided
             if not time_frame:
@@ -183,9 +183,9 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
                 "timeFrame": time_frame
             }
 
-            # Add application IDs if provided
-            if application_ids:
-                request_body["applicationIds"] = application_ids
+            # Add application ID if provided
+            if application_id:
+                request_body["applicationId"] = application_id
 
             # Create the GetApplications object
             get_applications = GetApplications(**request_body)
@@ -215,18 +215,18 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
     )
     @with_header_auth(ApplicationMetricsApi)
     async def get_endpoints_metrics(self,
-                                    endpoint_ids: Optional[List[str]] = None,
+                                    endpoint_id: Optional[str] = None,
                                     metrics: Optional[List[Dict[str, str]]] = None,
                                     time_frame: Optional[Dict[str, int]] = None,
                                     fill_time_series: Optional[bool] = True,
                                     ctx=None, api_client=None) -> Dict[str, Any]:
         """
-        Get metrics for specific endpoints.
+        Get metrics for a specific endpoint.
 
         This API endpoint retrieves one or more supported aggregations of metrics for an Endpoint.
 
         Args:
-            endpoint_ids: List of endpoint IDs to get metrics for
+            endpoint_id: Endpoint ID to get metrics for (single endpoint)
             metrics: List of metrics to retrieve with their aggregations
                 Example: [{"metric": "latency", "aggregation": "MEAN"}]
             time_frame: Dictionary with 'from' and 'to' timestamps in milliseconds
@@ -238,7 +238,7 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             Dictionary containing endpoint metrics data or error information
         """
         try:
-            logger.debug(f"get_endpoints_metrics called with endpoint_ids={endpoint_ids}")
+            logger.debug(f"get_endpoints_metrics called with endpoint_id={endpoint_id}")
 
             # Set default time range if not provided
             if not time_frame:
@@ -264,9 +264,9 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
                 "timeFrame": time_frame
             }
 
-            # Add endpoint IDs if provided
-            if endpoint_ids:
-                request_body["endpointIds"] = endpoint_ids
+            # Add endpoint ID if provided
+            if endpoint_id:
+                request_body["endpointId"] = endpoint_id
 
             # Create the GetEndpoints object
             get_endpoints = GetEndpoints(**request_body)
@@ -296,19 +296,19 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
     )
     @with_header_auth(ApplicationMetricsApi)
     async def get_services_metrics(self,
-                                   service_ids: Optional[List[str]] = None,
+                                   service_id: Optional[str] = None,
                                    metrics: Optional[List[Dict[str, str]]] = None,
                                    time_frame: Optional[Dict[str, int]] = None,
                                    fill_time_series: Optional[bool] = True,
                                    include_snapshot_ids: Optional[bool] = False,
                                    ctx=None, api_client=None) -> Dict[str, Any]:
         """
-        Get metrics for specific services.
+        Get metrics for a specific service.
 
         This API endpoint retrieves one or more supported aggregations of metrics for a Service.
 
         Args:
-            service_ids: List of service IDs to get metrics for
+            service_id: Service ID to get metrics for (single service)
             metrics: List of metrics to retrieve with their aggregations
                 Example: [{"metric": "latency", "aggregation": "MEAN"}]
             time_frame: Dictionary with 'from' and 'to' timestamps in milliseconds
@@ -321,7 +321,7 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
             Dictionary containing service metrics data or error information
         """
         try:
-            logger.debug(f"get_services_metrics called with service_ids={service_ids}")
+            logger.debug(f"get_services_metrics called with service_id={service_id}")
 
             # Set default time range if not provided
             if not time_frame:
@@ -347,9 +347,9 @@ class ApplicationMetricsMCPTools(BaseInstanaClient):
                 "timeFrame": time_frame
             }
 
-            # Add service IDs if provided
-            if service_ids:
-                request_body["serviceIds"] = service_ids
+            # Add service ID if provided
+            if service_id:
+                request_body["serviceId"] = service_id
 
             # Create the GetServices object
             get_services = GetServices(**request_body)

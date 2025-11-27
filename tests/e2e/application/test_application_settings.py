@@ -428,10 +428,10 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.get_endpoint_configs = MagicMock()
 
-        # Mock response - return list directly instead of MagicMock objects
-        mock_response = [
+        # Mock response - the method expects a response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [
             {
                 "id": "endpoint-1",
                 "name": "Test Endpoint 1",
@@ -443,7 +443,9 @@ class TestApplicationSettingsE2E:
                 "type": "GRPC"
             }
         ]
-        mock_api_client.get_endpoint_configs.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        mock_api_client.get_endpoint_configs_without_preload_content.return_value = mock_response
 
         # Create the client
         client = ApplicationSettingsMCPTools(
@@ -461,7 +463,7 @@ class TestApplicationSettingsE2E:
         assert result[1]["id"] == "endpoint-2"
 
         # Verify the API was called correctly
-        mock_api_client.get_endpoint_configs.assert_called_once()
+        mock_api_client.get_endpoint_configs_without_preload_content.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -639,10 +641,10 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.get_manual_service_configs = MagicMock()
 
-        # Mock response - return list directly instead of MagicMock objects
-        mock_response = [
+        # Mock response - the method expects a response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [
             {
                 "id": "service-1",
                 "name": "Test Service 1",
@@ -654,8 +656,9 @@ class TestApplicationSettingsE2E:
                 "type": "PYTHON"
             }
         ]
-        # Return the list directly - it doesn't have to_dict method
-        mock_api_client.get_all_manual_service_configs.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        mock_api_client.get_all_manual_service_configs_without_preload_content.return_value = mock_response
 
         # Create the client
         client = ApplicationSettingsMCPTools(
@@ -667,17 +670,13 @@ class TestApplicationSettingsE2E:
         result = await client.get_all_manual_service_configs(api_client=mock_api_client)
 
         # Verify the result
-        assert isinstance(result, (list, dict))
-        if isinstance(result, list):
-            assert len(result) == 2
-            assert result[0]["id"] == "service-1"
-            assert result[1]["id"] == "service-2"
-        else:
-            # If it's a dict, it should contain the data
-            assert "data" in result or "items" in result
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0]["id"] == "service-1"
+        assert result[1]["id"] == "service-2"
 
         # Verify the API was called correctly
-        mock_api_client.get_all_manual_service_configs.assert_called_once()
+        mock_api_client.get_all_manual_service_configs_without_preload_content.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -692,8 +691,8 @@ class TestApplicationSettingsE2E:
         mock_response = MagicMock()
         mock_response.to_dict.return_value = {
             "id": "new-service-123",
-            "name": "New Test Service",
-            "type": "JAVA"
+            "description": "New Test Service",
+            "enabled": True
         }
         mock_api_client.add_manual_service_config.return_value = mock_response
 
@@ -703,12 +702,18 @@ class TestApplicationSettingsE2E:
             base_url=instana_credentials["base_url"]
         )
 
-        # Test the method
+        # Test the method - use TAG_FILTER type for tagFilterExpression
         result = await client.add_manual_service_config(
             payload={
-                "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []},
+                "tagFilterExpression": {
+                    "type": "TAG_FILTER",
+                    "name": "service.name",
+                    "stringValue": "test-service",
+                    "operator": "EQUALS",
+                    "entity": "SOURCE"
+                },
                 "unmonitoredServiceName": "New Test Service",
-                "existingServiceId": "service-123"
+                "enabled": True
             },
             api_client=mock_api_client
         )
@@ -716,7 +721,7 @@ class TestApplicationSettingsE2E:
         # Verify the result
         assert isinstance(result, dict)
         assert result["id"] == "new-service-123"
-        assert result["name"] == "New Test Service"
+        assert result["description"] == "New Test Service"
 
         # Verify the API was called correctly
         mock_api_client.add_manual_service_config.assert_called_once()
@@ -928,14 +933,16 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.replace_all = MagicMock()
 
-        # Mock response - return list directly
-        mock_response = [
+        # Mock response - the method expects a response object with data attribute
+        mock_response = MagicMock()
+        mock_response_data = [
             {"id": "service-1", "name": "Replaced Service 1", "type": "JAVA"},
             {"id": "service-2", "name": "Replaced Service 2", "type": "PYTHON"}
         ]
-        mock_api_client.replace_all.return_value = mock_response
+        import json
+        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
+        mock_api_client.replace_all_without_preload_content.return_value = mock_response
 
         # Create the client
         client = ApplicationSettingsMCPTools(
@@ -943,28 +950,28 @@ class TestApplicationSettingsE2E:
             base_url=instana_credentials["base_url"]
         )
 
-        # Test the method
+        # Test the method - payload needs serviceConfigs key
         result = await client.replace_all_service_configs(
             payload={
-                "enabled": True,
-                "matchSpecification": [{"type": "TAG", "key": "service.name", "operator": "EQUALS", "value": "Replaced Service 1"}],
-                "name": "Replaced Service 1",
-                "label": "Replaced Service 1",
-                "id": "service-1"
+                "serviceConfigs": [{
+                    "enabled": True,
+                    "matchSpecification": [{"type": "TAG", "key": "service.name", "operator": "EQUALS", "value": "Replaced Service 1"}],
+                    "name": "Replaced Service 1",
+                    "label": "Replaced Service 1",
+                    "id": "service-1"
+                }]
             },
             api_client=mock_api_client
         )
 
         # Verify the result
         assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], list)
-        assert len(result[0]) == 2
-        assert result[0][0]["name"] == "Replaced Service 1"
-        assert result[0][1]["name"] == "Replaced Service 2"
+        assert len(result) == 2
+        assert result[0]["name"] == "Replaced Service 1"
+        assert result[1]["name"] == "Replaced Service 2"
 
         # Verify the API was called correctly
-        mock_api_client.replace_all.assert_called_once()
+        mock_api_client.replace_all_without_preload_content.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -973,22 +980,12 @@ class TestApplicationSettingsE2E:
 
         # Create mock API client
         mock_api_client = MagicMock()
-        mock_api_client.order_service_config = MagicMock()
 
-        # Mock response - return list directly
-        mock_response = [
-            {
-                "id": "service-1",
-                "name": "Service 1",
-                "order": 1
-            },
-            {
-                "id": "service-2",
-                "name": "Service 2",
-                "order": 2
-            }
-        ]
-        mock_api_client.order_service_config.return_value = mock_response
+        # Mock response - the method expects a response object with status and data attributes
+        mock_response = MagicMock()
+        mock_response.status = 204
+        mock_response.data = None
+        mock_api_client.order_service_config_with_http_info.return_value = mock_response
 
         # Create the client
         client = ApplicationSettingsMCPTools(
@@ -1003,13 +1000,13 @@ class TestApplicationSettingsE2E:
         )
 
         # Verify the result
-        assert isinstance(result, list)
-        assert len(result) == 2
-        assert result[0]["order"] == 1
-        assert result[1]["order"] == 2
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert result["status"] == 204
+        assert "reordered successfully" in result["message"]
 
         # Verify the API was called correctly
-        mock_api_client.order_service_config.assert_called_once()
+        mock_api_client.order_service_config_with_http_info.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -1106,11 +1103,12 @@ class TestApplicationSettingsE2E:
         mock_api_client = MagicMock()
         mock_api_client.put_service_config = MagicMock()
 
-        # Mock response - return list directly
-        mock_response = [
-            {"id": "service-1", "name": "Updated Service 1", "type": "JAVA"},
-            {"id": "service-2", "name": "Updated Service 2", "type": "PYTHON"}
-        ]
+        # Mock response - return dict directly (not list)
+        mock_response = {
+            "id": "service-1",
+            "name": "Updated Service 1",
+            "type": "JAVA"
+        }
         mock_api_client.put_service_config.return_value = mock_response
 
         # Create the client
@@ -1133,12 +1131,9 @@ class TestApplicationSettingsE2E:
         )
 
         # Verify the result
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], list)
-        assert len(result[0]) == 2
-        assert result[0][0]["name"] == "Updated Service 1"
-        assert result[0][1]["name"] == "Updated Service 2"
+        assert isinstance(result, dict)
+        assert result["id"] == "service-1"
+        assert result["name"] == "Updated Service 1"
 
         # Verify the API was called correctly
         mock_api_client.put_service_config.assert_called_once()

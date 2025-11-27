@@ -42,6 +42,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     )
     @with_header_auth(ApplicationResourcesApi)
     async def get_application_endpoints(self,
+                                        app_id: Optional[str] = None,
+                                        service_id: Optional[str] = None,
+                                        endpoint_id: Optional[str] = None,
                                         name_filter: Optional[str] = None,
                                         types: Optional[List[str]] = None,
                                         technologies: Optional[List[str]] = None,
@@ -58,6 +61,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         For example, use this tool when asked about 'application endpoints', 'service endpoints', 'API endpoints in my application','endpoint id of an Endpoint', or when someone wants to 'list all endpoints'.
 
         Args:
+            app_id: Application ID to filter endpoints by application (optional)
+            service_id: Service ID to filter endpoints by service (optional)
+            endpoint_id: Endpoint ID to get a specific endpoint (optional)
             name_filter: Name of service to filter by (optional)
             types: List of endpoint types to filter by (optional)
             technologies: List of technologies to filter by (optional)
@@ -83,6 +89,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
 
             # Call the get_application_endpoints method from the SDK
             result = api_client.get_application_endpoints(
+                app_id=app_id,
+                service_id=service_id,
+                endpoint_id=endpoint_id,
                 name_filter=name_filter,
                 types=types,
                 technologies=technologies,
@@ -101,7 +110,21 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 result_dict = result
 
             logger.debug(f"Result from get_application_endpoints: {result_dict}")
-            return result_dict
+
+            # Check if we got a single Endpoint or EndpointResult (list)
+            # Single Endpoint is returned when app_id, service_id, AND endpoint_id are all provided
+            if app_id and service_id and endpoint_id:
+                # Single Endpoint object returned
+                return {
+                    "type": "single_endpoint",
+                    "endpoint": result_dict
+                }
+            else:
+                # EndpointResult (list) returned
+                return {
+                    "type": "endpoint_list",
+                    "data": result_dict
+                }
         except Exception as e:
             logger.error(f"Error in get_application_endpoints: {e}", exc_info=True)
             return {"error": f"Failed to get application endpoints: {e!s}"}
@@ -112,6 +135,8 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     )
     @with_header_auth(ApplicationResourcesApi)
     async def get_application_services(self,
+                                       app_id: Optional[str] = None,
+                                       service_id: Optional[str] = None,
                                        name_filter: Optional[str] = None,
                                        window_size: Optional[int] = None,
                                        to_time: Optional[int] = None,
@@ -127,6 +152,8 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         For example, use this tool when asked about 'application services', 'microservices in my application', 'list all services', or when someone wants to 'get service information'. A use case could be to retrieve all service ids present in an Application Perspective.
 
         Args:
+            app_id: Application ID to filter services by application (optional)
+            service_id: Service ID to filter specific service (optional)
             name_filter: Name of application/service to filter by (optional)
             window_size: Size of time window in milliseconds (optional)
             to_time: End timestamp in milliseconds (optional)
@@ -151,6 +178,8 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
 
             # Call the get_application_services method from the SDK
             result = api_client.get_application_services(
+                app_id=app_id,
+                service_id=service_id,
                 name_filter=name_filter,
                 window_size=window_size,
                 to=to_time,
@@ -169,6 +198,16 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
 
             logger.debug(f"Result from get_application_services: {result_dict}")
 
+            # Check if we got a single Service or ServiceResult (list)
+            # Single Service is returned when both app_id AND service_id are provided
+            if app_id and service_id:
+                # Single Service object returned
+                return {
+                    "type": "single_service",
+                    "service": result_dict
+                }
+
+            # ServiceResult (list) returned - extract and format the data
             # Extract service labels and IDs from the items
             services = []
             service_labels = []
@@ -176,14 +215,14 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
 
             for item in items:
                 if isinstance(item, dict):
-                    service_id = item.get('id', '')
+                    svc_id = item.get('id', '')
                     label = item.get('label', '')
                     technologies = item.get('technologies', [])
 
-                    if label and service_id:
+                    if label and svc_id:
                         service_labels.append(label)
                         services.append({
-                            'id': service_id,
+                            'id': svc_id,
                             'label': label,
                             'technologies': technologies
                         })
@@ -201,6 +240,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             service_labels = [service['label'] for service in limited_services]
 
             return {
+                "type": "service_list",
                 "message": f"Found {len(services)} services in application perspectives. Showing first {len(limited_services)}:",
                 "service_labels": service_labels,
                 "services": limited_services,

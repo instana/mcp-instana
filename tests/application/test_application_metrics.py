@@ -281,14 +281,14 @@ class TestApplicationMetricsMCPTools(unittest.TestCase):
         self.client.metrics_api.get_application_metrics = MagicMock(return_value=mock_result)
 
         # Set up test parameters
-        application_ids = ["app123", "app456"]
+        application_id = "app123"
         metrics = [{"metric": "calls", "aggregation": "SUM"}]
         time_frame = {"from": 1000, "to": 2000}
         fill_time_series = False
 
         # Call the method with custom parameters
         result = asyncio.run(self.client.get_application_metrics(
-            application_ids=application_ids,
+            application_id=application_id,
             metrics=metrics,
             time_frame=time_frame,
             fill_time_series=fill_time_series
@@ -323,14 +323,14 @@ class TestApplicationMetricsMCPTools(unittest.TestCase):
         self.client.metrics_api.get_endpoints_metrics = MagicMock(return_value=mock_result)
 
         # Set up test parameters
-        endpoint_ids = ["ep123", "ep456"]
+        endpoint_id = "ep123"
         metrics = [{"metric": "calls", "aggregation": "SUM"}]
         time_frame = {"from": 1000, "to": 2000}
         fill_time_series = False
 
         # Call the method with custom parameters
         result = asyncio.run(self.client.get_endpoints_metrics(
-            endpoint_ids=endpoint_ids,
+            endpoint_id=endpoint_id,
             metrics=metrics,
             time_frame=time_frame,
             fill_time_series=fill_time_series
@@ -379,7 +379,7 @@ class TestApplicationMetricsMCPTools(unittest.TestCase):
         self.client.metrics_api.get_services_metrics = MagicMock(return_value=mock_result)
 
         # Set up test parameters
-        service_ids = ["svc123", "svc456"]
+        service_id = "svc123"
         metrics = [{"metric": "calls", "aggregation": "SUM"}]
         time_frame = {"from": 1000, "to": 2000}
         fill_time_series = False
@@ -387,7 +387,7 @@ class TestApplicationMetricsMCPTools(unittest.TestCase):
 
         # Call the method with custom parameters
         result = asyncio.run(self.client.get_services_metrics(
-            service_ids=service_ids,
+            service_id=service_id,
             metrics=metrics,
             time_frame=time_frame,
             fill_time_series=fill_time_series,

@@ -525,11 +525,16 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ApplicationAlertConfig: {e}")
                 return {"error": f"Failed to import ApplicationAlertConfig: {e!s}"}
 
-            # Create an ApplicationAlertConfig object from the request body
+            # Create an ApplicationAlertConfig object from the request body using from_dict
+            # This properly handles nested objects and discriminators
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig(**request_body)
+                config_object = ApplicationAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
+
+                # Debug: Log what will be sent to API
+                config_dict = config_object.to_dict()
+                logger.debug(f"Config object as dict (what will be sent to API): {config_dict}")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")
                 return {"error": f"Failed to create config object: {e!s}"}
@@ -655,10 +660,11 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ApplicationAlertConfig: {e}")
                 return {"error": f"Failed to import ApplicationAlertConfig: {e!s}"}
 
-            # Create an ApplicationAlertConfig object from the request body
+            # Create an ApplicationAlertConfig object from the request body using from_dict
+            # This properly handles nested objects and discriminators
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig(**request_body)
+                config_object = ApplicationAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")

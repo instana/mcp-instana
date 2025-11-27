@@ -72,7 +72,31 @@ sys.modules['instana_client.models.group'] = MagicMock()  # Add missing module
 sys.modules['fastmcp'] = MagicMock()
 sys.modules['fastmcp.server'] = MagicMock()
 sys.modules['fastmcp.server.dependencies'] = MagicMock()
-sys.modules['pydantic'] = MagicMock()
+
+# Mock mcp and mcp.types to avoid pydantic import issues
+mock_mcp = MagicMock()
+mock_mcp_types = MagicMock()
+mock_tool_annotations = MagicMock()
+mock_mcp_types.ToolAnnotations = mock_tool_annotations
+sys.modules['mcp'] = mock_mcp
+sys.modules['mcp.types'] = mock_mcp_types
+
+# Mock src.core and src.core.utils modules
+mock_src_core = MagicMock()
+mock_src_core_utils = MagicMock()
+
+# Create a proper BaseInstanaClient mock
+class MockBaseInstanaClient:
+    def __init__(self, read_token: str, base_url: str):
+        self.read_token = read_token
+        self.base_url = base_url
+
+mock_src_core_utils.BaseInstanaClient = MockBaseInstanaClient
+mock_src_core_utils.register_as_tool = lambda *args, **kwargs: lambda func: func
+mock_src_core_utils.with_header_auth = mock_with_header_auth
+
+sys.modules['src.core'] = mock_src_core
+sys.modules['src.core.utils'] = mock_src_core_utils
 
 # Mock the get_http_headers function
 mock_get_http_headers = MagicMock(return_value={})
