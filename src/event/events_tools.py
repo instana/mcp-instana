@@ -578,11 +578,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
 
         try:
-            logger.debug(f"get_issue_events called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
+            logger.debug(f"get_issues called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
             from_time, to_time = self._process_time_range(time_range, from_time, to_time)
             if not from_time:
                 from_time = to_time - (60 * 60 * 1000)
             try:
+                # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
                     var_from=from_time,
                     to=to_time,
@@ -591,20 +592,35 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     exclude_triggered_before=exclude_triggered_before,
                     event_type_filters=["issue"]
                 )
+
+                # Check response status immediately
                 if response_data.status != 200:
                     return {"error": f"Failed to get issue events: HTTP {response_data.status}"}
+
+                # Process the response data directly without additional parsing
                 response_text = response_data.data.decode('utf-8')
                 result = json.loads(response_text)
+
+                # Create a standardized result format
                 if isinstance(result, list):
-                    result_dict = {"events": result, "events_count": len(result)}
+                    # Include a summary of the events for quicker analysis
+                    events_count = len(result)
+                    result_dict = {
+                        "events": result[:max_events],  # Limit to max_events for performance
+                        "events_count": events_count,
+                        "total_events": events_count,
+                        "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
+                    }
                 else:
                     result_dict = result
+
+                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} issue events")
                 return result_dict
             except Exception as api_error:
                 logger.error(f"API call failed: {api_error}", exc_info=True)
                 return {"error": f"Failed to get issue events: {api_error}"}
         except Exception as e:
-            logger.error(f"Error in get_issue_events: {e}", exc_info=True)
+            logger.error(f"Error in get_issues: {e}", exc_info=True)
             return {"error": f"Failed to get issue events: {e!s}"}
 
     @register_as_tool(
@@ -649,11 +665,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
 
         try:
-            logger.debug(f"get_incident_events called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
+            logger.debug(f"get_incidents called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
             from_time, to_time = self._process_time_range(time_range, from_time, to_time)
             if not from_time:
                 from_time = to_time - (60 * 60 * 1000)
             try:
+                # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
                     var_from=from_time,
                     to=to_time,
@@ -662,20 +679,35 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     exclude_triggered_before=exclude_triggered_before,
                     event_type_filters=["incident"]
                 )
+
+                # Check response status immediately
                 if response_data.status != 200:
                     return {"error": f"Failed to get incident events: HTTP {response_data.status}"}
+
+                # Process the response data directly without additional parsing
                 response_text = response_data.data.decode('utf-8')
                 result = json.loads(response_text)
+
+                # Create a standardized result format
                 if isinstance(result, list):
-                    result_dict = {"events": result, "events_count": len(result)}
+                    # Include a summary of the events for quicker analysis
+                    events_count = len(result)
+                    result_dict = {
+                        "events": result[:max_events],  # Limit to max_events for performance
+                        "events_count": events_count,
+                        "total_events": events_count,
+                        "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
+                    }
                 else:
                     result_dict = result
+
+                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} incident events")
                 return result_dict
             except Exception as api_error:
                 logger.error(f"API call failed: {api_error}", exc_info=True)
                 return {"error": f"Failed to get incident events: {api_error}"}
         except Exception as e:
-            logger.error(f"Error in get_incident_events: {e}", exc_info=True)
+            logger.error(f"Error in get_incidents: {e}", exc_info=True)
             return {"error": f"Failed to get incident events: {e!s}"}
 
     @register_as_tool(
@@ -720,11 +752,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
 
         try:
-            logger.debug(f"get_change_events called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
+            logger.debug(f"get_changes called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
             from_time, to_time = self._process_time_range(time_range, from_time, to_time)
             if not from_time:
                 from_time = to_time - (60 * 60 * 1000)
             try:
+                # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
                     var_from=from_time,
                     to=to_time,
@@ -733,20 +766,35 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     exclude_triggered_before=exclude_triggered_before,
                     event_type_filters=["change"]
                 )
+
+                # Check response status immediately
                 if response_data.status != 200:
                     return {"error": f"Failed to get change events: HTTP {response_data.status}"}
+
+                # Process the response data directly without additional parsing
                 response_text = response_data.data.decode('utf-8')
                 result = json.loads(response_text)
+
+                # Create a standardized result format
                 if isinstance(result, list):
-                    result_dict = {"events": result, "events_count": len(result)}
+                    # Include a summary of the events for quicker analysis
+                    events_count = len(result)
+                    result_dict = {
+                        "events": result[:max_events],  # Limit to max_events for performance
+                        "events_count": events_count,
+                        "total_events": events_count,
+                        "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
+                    }
                 else:
                     result_dict = result
+
+                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} change events")
                 return result_dict
             except Exception as api_error:
                 logger.error(f"API call failed: {api_error}", exc_info=True)
                 return {"error": f"Failed to get change events: {api_error}"}
         except Exception as e:
-            logger.error(f"Error in get_change_events: {e}", exc_info=True)
+            logger.error(f"Error in get_changes: {e}", exc_info=True)
             return {"error": f"Failed to get change events: {e!s}"}
 
     @register_as_tool(

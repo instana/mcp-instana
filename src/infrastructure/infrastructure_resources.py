@@ -68,10 +68,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_monitoring_state: {e}", exc_info=True)
             return {"error": f"Failed to get monitoring state: {e!s}"}
 
-    @register_as_tool(
-        title="Get Plugin Payload",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
+    # This tool is disabled since the underlying API is not giving a proper response.
     @with_header_auth(InfrastructureResourcesApi)
     async def get_plugin_payload(self,
                                  snapshot_id: str,

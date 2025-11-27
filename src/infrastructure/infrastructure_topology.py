@@ -133,6 +133,9 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
         The topology includes nodes (representing entities like hosts, processes, containers) and edges (representing
         connections between entities). This is useful for understanding the overall structure of your environment.
 
+        This implementation uses the `get_topology_without_preload_content` method from the SDK to bypass validation
+        issues that can occur with complex Kubernetes infrastructure data.
+
         For example, use this tool when:
         - You need a complete map of your infrastructure
         - You want to understand how components are connected
@@ -152,22 +155,31 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
 
             # Use the API client from the decorator
             try:
-                result = api_client.get_topology(include_data=include_data)
-                logger.debug("SDK call successful, processing result")
-            except Exception as sdk_error:
-                logger.error(f"SDK validation error: {sdk_error}")
+                # Use get_topology_without_preload_content to bypass validation
+                response = api_client.get_topology_without_preload_content(include_data=include_data)
+                logger.debug("SDK call successful using get_topology_without_preload_content")
 
-                # If it's a validation error, try to extract useful information from the error
-                if "validation error" in str(sdk_error).lower():
-                    return {
-                        "error": "SDK validation error occurred",
-                        "details": str(sdk_error),
-                        "suggestion": "The API response format may not match the expected SDK model structure. This often happens with complex Kubernetes or cloud infrastructure data.",
-                        "workaround": "Consider using other topology tools like get_related_hosts with specific snapshot IDs, or check if the include_data parameter affects the response format."
-                    }
-                else:
-                    # Re-raise if it's not a validation error
-                    raise sdk_error
+                # Parse the JSON response manually following the pattern from application_topology.py
+                import json
+                try:
+                    # The result from get_topology_without_preload_content is a response object
+                    # We need to read the response data and parse it as JSON
+                    response_text = response.data.decode('utf-8')
+                    result = json.loads(response_text)
+                    logger.debug("Successfully parsed topology data as JSON")
+                except (json.JSONDecodeError, AttributeError) as json_err:
+                    error_message = f"Failed to parse JSON response: {json_err}"
+                    logger.error(error_message)
+                    return {"error": error_message}
+
+            except Exception as sdk_error:
+                logger.error(f"SDK error: {sdk_error}")
+                return {
+                    "error": "Failed to get topology data",
+                    "details": str(sdk_error),
+                    "suggestion": "The API may be unavailable or the request format is incorrect.",
+                    "workaround": "Try again later or check if the include_data parameter affects the response."
+                }
 
             # Convert the result to a dictionary
             result_dict = None

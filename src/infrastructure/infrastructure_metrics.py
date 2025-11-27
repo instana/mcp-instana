@@ -87,6 +87,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
             if not plugin:
                 return {"error": "Plugin is required for this operation"}
 
+            # If no query is provided, return an error
             if not query:
                 return {"error": "Query is required for this operation"}
 

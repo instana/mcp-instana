@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "mcp-instana",
   "display_name": "MCP Instana Server",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP Instana Server for Observability",
   "author": {
     "name": "MCP Instana Team",
@@ -53,7 +53,7 @@
       "type": "string",
       "title": "Version",
       "description": "Version of the mcp-instana package which is being installed.",
-      "default": "0.3.0",
+      "default": "0.3.1",
       "required": false
     }
   },

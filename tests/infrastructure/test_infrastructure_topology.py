@@ -3,6 +3,7 @@ Unit tests for the InfrastructureTopologyMCPTools class
 """
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -188,13 +189,16 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
                 {"from": "node1", "to": "node2", "type": "hosts"}
             ]
         }
-        self.topology_api.get_topology.return_value = mock_result
+        # Set up the mock response for get_topology_without_preload_content
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(mock_result).encode('utf-8')
+        self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
         # Call the method
         result = asyncio.run(self.client.get_topology(include_data=True))
 
         # Check that the API was called with the correct arguments
-        self.topology_api.get_topology.assert_called_once_with(include_data=True)
+        self.topology_api.get_topology_without_preload_content.assert_called_once_with(include_data=True)
 
         # Check that the result has the expected structure (it transforms the response)
         self.assertIn("summary", result)
@@ -205,7 +209,7 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
     def test_get_topology_error(self):
         """Test get_topology error handling"""
         # Set up the mock to raise an exception
-        self.topology_api.get_topology.side_effect = Exception("Test error")
+        self.topology_api.get_topology_without_preload_content.side_effect = Exception("Test error")
 
         # Call the method
         result = asyncio.run(self.client.get_topology())

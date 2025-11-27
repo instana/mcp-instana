@@ -88,6 +88,11 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                     result_dict = {"data": str(result), "plugin_id": plugin_id}
 
                 logger.debug(f"Result from get_available_payload_keys_by_plugin_id: {result_dict}")
+
+                # Safety check: ensure we never return a raw list
+                if isinstance(result_dict, list):
+                    result_dict = {"payload_keys": result_dict, "plugin_id": plugin_id}
+
                 return result_dict
 
             except Exception as sdk_error:
@@ -111,7 +116,16 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                     # Try to parse as JSON first
                     import json
                     try:
-                        result_dict = json.loads(response_text)
+                        parsed_result = json.loads(response_text)
+
+                        # Ensure we always return a dictionary, not a raw list
+                        if isinstance(parsed_result, list):
+                            result_dict = {"payload_keys": parsed_result, "plugin_id": plugin_id}
+                        elif isinstance(parsed_result, dict):
+                            result_dict = parsed_result
+                        else:
+                            result_dict = {"data": parsed_result, "plugin_id": plugin_id}
+
                         logger.debug(f"Result from fallback method (JSON): {result_dict}")
                         return result_dict
                     except json.JSONDecodeError:
@@ -390,14 +404,26 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 return result_dict
 
             except Exception as sdk_error:
-                logger.error(f"SDK method failed: {sdk_error}, trying with custom headers")
+                logger.error(f"SDK method failed: {sdk_error}, evaluating fallback conditions")
 
                 # Check if it's a 406 error
                 is_406_error = False
                 if hasattr(sdk_error, 'status') and sdk_error.status == 406 or "406" in str(sdk_error) and "Not Acceptable" in str(sdk_error):
                     is_406_error = True
 
-                if is_406_error:
+                # Check for Pydantic ValidationError (SDK model deserialization issues)
+                is_pydantic_error = False
+                try:
+                    from pydantic import (
+                        ValidationError as _PydanticValidationError,  # type: ignore
+                    )
+                    is_pydantic_error = isinstance(sdk_error, _PydanticValidationError)
+                except Exception:
+                    # Fallback to string inspection if pydantic not importable in runtime
+                    err_str = str(sdk_error).lower()
+                    is_pydantic_error = ("pydantic" in err_str and "validation" in err_str) or ("validation error" in err_str)
+
+                if is_406_error or is_pydantic_error:
                     # Try using the SDK's method with custom headers
                     # The SDK should have a method that allows setting custom headers
                     custom_headers = {
@@ -430,7 +456,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                         logger.error(error_message)
                         return {"error": error_message}
                 else:
-                    # Re-raise if it's not a 406 error
+                    # Re-raise if it's not a 406 or Pydantic validation error
                     raise
 
         except Exception as e:

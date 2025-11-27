@@ -1,7 +1,6 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 <!-- mcp-name: io.github.instana/mcp-instana -->
-**Table of Contents**
 
 - [MCP Server for IBM Instana](#mcp-server-for-ibm-instana)
   - [Architecture Overview](#architecture-overview)
@@ -48,23 +47,8 @@
       - [**pyproject.toml** (Development)](#pyprojecttoml-development)
       - [**pyproject-runtime.toml** (Production)](#pyproject-runtimetoml-production)
     - [Building the Docker Image](#building-the-docker-image)
-      - [**Prerequisites**](#prerequisites-1)
+      - [**Prerequisites**](#prerequisites)
       - [**Build Command**](#build-command)
-      - [**What the Build Does**](#what-the-build-does)
-    - [Running the Docker Container](#running-the-docker-container)
-      - [**Basic Usage**](#basic-usage)
-      - [**Environment Variables**](#environment-variables)
-      - [**Docker Compose Example**](#docker-compose-example)
-    - [Docker Security Features](#docker-security-features)
-      - [**Security Best Practices Implemented**](#security-best-practices-implemented)
-      - [**Image Size Optimization**](#image-size-optimization)
-    - [Testing the Docker Container](#testing-the-docker-container)
-      - [**Health Check**](#health-check)
-      - [**MCP Inspector Testing**](#mcp-inspector-testing)
-      - [**Logs and Debugging**](#logs-and-debugging)
-    - [Production Deployment](#production-deployment)
-      - [**Recommended Production Setup**](#recommended-production-setup)
-      - [**Kubernetes Example**](#kubernetes-example)
   - [Troubleshooting](#troubleshooting)
     - [**Docker Issues**](#docker-issues)
       - [**Container Won't Start**](#container-wont-start)
@@ -1001,141 +985,23 @@ The project uses a **two-file dependency management strategy**:
 #### **Prerequisites**
 - Docker installed and running
 - Access to the project source code
+- Docker BuildKit for multi-architecture builds (enabled by default in recent Docker versions)
 
 #### **Build Command**
 ```bash
 # Build the optimized production image
-docker build -t mcp-instana .
+docker build -t mcp-instana:latest .
 
 # Build with a specific tag
-docker build -t mcp-instana:v1.0.0 .
-```
+docker build -t mcp-instana:< image_tag > .
 
-#### **What the Build Does**
-1. **Multi-stage build** for optimal size and security
-2. **Builder stage**: Installs only runtime dependencies from `pyproject-runtime.toml`
-3. **Runtime stage**: Creates minimal production image with non-root user
-4. **Security**: No hardcoded secrets, proper user permissions
-5. **Optimization**: Only essential dependencies (20 vs 95+ in development)
-
-### Running the Docker Container
-
-#### **Basic Usage**
+#### **Run Command**
 ```bash
 # Run the container (no credentials needed in the container)
 docker run -p 8080:8080 mcp-instana
 
 # Run with custom port
 docker run -p 8081:8080 mcp-instana
-```
-
-
-
-#### **Docker Compose Example**
-```yaml
-version: '3.8'
-services:
-  mcp-instana:
-    build: .
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-```
-
-### Docker Security Features
-
-#### **Security Best Practices Implemented**
-- ✅ **Non-root user**: Container runs as `mcpuser` (not root)
-- ✅ **No secrets in container**: Credentials are passed via HTTP headers from clients, not stored in the container
-- ✅ **Minimal dependencies**: Only 20 essential runtime dependencies
-- ✅ **Multi-stage build**: Build tools don't make it to final image
-- ✅ **Health checks**: Built-in container health monitoring
-- ✅ **Optimized base image**: Uses `python:3.11-slim`
-
-#### **Image Size Optimization**
-- **Original approach**: 95+ dependencies → ~1-2GB+ image
-- **Optimized approach**: 20 dependencies → ~266MB image
-- **Size reduction**: ~70-80% smaller images
-- **Benefits**: Faster deployments, lower storage costs, reduced attack surface
-
-### Testing the Docker Container
-
-#### **Health Check**
-```bash
-# Check if container is healthy
-docker ps
-
-# Test the MCP endpoint
-curl http://localhost:8080/mcp/
-```
-
-#### **MCP Inspector Testing**
-```bash
-# Test with MCP Inspector
-npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
-```
-
-#### **Logs and Debugging**
-```bash
-# View container logs
-docker logs <container_id>
-
-# Follow logs in real-time
-docker logs -f <container_id>
-
-# Execute commands in running container
-docker exec -it <container_id> /bin/bash
-```
-
-### Production Deployment
-
-#### **Recommended Production Setup**
-1. **Run container without credentials** - The container runs in Streamable HTTP mode, so no Instana credentials are needed in the container
-2. **Configure clients with credentials** - Pass Instana credentials via HTTP headers from MCP clients (Claude Desktop, GitHub Copilot, etc.)
-3. **Set up proper logging** and monitoring
-4. **Configure health checks** for container orchestration
-5. **Use container orchestration** (Kubernetes, Docker Swarm, etc.)
-6. **Implement proper backup** and disaster recovery
-
-#### **Kubernetes Example**
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mcp-instana
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: mcp-instana
-  template:
-    metadata:
-      labels:
-        app: mcp-instana
-    spec:
-      containers:
-      - name: mcp-instana
-        image: mcp-instana:latest
-        ports:
-        - containerPort: 8080
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
 ```
 
 ## Troubleshooting
@@ -1146,12 +1012,10 @@ spec:
 ```bash
 # Check container logs
 docker logs <container_id>
-
 # Common issues:
 # 1. Port already in use
 # 2. Invalid container image
 # 3. Missing dependencies
-
 # Credentials are passed via HTTP headers from the MCP client
 ```
 
@@ -1159,7 +1023,6 @@ docker logs <container_id>
 ```bash
 # Test container connectivity
 docker exec -it <container_id> curl http://127.0.0.1:8080/health
-
 # Check port mapping
 docker port <container_id>
 ```
@@ -1168,7 +1031,6 @@ docker port <container_id>
 ```bash
 # Check container resource usage
 docker stats <container_id>
-
 # Monitor container health
 docker inspect <container_id> | grep -A 10 Health
 ```
@@ -1184,3 +1046,4 @@ docker inspect <container_id> | grep -A 10 Health
       - If that works, your Python environment may not be able to verify the certificate and might not have access to the same certificates as your shell or system. Ensure your Python environment uses system certificates (macOS). You can do this by installing certificates to Python:
       `//Applications/Python\ 3.13/Install\ Certificates.command`
     - If you cannot reach the endpoint with SSL verification, try without it. If that works, check your system's CA certificates and ensure they are up-to-date.
+```
