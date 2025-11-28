@@ -147,4 +147,4 @@ class LookupHelpers(BaseInstanaClient):
             logger.error(f"Error looking up service ID: {e}", exc_info=True)
             return {"error": f"Failed to lookup service: {e!s}"}
 
-# Made with Bob
+#  

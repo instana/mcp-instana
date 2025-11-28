@@ -500,4 +500,4 @@ class InfrastructureMetricsInsightMCPTools(BaseInstanaClient):
             logger.error(f"Error getting infrastructure metrics: {e}", exc_info=True)
             return {"error": f"Failed to get infrastructure metrics: {e!s}"}
 
-# Made with Bob
+#  
