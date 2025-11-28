@@ -16,6 +16,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from src.insights.infrastructure_metrics_insight import InfrastructureMetricsInsightMCPTools
 from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
@@ -74,7 +75,7 @@ class MCPState:
     infra_catalog_client: Any = None
     infra_topo_client: Any = None
     infra_analyze_client: Any = None
-    infra_metrics_client: Any = None
+    # infra_metrics_client: Any = None
     app_catalog_client: Any = None
     app_topology_client: Any = None
     app_analyze_client: Any = None
@@ -86,6 +87,7 @@ class MCPState:
     website_configuration_client: Any = None
     # application_entities_insight_client: Any = None
     application_metrics_insight_client: Any = None
+    infrastructure_metrics_insight_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -260,9 +262,9 @@ def get_client_categories():
         from src.infrastructure.infrastructure_catalog import (
             InfrastructureCatalogMCPTools,
         )
-        from src.infrastructure.infrastructure_metrics import (
-            InfrastructureMetricsMCPTools,
-        )
+        # from src.infrastructure.infrastructure_metrics import (
+        #     InfrastructureMetricsMCPTools,
+        # )
         from src.infrastructure.infrastructure_resources import (
             InfrastructureResourcesMCPTools,
         )
@@ -276,6 +278,7 @@ def get_client_categories():
         from src.website.website_metrics import WebsiteMetricsMCPTools
         # from src.insights.entities_insight import ApplicationEntitiesInsightMCPTools
         from src.insights.application_metrics_insight import ApplicationMetricsInsightMCPTools
+        from src.insights.infrastructure_metrics_insight import InfrastructureMetricsInsightMCPTools
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -286,7 +289,7 @@ def get_client_categories():
             ('infra_catalog_client', InfrastructureCatalogMCPTools),
             ('infra_topo_client', InfrastructureTopologyMCPTools),
             ('infra_analyze_client', InfrastructureAnalyzeMCPTools),
-            ('infra_metrics_client', InfrastructureMetricsMCPTools),
+            # ('infra_metrics_client', InfrastructureMetricsMCPTools),
         ],
         "app": [
             # ('app_resource_client', ApplicationResourcesMCPTools),
@@ -317,6 +320,7 @@ def get_client_categories():
         "insights": [
             # ('application_entities_insight_client', ApplicationEntitiesInsightMCPTools),
             ('application_metrics_insight_client', ApplicationMetricsInsightMCPTools),
+            ('infrastructure_metrics_insight_client', InfrastructureMetricsInsightMCPTools),
         ],
     }
 
