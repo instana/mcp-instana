@@ -37,7 +37,7 @@
 
 ### 0.1.0
 
--   **New Feature:** Initial public release of the MCP Server for IBM
+-   Initial public release of the MCP Server for IBM
     Instana.
 -   **New Feature:** Introduced core Monitoring Capabilities
     (Application, Infrastructure, and Event Monitoring).
