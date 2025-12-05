@@ -26,7 +26,7 @@ dependencies = [
     "uvicorn==0.35.0",
     
     # Instana API client
-    "instana-client==1.0.1",
+    "instana-client==1.0.2",
     
     # HTTP client and utilities
     "requests==2.32.4",

@@ -1106,18 +1106,17 @@ wheels = [
 
 [[package]]
 name = "instana-client"
-version = "1.0.1"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "lazy-imports" },
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/44/33ee815aaaba7458eb34b1f1c0a73922e3607fbc2fe4d9edc4b53d5e2322/instana_client-1.0.1.tar.gz", hash = "sha256:2119b65b7859b60fedb33c8ffe0661bfdf7f14cab19238bb2e97572296589897", size = 543366, upload-time = "2025-10-15T13:40:33.463Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/8e/170c32428902538b994031ea0bec694d2f113798d81cd7fb50e0961625f2/instana_client-1.0.2.tar.gz", hash = "sha256:fca60b61d0b0a13520373312e2cce8d06be4c732c5824d3fd785234cbc68cbde", size = 534634, upload-time = "2025-12-05T11:43:06.314Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/79/ef5555ad7a34c9e57aa0c30ca6ec4fb427b357d24e3d29b0fdc81b89f013/instana_client-1.0.1-py3-none-any.whl", hash = "sha256:1ef14229ce1138516b7d5bd64ee77f33ac9427c390ec479f15ae077f8b9b8344", size = 1139194, upload-time = "2025-10-15T13:40:31.809Z" },
+    { url = "https://files.pythonhosted.org/packages/36/11/b7dc90fe7ff361528aa9afe314f5c4f86b3eeb04748951168bae3544585e/instana_client-1.0.2-py3-none-any.whl", hash = "sha256:e799ef5a754168d9581b350097a90aacfe80ae49a2819732edb2b1513124f1df", size = 1151072, upload-time = "2025-12-05T11:43:02.072Z" },
 ]
 
 [[package]]
@@ -1344,15 +1343,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lazy-imports"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ec/cd/94bf4a69be8f2ffe5584562bb4f2adcbae8004ffe1803dba118750ae17d5/lazy_imports-1.1.0.tar.gz", hash = "sha256:e6ea5a1e4f09a861357e670b7aa61efcbce6fe29361785dd253df66f8ddbc36b", size = 24601, upload-time = "2025-10-31T19:06:41.948Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/9d/70a2d902d0d9530f36e60d6ef2f97a47363d2f20cac02999e29cc97b0756/lazy_imports-1.1.0-py3-none-any.whl", hash = "sha256:49fb1034ffe325fbec6e1f0e1e5b47eaaf43989b17be6c090added97c2b3ec24", size = 18964, upload-time = "2025-10-31T19:06:40.707Z" },
-]
-
-[[package]]
 name = "lazy-object-proxy"
 version = "1.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1548,7 +1538,7 @@ dev = [
 requires-dist = [
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.10.1" },
     { name = "fastmcp", specifier = "==2.13.0" },
-    { name = "instana-client", specifier = "==1.0.1" },
+    { name = "instana-client", specifier = "==1.0.2" },
     { name = "mcp" },
     { name = "pydantic", specifier = "==2.11.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },

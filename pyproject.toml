@@ -25,7 +25,7 @@ dependencies = [
     # MCP SDK for types and annotations
     "mcp",
     # Instana API client - imported in src/event/events_tools.py
-    "instana-client==1.0.1",
+    "instana-client==1.0.2",
     # HTTP client - imported in src/core/utils.py
     "requests==2.32.4",
     # Environment loading - imported in src/core/server.py
