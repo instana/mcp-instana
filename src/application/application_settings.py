@@ -326,17 +326,19 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         try:
             debug_print(f"Fetching application perspective with ID: {id}")
-            # Call the get_application_config method from the SDK
-            result = api_client.get_application_config(id=id)
-
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                result_dict = result
-
-            debug_print(f"Result from get_application_config: {result_dict}")
-            return result_dict
+            # Use raw JSON response to avoid Pydantic validation issues
+            result = api_client.get_application_config_without_preload_content(id=id)
+            import json
+            try:
+                response_text = result.data.decode('utf-8')
+                json_data = json.loads(response_text)
+                result_dict = json_data
+                debug_print(f"Result from get_application_config: {result_dict}")
+                return result_dict
+            except (json.JSONDecodeError, AttributeError) as json_err:
+                error_message = f"Failed to parse JSON response: {json_err}"
+                debug_print(error_message)
+                return {"error": error_message}
         except Exception as e:
             debug_print(f"Error in get_application_config: {e}")
             traceback.print_exc(file=sys.stderr)
