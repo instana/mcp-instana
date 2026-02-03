@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class SmartRouterMCPTool(BaseInstanaClient):
     """
-    Smart router that routes queries to Application Metrics and Alert Configuration tools.
+    Smart router that routes queries to Application Metrics, Alert Configuration, and Catalog tools.
     The LLM agent determines the appropriate operation based on query understanding.
     """
 
@@ -28,6 +28,7 @@ class SmartRouterMCPTool(BaseInstanaClient):
         # Initialize the application tool clients
         from src.application.application_alert_config import ApplicationAlertMCPTools
         from src.application.application_call_group import ApplicationCallGroupMCPTools
+        from src.application.application_catalog import ApplicationCatalogMCPTools
         from src.application.application_global_alert_config import (
             ApplicationGlobalAlertMCPTools,
         )
@@ -39,6 +40,7 @@ class SmartRouterMCPTool(BaseInstanaClient):
         self.app_global_alert_config_client = ApplicationGlobalAlertMCPTools(read_token, base_url)
         self.app_resources_client = ApplicationResourcesMCPTools(read_token, base_url)
         self.app_settings_client = ApplicationSettingsMCPTools(read_token, base_url)
+        self.app_catalog_client = ApplicationCatalogMCPTools(read_token, base_url)
 
         logger.info("Smart Router initialized with Application tools")
 
@@ -54,13 +56,14 @@ class SmartRouterMCPTool(BaseInstanaClient):
         ctx=None
     ) -> Dict[str, Any]:
         """
-        Unified Instana application resource manager for metrics, alerts, and configurations.
+        Unified Instana application resource manager for metrics, alerts, configurations, and catalog.
 
         Resource Types:
         - "metrics": Query application metrics, services, and endpoints
         - "alert_config": Manage application-specific alert configurations
         - "global_alert_config": Manage global application alert configurations
         - "settings": Manage application perspectives, endpoints, services, manual services
+        - "catalog": Access application tag and metric catalog information
 
         METRICS (resource_type="metrics"):
             operation: "application"
@@ -105,8 +108,15 @@ class SmartRouterMCPTool(BaseInstanaClient):
                 }
             }
 
+        CATALOG (resource_type="catalog"):
+            operations: get_tag_catalog, get_metric_catalog
+            params: {use_case, data_source, var_from}
+
+            Get tag catalog: operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
+            Get metric catalog: operation="get_metric_catalog"
+
         Args:
-            resource_type: "metrics", "alert_config", "global_alert_config", or "settings"
+            resource_type: "metrics", "alert_config", "global_alert_config", "settings", or "catalog"
             operation: Specific operation for the resource type
             params: Operation-specific parameters (optional)
             ctx: MCP context (internal)
@@ -129,6 +139,12 @@ class SmartRouterMCPTool(BaseInstanaClient):
 
             # Create application perspective
             resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App"}}
+
+            # Get application tag catalog
+            resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
+
+            # Get application metric catalog
+            resource_type="catalog", operation="get_metric_catalog"
         """
         try:
             logger.info(f"Smart Router received: resource_type={resource_type}, operation={operation}")
@@ -138,10 +154,10 @@ class SmartRouterMCPTool(BaseInstanaClient):
                 params = {}
 
             # Validate resource_type
-            if resource_type not in ["metrics", "alert_config", "global_alert_config", "settings"]:
+            if resource_type not in ["metrics", "alert_config", "global_alert_config", "settings", "catalog"]:
                 return {
-                    "error": f"Invalid resource_type '{resource_type}'. Must be 'metrics', 'alert_config', 'global_alert_config', or 'settings'",
-                    "suggestion": "Choose 'metrics' for querying data, 'alert_config' for application-specific alerts, 'global_alert_config' for global alerts, or 'settings' for application perspective configurations"
+                    "error": f"Invalid resource_type '{resource_type}'. Must be 'metrics', 'alert_config', 'global_alert_config', 'settings', or 'catalog'",
+                    "suggestion": "Choose 'metrics' for querying data, 'alert_config' for application-specific alerts, 'global_alert_config' for global alerts, 'settings' for application perspective configurations, or 'catalog' for tag and metric catalog information"
                 }
 
             # Route to the appropriate resource handler
@@ -153,10 +169,12 @@ class SmartRouterMCPTool(BaseInstanaClient):
                 return await self._handle_global_alert_config(operation, params, ctx)
             elif resource_type == "settings":
                 return await self._handle_settings(operation, params, ctx)
+            elif resource_type == "catalog":
+                return await self._handle_catalog(operation, params, ctx)
             else:
                 return {
                     "error": f"Unsupported resource_type: {resource_type}",
-                    "supported_types": ["metrics", "alert_config", "global_alert_config", "settings"]
+                    "supported_types": ["metrics", "alert_config", "global_alert_config", "settings", "catalog"]
                 }
 
         except Exception as e:
@@ -501,4 +519,56 @@ class SmartRouterMCPTool(BaseInstanaClient):
             logger.error(f"Error fetching application ID: {e}", exc_info=True)
             return {"error": f"Failed to fetch application ID: {e!s}"}
 
+    async def _handle_catalog(
+        self,
+        operation: str,
+        params: Dict[str, Any],
+        ctx
+    ) -> Dict[str, Any]:
+        """Handle Application Catalog operations."""
+        valid_operations = ["get_tag_catalog", "get_metric_catalog"]
+
+        if operation not in valid_operations:
+            return {
+                "error": f"Invalid operation '{operation}' for catalog",
+                "valid_operations": valid_operations
+            }
+
+        # Extract parameters
+        use_case = params.get("use_case")
+        data_source = params.get("data_source")
+        var_from = params.get("var_from")
+
+        # Route to the appropriate catalog method
+        if operation == "get_tag_catalog":
+            logger.info("Routing to Application Tag Catalog")
+            result = await self.app_catalog_client.get_application_tag_catalog(
+                use_case=use_case,
+                data_source=data_source,
+                var_from=var_from,
+                ctx=ctx
+            )
+
+            return {
+                "resource_type": "catalog",
+                "operation": operation,
+                "results": result
+            }
+
+        elif operation == "get_metric_catalog":
+            logger.info("Routing to Application Metric Catalog")
+            result = await self.app_catalog_client.get_application_metric_catalog(
+                ctx=ctx
+            )
+
+            return {
+                "resource_type": "catalog",
+                "operation": operation,
+                "results": result
+            }
+
+        return {
+            "error": f"Unsupported catalog operation: {operation}",
+            "valid_operations": valid_operations
+        }
 

@@ -647,6 +647,9 @@ Here is an example of a GitHub Copilot response:
     - [x] Manage application perspectives
     - [x] Configure endpoints and services
     - [x] Manage manual services
+  - [x] Application Catalog
+    - [x] Get application tag catalog
+    - [x] Get application metric catalog
 - [x] **Infrastructure Analysis** (`analyze_infrastructure_elicitation`)
   - [x] Two-pass elicitation for entity/metric queries
   - [x] Support for multiple entity types (JVM, Kubernetes, Docker, etc.)
@@ -687,13 +690,22 @@ Here is an example of a GitHub Copilot response:
     - [x] Get Website Geo Mapping Rules
     - [ ] Set Website Geo Mapping Rules
     - [ ] Upload Source Map File
-    - [ ] Clear Source Map Upload 
+    - [ ] Clear Source Map Upload
+- [x] **Custom Dashboards** (`manage_custom_dashboards`)
+  - [x] Get all custom dashboards
+  - [x] Get specific dashboard by ID
+  - [x] Create new custom dashboard
+  - [x] Update existing custom dashboard
+  - [x] Delete custom dashboard
+  - [x] Get shareable users for dashboard
+  - [x] Get shareable API tokens for dashboard
 
 ## Available Tools
 
 | Tool                                                          | Category                       | Description                                            |
 |---------------------------------------------------------------|--------------------------------|------------------------------------------------------- |
-| `manage_instana_resources`                                    | Application & Infrastructure   | Unified tool for managing application metrics, alert configs, and settings |
+| `manage_instana_resources`                                    | Application & Infrastructure   | Unified tool for managing application metrics, alert configs, settings, and catalog |
+| `manage_custom_dashboards`                                    | Custom Dashboards              | Unified tool for managing custom dashboard CRUD operations |
 | `analyze_infrastructure_elicitation`                          | Infrastructure Analyze         | Two-pass infrastructure analysis with entity/metric elicitation |
 | `get_actions`                                                 | Automation                     | Get available automation actions from action catalog   |
 | `get_action_details`                                          | Automation                     | Get detailed information about a specific action       |
@@ -740,9 +752,15 @@ The MCP server supports selective tool loading to optimize performance and reduc
 ### Available Tool Categories
 
 - **`router`**: Unified application and infrastructure management
-  - `manage_instana_resources`: Single tool for application metrics, alert configurations, and settings
+  - `manage_instana_resources`: Single tool for application metrics, alert configurations, settings, and catalog
   - Supports application perspectives, endpoints, services, and manual services
   - Manages both application-specific and global alert configurations
+  - Provides access to application tag catalog and metric catalog
+
+- **`dashboard`**: Custom dashboard management
+  - `manage_custom_dashboards`: CRUD operations for custom dashboards
+  - Supports dashboard creation, retrieval, updates, and deletion
+  - Manages shareable users and API tokens for dashboards
 
 - **`infra`**: Infrastructure analysis tools
   - `analyze_infrastructure_elicitation`: Two-pass infrastructure analysis with entity/metric elicitation
@@ -779,6 +797,9 @@ mcp-instana --tools router,infra --transport streamable-http
 # Enable events and website tools
 mcp-instana --tools events,website --transport streamable-http
 
+# Enable dashboard and router tools
+mcp-instana --tools dashboard,router --transport streamable-http
+
 # Enable all tools (default behavior)
 mcp-instana --transport streamable-http
 
@@ -800,6 +821,9 @@ uv run src/core/server.py --tools router,infra --transport streamable-http
 
 # Enable events and website tools
 uv run src/core/server.py --tools events,website --transport streamable-http
+
+# Enable dashboard and router tools
+uv run src/core/server.py --tools dashboard,router --transport streamable-http
 
 # Enable all tools (default behavior)
 uv run src/core/server.py --transport streamable-http

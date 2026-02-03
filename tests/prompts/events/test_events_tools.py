@@ -39,14 +39,14 @@ class TestEventsPrompts(unittest.TestCase):
     def test_get_prompts_returns_all_prompts(self):
         """Test that get_prompts returns all prompts defined in the class."""
         prompts = EventsPrompts.get_prompts()
-        self.assertEqual(len(prompts), 8)
+        self.assertEqual(len(prompts), 7)
         self.assertEqual(prompts[0][0], 'get_event')
         self.assertEqual(prompts[1][0], 'get_kubernetes_info_events')
         self.assertEqual(prompts[2][0], 'get_agent_monitoring_events')
-        self.assertEqual(prompts[4][0], 'get_issues')
-        self.assertEqual(prompts[5][0], 'get_incidents')
-        self.assertEqual(prompts[6][0], 'get_changes')
-        self.assertEqual(prompts[7][0], 'get_events_by_ids')
+        self.assertEqual(prompts[3][0], 'get_issues')
+        self.assertEqual(prompts[4][0], 'get_incidents')
+        self.assertEqual(prompts[5][0], 'get_changes')
+        self.assertEqual(prompts[6][0], 'get_events_by_ids')
 
 
 if __name__ == '__main__':

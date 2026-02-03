@@ -40,14 +40,15 @@ class TestApplicationSettingsPrompts(unittest.TestCase):
     def test_get_prompts_returns_all_prompts(self):
         """Test that get_prompts returns all prompts defined in the class."""
         prompts = ApplicationSettingsPrompts.get_prompts()
-        self.assertEqual(len(prompts), 7)
+        self.assertEqual(len(prompts), 8)
         self.assertEqual(prompts[0][0], 'get_all_applications_configs')
         self.assertEqual(prompts[1][0], 'get_application_config')
-        self.assertEqual(prompts[2][0], 'get_all_endpoint_configs')
-        self.assertEqual(prompts[3][0], 'get_endpoint_config')
-        self.assertEqual(prompts[4][0], 'get_all_manual_service_configs')
-        self.assertEqual(prompts[5][0], 'add_manual_service_config')
-        self.assertEqual(prompts[6][0], 'get_service_config')
+        self.assertEqual(prompts[2][0], 'create_application_config')
+        self.assertEqual(prompts[3][0], 'get_all_endpoint_configs')
+        self.assertEqual(prompts[4][0], 'get_endpoint_config')
+        self.assertEqual(prompts[5][0], 'get_all_manual_service_configs')
+        self.assertEqual(prompts[6][0], 'add_manual_service_config')
+        self.assertEqual(prompts[7][0], 'get_service_config')
 
 
 if __name__ == '__main__':

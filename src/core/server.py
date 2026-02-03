@@ -66,8 +66,9 @@ from fastmcp import FastMCP
 @dataclass
 class MCPState:
     """State for the MCP server with all tool categories."""
-    # Router tool
+    # Router tools
     smart_router_client: Any = None
+    custom_dashboard_smart_router_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     infra_analyze_new_client: Any = None
@@ -241,6 +242,9 @@ def get_client_categories():
     try:
         from src.automation.action_catalog import ActionCatalogMCPTools
         from src.automation.action_history import ActionHistoryMCPTools
+        from src.core.custom_dashboard_smart_router_tool import (
+            CustomDashboardSmartRouterMCPTool,
+        )
         from src.core.smart_router_tool import SmartRouterMCPTool
         from src.event.events_tools import AgentMonitoringEventsMCPTools
         from src.infrastructure.infrastructure_analyze_new import (
@@ -258,6 +262,7 @@ def get_client_categories():
     return {
         "router": [
             ('smart_router_client', SmartRouterMCPTool),
+            ('custom_dashboard_smart_router_client', CustomDashboardSmartRouterMCPTool),
         ],
         "infra": [
             ('infra_analyze_new_client', InfrastructureAnalyzeOption2),
@@ -285,9 +290,6 @@ def get_prompt_categories():
     # Import the class-based prompts
     try:
         from src.prompts.application.application_alerts import ApplicationAlertsPrompts
-        from src.prompts.application.application_catalog import (
-            ApplicationCatalogPrompts,
-        )
         from src.prompts.application.application_metrics import (
             ApplicationMetricsPrompts,
         )
@@ -314,7 +316,6 @@ def get_prompt_categories():
 
     # Get prompts from each class
     app_alerts_prompts = ApplicationAlertsPrompts.get_prompts()
-    app_catalog_prompts = ApplicationCatalogPrompts.get_prompts()
     app_metrics_prompts = ApplicationMetricsPrompts.get_prompts()
     app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
     app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
@@ -329,7 +330,6 @@ def get_prompt_categories():
     return {
         "app": [
             ("Application Alerts", app_alerts_prompts),
-            ("Application Catalog", app_catalog_prompts),
             ("Application Metrics", app_metrics_prompts),
             ("Application Resources", app_resources_prompts),
             ("Application Settings", app_settings_prompts),
