@@ -1,4 +1,8 @@
 # Changelog
+### 0.7.0
+
+-   **Dependency Update:** Refactored Applications and Infrastructure tools for optimized performance.
+
 ### 0.6.2
 
 -   **New Feature:** Added header for the User-agent for version tracking of mcp instana.
