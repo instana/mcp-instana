@@ -1,0 +1,63 @@
+{
+  "type": "oTelLLM",
+  "api_endpoint": "/api/infrastructure-monitoring/analyze/entities",
+  "description": "OpenTelemetry LLM (GenAI) entity type for monitoring LLM usage, tokens, costs, and performance",
+  "parameters": {
+    "metrics": {
+      "metric": [
+        "metrics.gauges.llm.usage.total_tokens",
+        "metrics.gauges.llm.usage.input_tokens",
+        "metrics.gauges.llm.usage.output_tokens",
+        "metrics.gauges.llm.usage.cost",
+        "metrics.gauges.llm.usage.input_cost",
+        "metrics.gauges.llm.usage.output_cost",
+        "metrics.gauges.llm.response.duration",
+        "metrics.sums.llm.request.count"
+      ],
+      "aggregation": {
+        "enum": ["MEAN", "MAX", "MIN", "SUM"]
+      }
+    },
+    "tagFilterElements": {
+      "enum": [
+        "type",
+        "metric.tag.service_name",
+        "metric.tag.model_id",
+        "metric.tag.ai_system"
+      ]
+    }
+  },
+  "examples": [
+    {
+      "description": "Get total tokens for a specific service",
+      "filters": [
+        {"name": "metric.tag.service_name", "value": "groq_chat_service"}
+      ],
+      "metrics": ["metrics.gauges.llm.usage.total_tokens"],
+      "aggregation": "MEAN"
+    },
+    {
+      "description": "Get costs for a specific model",
+      "filters": [
+        {"name": "metric.tag.model_id", "value": "llama-3.1-70b-versatile"}
+      ],
+      "metrics": [
+        "metrics.gauges.llm.usage.cost",
+        "metrics.gauges.llm.usage.input_cost",
+        "metrics.gauges.llm.usage.output_cost"
+      ],
+      "aggregation": "SUM"
+    },
+    {
+      "description": "Get performance metrics for an AI system",
+      "filters": [
+        {"name": "metric.tag.ai_system", "value": "groq"}
+      ],
+      "metrics": [
+        "metrics.gauges.llm.response.duration",
+        "metrics.sums.llm.request.count"
+      ],
+      "aggregation": "MEAN"
+    }
+  ]
+}

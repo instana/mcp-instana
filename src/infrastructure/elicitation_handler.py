@@ -83,6 +83,7 @@ class ElicitationHandler:
                 {"label": "JVM Applications", "value": "jvm application"},
                 {"label": "DB2 Database", "value": "db2 database"},
                 {"label": "IBM MQ Queues", "value": "ibm mq queues"},
+                {"label": "GenAI/LLM", "value": "genai llm"},
              ],
              context={"normalized_intent": normalized_intent}
         )

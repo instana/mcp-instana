@@ -84,7 +84,7 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         Parameters:
         - intent: Natural language query (e.g., "maximum heap size of JVM on host galactica1")
-        - entity: Entity hint (e.g., "jvm", "kubernetes", "docker")
+        - entity: Entity hint (e.g., "jvm", "kubernetes", "docker", "genai")
 
         **Pass 2 - Selections to Results:**
         Provide exact selections from schema. Server builds payload and calls API.
@@ -153,6 +153,12 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
             entity_type = "ibmMqQueue"
         elif "db2 database" in entity_hint:
             entity_type = "db2Database"
+        elif ("otel llm" in entity_hint or "large language model" in entity_hint or
+              "llm model" in entity_hint or "llm service" in entity_hint or "llm application" in entity_hint or
+              "genai service" in entity_hint or "genai application" in entity_hint or "genai model" in entity_hint or
+              "gen ai service" in entity_hint or "gen ai application" in entity_hint or "gen ai model" in entity_hint or
+              "ai model" in entity_hint or "ai service" in entity_hint or "ai application" in entity_hint or "gen ai" in entity_hint):
+            entity_type = "oTelLLM"
         # Priority 2: Single word specific matches
         elif "deployment" in entity_hint:
             entity_type = "kubernetesDeployment"
@@ -166,6 +172,8 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
             entity_type = "ibmMqQueue"
         elif "db2" in entity_hint or "database" in entity_hint:
             entity_type = "db2Database"
+        elif "otelllm" in entity_hint or "genai" in entity_hint or "llm" in entity_hint or "ai" in entity_hint:
+            entity_type = "oTelLLM"
         elif "host" in entity_hint or "server" in entity_hint or "machine" in entity_hint:
             entity_type = "host"
         # Priority 3: Generic kubernetes - use intent context to disambiguate
@@ -192,7 +200,7 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
         if not entity_type:
             return [TextContent(
                 type="text",
-                text=f"Error: Unknown entity type '{entity_hint}'. Supported: jvm, kubernetes pod, kubernetes deployment, docker, ibmmq, db2"
+                text=f"Error: Unknown entity type '{entity_hint}'. Supported: jvm, kubernetes pod, kubernetes deployment, docker, ibmmq, db2, genai"
             )]
 
         logger.info(f"Resolved entity type: {entity_type}")
@@ -270,7 +278,9 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         # Build payload using payload compiler
         # For PoC, we'll build a simple payload directly
-        from instana_client.models.cursor_pagination import CursorPagination
+        from instana_client.models.cursor_pagination_infra_explore_cursor import (
+            CursorPaginationInfraExploreCursor,
+        )
         from instana_client.models.get_infrastructure_groups_query import (
             GetInfrastructureGroupsQuery,
         )
@@ -475,11 +485,11 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
             logger.info(f"Pagination: pageSize={page_size}, offset={offset}")
 
-        # Build CursorPagination object
+        # Build CursorPaginationInfraExploreCursor object
         if offset is not None and offset > 0:
-            cursor_pagination = CursorPagination(retrieval_size=page_size, offset=offset)
+            cursor_pagination = CursorPaginationInfraExploreCursor(retrievalSize=page_size, offset=offset)
         else:
-            cursor_pagination = CursorPagination(retrieval_size=page_size)
+            cursor_pagination = CursorPaginationInfraExploreCursor(retrievalSize=page_size)
 
         # Build TimeFrame object - supports both relative and absolute time ranges
         if to_timestamp is not None:

@@ -47,6 +47,10 @@ class EntityCapabilityRegistry:
         ("host", "host"): "host",
         ("infrastructure", "host"): "host",
         ("server", "host"): "host",
+        ("otelllm", "llm"): "oTelLLM",
+        ("genai", "llm"): "oTelLLM",
+        ("llm", "llm"): "oTelLLM",
+        ("ai", "llm"): "oTelLLM",
     }
 
     def __init__(self, schema_dir: Path) -> None:
