@@ -243,7 +243,7 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
         group_by = selections.get("groupBy", [])
         order = selections.get("order")  # Optional: {"by": "metric_name", "direction": "ASC|DESC"}
         time_range = selections.get("timeRange", "1h")  # Default to 1 hour
-        pagination = selections.get("pagination", {})  # Optional: {"page": 1, "pageSize": 20} or {"offset": 0, "limit": 20}
+        pagination = selections.get("pagination", {})  # Optional: {"pageSize": 20, "cursor": {...}} or {"limit": 20, "cursor": {...}}
 
         # Ensure metrics is a list
         if not isinstance(metrics, list):
@@ -270,7 +270,9 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         # Build payload using payload compiler
         # For PoC, we'll build a simple payload directly
-        from instana_client.models.cursor_pagination import CursorPagination
+        from instana_client.models.cursor_pagination_infra_explore_cursor import (
+            CursorPaginationInfraExploreCursor,
+        )
         from instana_client.models.get_infrastructure_groups_query import (
             GetInfrastructureGroupsQuery,
         )
@@ -455,31 +457,24 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
                 logger.info(f"Built Order: by={order_by}, direction={order_direction}")
 
         # Build pagination object
-        # Supports pagination formats: {"page": 1, "pageSize": 20} or {"offset": 0, "limit": 20}
+        # Supports pagination formats: {"pageSize": 20, "cursor": "..."} or {"limit": 20, "cursor": "..."}
         page_size = 50  # Default
-        offset = None
+        cursor = None
 
         if pagination and isinstance(pagination, dict):
             # Handle pageSize or limit
             page_size = pagination.get("pageSize") or pagination.get("limit", 50)
 
-            # Handle page number (convert to offset)
-            page = pagination.get("page")
-            if page is not None and page > 0:
-                offset = (page - 1) * page_size
-                logger.info(f"Converted page {page} to offset {offset}")
+            # Handle cursor for pagination
+            cursor = pagination.get("cursor")
 
-            # Handle direct offset
-            if "offset" in pagination:
-                offset = pagination.get("offset", 0)
+            logger.info(f"Pagination: pageSize={page_size}, cursor={cursor}")
 
-            logger.info(f"Pagination: pageSize={page_size}, offset={offset}")
-
-        # Build CursorPagination object
-        if offset is not None and offset > 0:
-            cursor_pagination = CursorPagination(retrieval_size=page_size, offset=offset)
+        # Build CursorPaginationInfraExploreCursor object
+        if cursor is not None:
+            cursor_pagination = CursorPaginationInfraExploreCursor(retrieval_size=page_size, cursor=cursor)
         else:
-            cursor_pagination = CursorPagination(retrieval_size=page_size)
+            cursor_pagination = CursorPaginationInfraExploreCursor(retrieval_size=page_size)
 
         # Build TimeFrame object - supports both relative and absolute time ranges
         if to_timestamp is not None:
