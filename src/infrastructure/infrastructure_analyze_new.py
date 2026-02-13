@@ -13,6 +13,7 @@ Key benefit: LLM never sees schema complexity, reducing tokens by 99.4%
 """
 
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -55,8 +56,24 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         # Initialize Option 2 components
         if schema_dir is None:
-            # Default to schema directory relative to this file
-            schema_dir = Path(__file__).parent.parent.parent / "schema"
+            # Try multiple locations for schema directory
+            # 1. Development: relative to this file
+            dev_schema_dir = Path(__file__).parent.parent.parent / "schema"
+
+            # 2. Installed package: in site-packages/schema
+            # Get the site-packages directory where this module is installed
+            module_path = Path(__file__).parent
+            site_packages = module_path.parent.parent  # Go up from src/infrastructure to site-packages
+            pkg_schema_dir = site_packages / "schema"
+
+            # Use development path if it exists, otherwise use package path
+            if dev_schema_dir.exists():
+                schema_dir = dev_schema_dir
+            elif pkg_schema_dir.exists():
+                schema_dir = pkg_schema_dir
+            else:
+                # Fallback to development path (will log warning if doesn't exist)
+                schema_dir = dev_schema_dir
 
         self.registry = EntityCapabilityRegistry(schema_dir)
         self.elicitation_handler = ElicitationHandler()

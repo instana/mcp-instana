@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "0.7.0"
+version = "0.7.1"
 description = "MCP server for Instana"
 authors = [
     {name = "Elina Priyadarshinee", email = "Elina.priyadarshinee1@ibm.com"},
@@ -62,7 +62,13 @@ test = "tests.run_all_tests:main"
 test-coverage = "tests.run_all_tests_with_coverage:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "schema"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "schema/",
+]
 
 [tool.ruff]
 # Target Python 3.11
