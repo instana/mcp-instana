@@ -198,16 +198,30 @@ class SmartRouterMCPTool(BaseInstanaClient):
                 "valid_operations": ["application"]
             }
 
-        # Extract parameters
+        # Extract parameters - support both camelCase and snake_case
         query = params.get("query", "")
-        time_frame = params.get("time_frame")
+        time_frame = params.get("time_frame") or params.get("timeFrame")
         metrics = params.get("metrics")
-        tag_filter_expression = params.get("tag_filter_expression")
+        tag_filter_expression = params.get("tag_filter_expression") or params.get("tagFilterExpression")
         group = params.get("group")
         order = params.get("order")
         pagination = params.get("pagination")
-        include_internal = params.get("include_internal")
-        include_synthetic = params.get("include_synthetic")
+        include_internal = params.get("include_internal") or params.get("includeInternal")
+        include_synthetic = params.get("include_synthetic") or params.get("includeSynthetic")
+
+        # 🔍 DEBUG: Log extracted parameters
+        logger.debug("=" * 80)
+        logger.debug("📤 SMART ROUTER - EXTRACTED PARAMS")
+        logger.debug("=" * 80)
+        logger.debug(f"time_frame: {time_frame}")
+        logger.debug(f"metrics: {metrics}")
+        logger.debug(f"tag_filter_expression: {tag_filter_expression}")
+        logger.debug(f"group: {group}")
+        logger.debug(f"order: {order}")
+        logger.debug(f"pagination: {pagination}")
+        logger.debug(f"include_internal: {include_internal}")
+        logger.debug(f"include_synthetic: {include_synthetic}")
+        logger.debug("=" * 80)
 
         # Route to Application Call Group Metrics
         logger.info("Routing to Application Call Group Metrics")

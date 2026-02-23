@@ -135,26 +135,56 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                     "groupbyTagEntity": "DESTINATION"
                 }
 
-            # Create the GetCallGroups object with ONLY group and metrics
-            # The SDK model only accepts these two parameters
-            query_params = {}
+            # Build complete request body with all parameters
+            # IMPORTANT: SDK expects camelCase keys (aliases), not snake_case
+            request_body = {}
             if group:
-                query_params["group"] = group
+                request_body["group"] = group
             if metrics:
-                query_params["metrics"] = metrics
+                request_body["metrics"] = metrics
+            if tag_filter_expression:
+                request_body["tagFilterExpression"] = tag_filter_expression  # camelCase!
+            if time_frame:
+                request_body["timeFrame"] = time_frame  # camelCase!
+            if pagination:
+                request_body["pagination"] = pagination
+            if order:
+                request_body["order"] = order
+            if include_internal is not None:
+                request_body["includeInternal"] = include_internal  # camelCase!
+            if include_synthetic is not None:
+                request_body["includeSynthetic"] = include_synthetic  # camelCase!
 
-            logger.debug(f"Creating GetCallGroups with params: {query_params}")
-            get_call_groups = GetCallGroups(**query_params)
+            # 🔍 DEBUG: Log the request body BEFORE SDK conversion
+            logger.info("=" * 80)
+            logger.info("📤 REQUEST BODY DEBUG - BEFORE SDK CONVERSION")
+            logger.info("=" * 80)
+            logger.info(f"Request Body Type: {type(request_body)}")
+            logger.info(f"Request Body Keys: {request_body.keys()}")
+            logger.info(f"Full Request Body: {request_body}")
+            logger.info("=" * 80)
+
+            # Use from_dict to properly convert nested objects to SDK model types
+            logger.debug(f"Creating GetCallGroups from request_body: {request_body}")
+            get_call_groups = GetCallGroups.from_dict(request_body)
             logger.debug("Successfully created GetCallGroups object")
 
+            # 🔍 DEBUG: Log the SDK object AFTER conversion
+            logger.info("=" * 80)
+            logger.info("📦 SDK OBJECT DEBUG - AFTER CONVERSION")
+            logger.info("=" * 80)
+            if hasattr(get_call_groups, 'to_dict'):
+                sdk_dict = get_call_groups.to_dict()
+                logger.info(f"SDK Object as Dict: {sdk_dict}")
+            logger.info("=" * 80)
+
             # Call the get_call_group method from the SDK
-            # Note: Other parameters like time_frame, tag_filter_expression, etc.
-            # might need to be passed as separate parameters to the API call
-            # For now, following the exact pattern from application_analyze.py
             logger.debug("Calling get_call_group with GetCallGroups object")
             result = api_client.get_call_group(
-                get_call_groups=get_call_groups
+                get_call_groups=get_call_groups,
+                fill_time_series=fill_time_series
             )
+
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
