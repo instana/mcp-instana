@@ -156,13 +156,13 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 request_body["includeSynthetic"] = include_synthetic  # camelCase!
 
             # 🔍 DEBUG: Log the request body BEFORE SDK conversion
-            logger.info("=" * 80)
-            logger.info("📤 REQUEST BODY DEBUG - BEFORE SDK CONVERSION")
-            logger.info("=" * 80)
-            logger.info(f"Request Body Type: {type(request_body)}")
-            logger.info(f"Request Body Keys: {request_body.keys()}")
-            logger.info(f"Full Request Body: {request_body}")
-            logger.info("=" * 80)
+            logger.debug("=" * 80)
+            logger.debug("📤 REQUEST BODY DEBUG - BEFORE SDK CONVERSION")
+            logger.debug("=" * 80)
+            logger.debug(f"Request Body Type: {type(request_body)}")
+            logger.debug(f"Request Body Keys: {request_body.keys()}")
+            logger.debug(f"Full Request Body: {request_body}")
+            logger.debug("=" * 80)
 
             # Use from_dict to properly convert nested objects to SDK model types
             logger.debug(f"Creating GetCallGroups from request_body: {request_body}")
@@ -170,13 +170,13 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
             logger.debug("Successfully created GetCallGroups object")
 
             # 🔍 DEBUG: Log the SDK object AFTER conversion
-            logger.info("=" * 80)
-            logger.info("📦 SDK OBJECT DEBUG - AFTER CONVERSION")
-            logger.info("=" * 80)
+            logger.debug("=" * 80)
+            logger.debug("📦 SDK OBJECT DEBUG - AFTER CONVERSION")
+            logger.debug("=" * 80)
             if hasattr(get_call_groups, 'to_dict'):
                 sdk_dict = get_call_groups.to_dict()
-                logger.info(f"SDK Object as Dict: {sdk_dict}")
-            logger.info("=" * 80)
+                logger.debug(f"SDK Object as Dict: {sdk_dict}")
+            logger.debug("=" * 80)
 
             # Call the get_call_group method from the SDK
             logger.debug("Calling get_call_group with GetCallGroups object")
@@ -194,23 +194,23 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 result_dict = result
 
             # 🔍 DEBUG: Log the API response structure and data
-            logger.info("=" * 80)
-            logger.info("📥 INSTANA API RESPONSE DEBUG - CALL GROUPS")
-            logger.info("=" * 80)
-            logger.info(f"Response Type: {type(result_dict)}")
-            logger.info(f"Response Keys: {result_dict.keys() if isinstance(result_dict, dict) else 'N/A'}")
+            logger.debug("=" * 80)
+            logger.debug("📥 INSTANA API RESPONSE DEBUG - CALL GROUPS")
+            logger.debug("=" * 80)
+            logger.debug(f"Response Type: {type(result_dict)}")
+            logger.debug(f"Response Keys: {result_dict.keys() if isinstance(result_dict, dict) else 'N/A'}")
 
             # Log detailed structure for each group
             if isinstance(result_dict, dict) and 'items' in result_dict:
-                logger.info(f"Number of groups: {len(result_dict['items'])}")
+                logger.debug(f"Number of groups: {len(result_dict['items'])}")
                 for idx, item in enumerate(result_dict['items'][:3]):  # Log first 3 items
-                    logger.info(f"\nGroup {idx}:")
-                    logger.info(f"  Keys: {item.keys() if isinstance(item, dict) else 'N/A'}")
+                    logger.debug(f"\nGroup {idx}:")
+                    logger.debug(f"  Keys: {item.keys() if isinstance(item, dict) else 'N/A'}")
                     if isinstance(item, dict):
                         if 'metrics' in item:
-                            logger.info(f"  Metrics: {item['metrics'].keys() if isinstance(item['metrics'], dict) else item['metrics']}")
+                            logger.debug(f"  Metrics: {item['metrics'].keys() if isinstance(item['metrics'], dict) else item['metrics']}")
 
-            logger.info("=" * 80)
+            logger.debug("=" * 80)
             logger.debug(f"Full Result: {result_dict}")
 
             # Post-process the response to make it more LLM-friendly
