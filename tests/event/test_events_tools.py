@@ -113,9 +113,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
 
     def test_get_event_success(self):
         """Test get_event with a successful response"""
-        # Set up the mock response
+        # Set up the mock response - include fields that survive _optimize_event_data
         event_id = "test_event_id"
-        mock_result = {"eventId": event_id, "data": "test_data"}
+        mock_result = {"eventId": event_id, "data": "test_data", "type": "incident", "state": "open", "problem": "Test problem", "start": 1000000}
         self.events_api.get_event.return_value = mock_result
 
         # Call the method
@@ -124,8 +124,11 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         # Check that the mock was called with the correct arguments
         self.events_api.get_event.assert_called_once_with(event_id=event_id)
 
-        # Check that the result is correct
-        self.assertEqual(result, mock_result)
+        # Check that the result contains the event ID and key fields
+        # Note: get_event now runs _optimize_event_data which transforms the structure
+        self.assertEqual(result["eventId"], event_id)
+        self.assertIn("type", result)
+        self.assertIn("problem", result)
 
     def test_get_event_error(self):
         """Test get_event error handling"""
@@ -196,10 +199,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         event_id = "test_event_id"
         self.events_api.get_event.side_effect = Exception("Test error")
 
-        # Set up the mock response for fallback approach
+        # Set up the mock response for fallback approach - include fields that survive _optimize_event_data
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.data = b'{"eventId": "test_event_id", "data": "fallback_data"}'
+        mock_response.data = b'{"eventId": "test_event_id", "type": "incident", "state": "open", "problem": "Test problem", "start": 1000000}'
         self.events_api.get_event_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -209,8 +212,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.events_api.get_event_without_preload_content.assert_called_once_with(event_id=event_id)
 
         # Check that the result contains the expected data
+        # Note: get_event now runs _optimize_event_data which transforms the structure
         self.assertEqual(result["eventId"], "test_event_id")
-        self.assertEqual(result["data"], "fallback_data")
+        self.assertIn("type", result)
+        self.assertIn("problem", result)
 
     def test_get_event_fallback_http_error(self):
         """Test get_event fallback approach with HTTP error"""
@@ -303,13 +308,13 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_kubernetes_info_events())
 
         # Check that the mock was called with the correct arguments
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
         expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
 
         self.events_api.kubernetes_info_events.assert_called_once_with(
             var_from=expected_from_time,
             to=expected_to_time,
-            window_size=50,
             filter_event_updates=None,
             exclude_triggered_before=None
         )
@@ -345,13 +350,11 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         asyncio.run(self.client.get_kubernetes_info_events(time_range="last 2 days"))
 
         # Check that the mock was called with the correct arguments
-        expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
-        expected_from_time = expected_to_time - (2 * 24 * 60 * 60 * 1000)  # 2 days earlier
+        # When time_range is provided, _build_time_params uses window_size
+        expected_window_size = 2 * 24 * 60 * 60 * 1000  # 2 days in ms
 
         self.events_api.kubernetes_info_events.assert_called_once_with(
-            var_from=expected_from_time,
-            to=expected_to_time,
-            window_size=50,
+            window_size=expected_window_size,
             filter_event_updates=None,
             exclude_triggered_before=None
         )
@@ -433,14 +436,13 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_agent_monitoring_events())
 
         # Check that the mock was called with the correct arguments
-        # Default time range should be 24 hours as per _process_time_range
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
         expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
 
         self.events_api.agent_monitoring_events.assert_called_once_with(
             var_from=expected_from_time,
             to=expected_to_time,
-            window_size=50,
             filter_event_updates=None,
             exclude_triggered_before=None
         )
@@ -540,13 +542,14 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             "unknown format"
         ]
 
-        expected_from_times = [
-            1000 * 1000 - (24 * 60 * 60 * 1000),  # last few hours -> 24 hours
-            1000 * 1000 - (5 * 60 * 60 * 1000),   # last 5 hours
-            1000 * 1000 - (3 * 24 * 60 * 60 * 1000),  # last 3 days
-            1000 * 1000 - (2 * 7 * 24 * 60 * 60 * 1000),  # last 2 weeks
-            1000 * 1000 - (1 * 30 * 24 * 60 * 60 * 1000),  # last 1 month
-            1000 * 1000 - (24 * 60 * 60 * 1000)   # unknown format -> default 24 hours
+        # Expected window sizes for each time range (used when time_range is provided)
+        expected_window_sizes = [
+            24 * 60 * 60 * 1000,           # last few hours -> default 24 hours
+            5 * 60 * 60 * 1000,            # last 5 hours
+            3 * 24 * 60 * 60 * 1000,       # last 3 days
+            2 * 7 * 24 * 60 * 60 * 1000,   # last 2 weeks
+            1 * 30 * 24 * 60 * 60 * 1000,  # last 1 month
+            24 * 60 * 60 * 1000            # unknown format -> default 24 hours (still uses window_size)
         ]
 
         for i, time_range in enumerate(time_ranges):
@@ -556,14 +559,12 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             # Call the method with the time range (result used in assertion via mock call)
             _ = asyncio.run(self.client.get_kubernetes_info_events(time_range=time_range))
 
-            # Check that the mock was called with the correct arguments
-            self.events_api.kubernetes_info_events.assert_called_once_with(
-                var_from=expected_from_times[i],
-                to=1000 * 1000,
-                window_size=50,
-                filter_event_updates=None,
-                exclude_triggered_before=None
-            )
+            # Check that the mock was called with window_size for all time ranges
+            # Even unknown formats fall back to default window_size (24 hours)
+            call_kwargs = self.events_api.kubernetes_info_events.call_args[1]
+            self.assertEqual(call_kwargs["window_size"], expected_window_sizes[i])
+            self.assertIsNone(call_kwargs["filter_event_updates"])
+            self.assertIsNone(call_kwargs["exclude_triggered_before"])
 
     @patch('src.event.events_tools.datetime')
     def test_get_agent_monitoring_events_with_problem_no_prefix(self, mock_datetime):
@@ -692,15 +693,17 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         # Assertions
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 2)
-        self.assertEqual(result["events_count"], 2)
+        # New response format uses events_returned and total_events instead of events_count
+        self.assertEqual(result["events_returned"], 2)
+        self.assertEqual(result["total_events"], 2)
         self.assertEqual(result["events"][0]["eventId"], "change1")
         self.assertEqual(result["events"][1]["eventId"], "change2")
 
         # Verify the API call was made with the correct parameters
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # Corrected to match actual call
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=100,     # default size
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["change"]
@@ -848,10 +851,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertIn("Expecting value", result["error"])  # Adjusted to match actual JSONDecodeError message
 
         # Verify the API call was made with the correct parameters
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # 24-hour default, consistent with previous tests
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=100,     # default size
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["issue"]
@@ -883,10 +886,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertIn("Expecting value", result["error"])  # Adjusted to match actual JSONDecodeError message
 
         # Verify the API call was made with the correct parameters
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # 24-hour default, consistent with previous tests
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=100,     # default size
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["incident"]
@@ -1168,7 +1171,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         # Check that all events were included
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 3)
-        self.assertEqual(result["events_count"], 3)
+        # New response format uses events_returned and total_events instead of events_count
+        self.assertEqual(result["events_returned"], 3)
+        self.assertEqual(result["total_events"], 3)
 
         # Check that the events are returned as provided by the API
         events = result["events"]
@@ -1177,10 +1182,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertEqual(events[2]["eventId"], "issue3")
 
         # Verify the API call was made with the correct parameters
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # Corrected to match actual call (24 hours)
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=100,     # default size
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["issue"]
@@ -1214,19 +1219,20 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         # Check that the event was processed correctly
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 1)
-        self.assertEqual(result["events_count"], 1)
+        # New response format uses events_returned and total_events instead of events_count
+        self.assertEqual(result["events_returned"], 1)
+        self.assertEqual(result["total_events"], 1)
 
         # Check that the event has the expected fields
         event = result["events"][0]
         self.assertEqual(event["eventId"], "change1")
-        self.assertEqual(event["eventType"], "change")
         self.assertNotIn("changeType", event)  # Verify missing field
 
         # Verify the API call was made with the correct parameters
+        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # Corrected to match actual call (24 hours)
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=100,     # default size
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["change"]
@@ -1361,15 +1367,15 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         size = 200
         result = asyncio.run(self.client.get_issues(size=size))
 
-        # Check that the API was called with the correct parameters
+        # Check that the API was called
         self.events_api.get_events_without_preload_content.assert_called_once()
-        call_args = self.events_api.get_events_without_preload_content.call_args[1]
-        self.assertEqual(call_args['window_size'], size)
 
         # Check the result for correctness
+        # New response format uses events_returned and total_events instead of events_count
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 0)
-        self.assertEqual(result["events_count"], 0)
+        self.assertEqual(result["events_returned"], 0)
+        self.assertEqual(result["total_events"], 0)
 
     @patch('src.event.events_tools.datetime')
     def test_get_incidents_with_size_parameter(self, mock_datetime):
@@ -1392,21 +1398,20 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         size = 200
         result = asyncio.run(self.client.get_incidents(size=size))
 
-        # Check that the API was called with the correct parameters
+        # Check that the API was called
         self.events_api.get_events_without_preload_content.assert_called_once()
-        call_args = self.events_api.get_events_without_preload_content.call_args[1]
-        self.assertEqual(call_args['window_size'], size)
 
         # Check the result for correctness
+        # New response format uses events_returned and total_events instead of events_count
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 0)
-        self.assertEqual(result["events_count"], 0)
+        self.assertEqual(result["events_returned"], 0)
+        self.assertEqual(result["total_events"], 0)
 
-        # Verify the API call parameters
+        # Verify the API call parameters - no window_size since size param is not passed to API
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # 24-hour default, consistent with previous tests
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=200,     # size parameter passed to get_incidents
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["incident"]
@@ -1433,21 +1438,20 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         size = 200
         result = asyncio.run(self.client.get_changes(size=size))
 
-        # Check that the API was called with the correct parameters
+        # Check that the API was called
         self.events_api.get_events_without_preload_content.assert_called_once()
-        call_args = self.events_api.get_events_without_preload_content.call_args[1]
-        self.assertEqual(call_args['window_size'], size)
 
         # Check the result for correctness
+        # New response format uses events_returned and total_events instead of events_count
         self.assertIn("events", result)
         self.assertEqual(len(result["events"]), 0)
-        self.assertEqual(result["events_count"], 0)
+        self.assertEqual(result["events_returned"], 0)
+        self.assertEqual(result["total_events"], 0)
 
-        # Verify the API call parameters
+        # Verify the API call parameters - no window_size since size param is not passed to API
         self.events_api.get_events_without_preload_content.assert_called_once_with(
             var_from=-85400000,  # 24-hour default, consistent with previous tests
             to=1000000,          # 1000 seconds * 1000 (milliseconds)
-            window_size=200,     # size parameter passed to get_incidents
             filter_event_updates=None,
             exclude_triggered_before=None,
             event_type_filters=["change"]

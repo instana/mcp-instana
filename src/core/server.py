@@ -68,26 +68,21 @@ class MCPState:
     """State for the MCP server with all tool categories."""
     # Router tools
     smart_router_client: Any = None
-    custom_dashboard_smart_router_client: Any = None
+    smart_router_custom_dashboard_client: Any = None
+    smart_router_events_client: Any = None
+    smart_router_website_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     infra_analyze_new_client: Any = None
-
-    # Events tools
-    smart_router_website_client: Any = None
-    events_client: Any = None
 
     # Automation tools
     action_catalog_client: Any = None
     action_history_client: Any = None
 
-    # Website tools
+    # Website detail tools (used by website smart router)
     website_metrics_client: Any = None
     website_catalog_client: Any = None
     website_configuration_client: Any = None
-
-    # Settings tools
-    custom_dashboard_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -245,9 +240,9 @@ def get_client_categories():
         from src.core.custom_dashboard_smart_router_tool import (
             CustomDashboardSmartRouterMCPTool,
         )
+        from src.core.events_smart_router_tool import SmartRouterEventsMCPTool
         from src.core.smart_router_tool import SmartRouterMCPTool
         from src.core.website_smart_router import SmartRouterWebsiteMCPTool
-        from src.event.events_tools import AgentMonitoringEventsMCPTools
         from src.infrastructure.infrastructure_analyze_new import (
             InfrastructureAnalyzeOption2,
         )
@@ -263,13 +258,11 @@ def get_client_categories():
         "router": [
             ('smart_router_client', SmartRouterMCPTool),
             ('custom_dashboard_smart_router_client', CustomDashboardSmartRouterMCPTool),
+            ('smart_router_events_client', SmartRouterEventsMCPTool),
             ('smart_router_website_client', SmartRouterWebsiteMCPTool),
         ],
         "infra": [
             ('infra_analyze_new_client', InfrastructureAnalyzeOption2),
-        ],
-        "events": [
-            ('events_client', AgentMonitoringEventsMCPTools),
         ],
         "automation": [
             ('action_catalog_client', ActionCatalogMCPTools),
@@ -279,9 +272,6 @@ def get_client_categories():
             ('website_metrics_client', WebsiteMetricsMCPTools),
             ('website_catalog_client', WebsiteCatalogMCPTools),
             ('website_configuration_client', WebsiteConfigurationMCPTools),
-        ],
-        "settings": [
-            ('custom_dashboard_client', CustomDashboardMCPTools),
         ]
     }
 

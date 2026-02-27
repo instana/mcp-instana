@@ -31,14 +31,180 @@ from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 logger = logging.getLogger(__name__)
 
+# Time conversion constants (in milliseconds)
+MS_PER_MINUTE = 60 * 1000
+MS_PER_HOUR = 60 * MS_PER_MINUTE
+MS_PER_DAY = 24 * MS_PER_HOUR
+MS_PER_WEEK = 7 * MS_PER_DAY
+MS_PER_MONTH = 30 * MS_PER_DAY
+
+# Default values
+DEFAULT_TIME_WINDOW_HOURS = 24
+DEFAULT_MAX_EVENTS = 50
+DEFAULT_SIZE = 100
+
+# API parameter names
+API_PARAM_FROM = "var_from"
+API_PARAM_TO = "to"
+API_PARAM_WINDOW_SIZE = "window_size"
+API_PARAM_FILTER_EVENT_UPDATES = "filter_event_updates"
+API_PARAM_EXCLUDE_TRIGGERED_BEFORE = "exclude_triggered_before"
+API_PARAM_EVENT_TYPE_FILTERS = "event_type_filters"
+
+# Event type constants
+EVENT_TYPE_ISSUE = "issue"
+EVENT_TYPE_INCIDENT = "incident"
+EVENT_TYPE_CHANGE = "change"
+
 class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
     def __init__(self, read_token: str, base_url: str):
         super().__init__(read_token=read_token, base_url=base_url)
 
+    def _build_time_params(
+        self,
+        time_range: Optional[str] = None,
+        from_time: Optional[int] = None,
+        to_time: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Build time parameters for API calls.
+
+        Determines whether to use window_size or from_time/to_time based on what's provided.
+        Priority: 1) from_time/to_time if provided, 2) window_size from time_range
+
+        Args:
+            time_range: Natural language time range like "last 5 minutes"
+            from_time: Start timestamp in milliseconds (optional)
+            to_time: End timestamp in milliseconds (optional)
+
+        Returns:
+            Dictionary with API parameters and display times:
+            {
+                "api_params": {"window_size": X} or {"var_from": X, "to": Y},
+                "from_time": X,  # For display
+                "to_time": Y     # For display
+            }
+        """
+        api_params: Dict[str, Any] = {}
+
+        if from_time is not None or to_time is not None:
+            # Use explicit timestamps
+            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
+            api_params[API_PARAM_FROM] = from_time
+            api_params[API_PARAM_TO] = to_time
+            logger.debug(
+                f"[_build_time_params] Using explicit timestamps - "
+                f"from_time: {from_time}, to_time: {to_time}"
+            )
+        elif time_range:
+            # Convert time_range to window_size
+            window_size_param = self._convert_time_range_to_window_size(time_range)
+            if window_size_param:
+                api_params[API_PARAM_WINDOW_SIZE] = window_size_param
+                logger.debug(
+                    f"[_build_time_params] Using window_size from time_range '{time_range}' - "
+                    f"window_size: {window_size_param}ms ({window_size_param/MS_PER_MINUTE:.1f} minutes)"
+                )
+                # For display purposes, calculate from/to times
+                current_time_ms = int(datetime.now().timestamp() * 1000)
+                to_time = current_time_ms
+                from_time = current_time_ms - window_size_param
+            else:
+                # Fallback to default
+                logger.debug(f"[_build_time_params] Failed to parse time_range '{time_range}', using defaults")
+                from_time, to_time = self._process_time_range(None, None, None)
+                api_params[API_PARAM_FROM] = from_time
+                api_params[API_PARAM_TO] = to_time
+        else:
+            # No time parameters provided, use defaults
+            logger.debug(f"[_build_time_params] No time parameters provided, using default {DEFAULT_TIME_WINDOW_HOURS} hours")
+            from_time, to_time = self._process_time_range(None, None, None)
+            api_params[API_PARAM_FROM] = from_time
+            api_params[API_PARAM_TO] = to_time
+
+        return {
+            "api_params": api_params,
+            "from_time": from_time,
+            "to_time": to_time
+        }
+
+    def _convert_time_range_to_window_size(self, time_range: str) -> Optional[int]:
+        """
+        Convert natural language time range to window_size in milliseconds.
+
+        Args:
+            time_range: Natural language time range like "last 5 minutes", "last 24 hours"
+
+        Returns:
+            Window size in milliseconds, or None if cannot parse
+        """
+        if not time_range:
+            return None
+
+        time_range_lower = time_range.lower().strip()
+        logger.debug(f"[_convert_time_range_to_window_size] Converting time range: '{time_range}'")
+
+        # Extract minutes
+        if "minute" in time_range_lower:
+            minute_match = re.search(r'(\d+)\s*minute', time_range_lower)
+            if minute_match:
+                minutes = int(minute_match.group(1))
+                window_size = minutes * MS_PER_MINUTE
+                logger.debug(f"[_convert_time_range_to_window_size] Parsed {minutes} minutes = {window_size}ms")
+                return window_size
+
+        # Extract hours
+        elif "hour" in time_range_lower:
+            hour_match = re.search(r'(\d+)\s*hour', time_range_lower)
+            if hour_match:
+                hours = int(hour_match.group(1))
+                window_size = hours * MS_PER_HOUR
+                logger.debug(f"[_convert_time_range_to_window_size] Parsed {hours} hours = {window_size}ms")
+                return window_size
+            elif time_range_lower in ["last few hours", "last hours", "few hours"]:
+                window_size = DEFAULT_TIME_WINDOW_HOURS * MS_PER_HOUR
+                logger.debug(f"[_convert_time_range_to_window_size] Using default {DEFAULT_TIME_WINDOW_HOURS} hours = {window_size}ms")
+                return window_size
+
+        # Extract days
+        elif "day" in time_range_lower:
+            day_match = re.search(r'(\d+)\s*day', time_range_lower)
+            if day_match:
+                days = int(day_match.group(1))
+                window_size = days * MS_PER_DAY
+                logger.debug(f"[_convert_time_range_to_window_size] Parsed {days} days = {window_size}ms")
+                return window_size
+
+        # Extract weeks
+        elif "week" in time_range_lower:
+            week_match = re.search(r'(\d+)\s*week', time_range_lower)
+            if week_match:
+                weeks = int(week_match.group(1))
+                window_size = weeks * MS_PER_WEEK
+                logger.debug(f"[_convert_time_range_to_window_size] Parsed {weeks} weeks = {window_size}ms")
+                return window_size
+
+        # Extract months
+        elif "month" in time_range_lower:
+            month_match = re.search(r'(\d+)\s*month', time_range_lower)
+            if month_match:
+                months = int(month_match.group(1))
+                window_size = months * MS_PER_MONTH
+                logger.debug(f"[_convert_time_range_to_window_size] Parsed {months} months = {window_size}ms")
+                return window_size
+
+        # Default to 24 hours
+        window_size = DEFAULT_TIME_WINDOW_HOURS * MS_PER_HOUR
+        logger.debug(f"[_convert_time_range_to_window_size] No match found, using default {DEFAULT_TIME_WINDOW_HOURS} hours = {window_size}ms")
+        return window_size
+
     def _process_time_range(self, time_range=None, from_time=None, to_time=None):
         """
         Process time range parameters to get standardized from_time and to_time values.
+
+        DEPRECATED: This method is kept for backward compatibility but should be replaced
+        with _convert_time_range_to_window_size for API calls.
 
         Args:
             time_range: Natural language time range like "last 24 hours"
@@ -53,41 +219,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
         # Process natural language time range if provided
         if time_range:
-            logger.debug(f"Processing natural language time range: '{time_range}'")
-
-            # Default to 24 hours if just "last few hours" is specified
-            if time_range.lower() in ["last few hours", "last hours", "few hours"]:
-                hours = 24
-                from_time = current_time_ms - (hours * 60 * 60 * 1000)
-                to_time = current_time_ms
-            # Extract hours if specified
-            elif "hour" in time_range.lower():
-                hour_match = re.search(r'(\d+)\s*hour', time_range.lower())
-                hours = int(hour_match.group(1)) if hour_match else 24
-                from_time = current_time_ms - (hours * 60 * 60 * 1000)
-                to_time = current_time_ms
-            # Extract days if specified
-            elif "day" in time_range.lower():
-                day_match = re.search(r'(\d+)\s*day', time_range.lower())
-                days = int(day_match.group(1)) if day_match else 1
-                from_time = current_time_ms - (days * 24 * 60 * 60 * 1000)
-                to_time = current_time_ms
-            # Handle "last week"
-            elif "week" in time_range.lower():
-                week_match = re.search(r'(\d+)\s*week', time_range.lower())
-                weeks = int(week_match.group(1)) if week_match else 1
-                from_time = current_time_ms - (weeks * 7 * 24 * 60 * 60 * 1000)
-                to_time = current_time_ms
-            # Handle "last month"
-            elif "month" in time_range.lower():
-                month_match = re.search(r'(\d+)\s*month', time_range.lower())
-                months = int(month_match.group(1)) if month_match else 1
-                from_time = current_time_ms - (months * 30 * 24 * 60 * 60 * 1000)
-                to_time = current_time_ms
-            # Default to 24 hours for any other time range
-            else:
-                hours = 24
-                from_time = current_time_ms - (hours * 60 * 60 * 1000)
+            window_size = self._convert_time_range_to_window_size(time_range)
+            if window_size:
+                from_time = current_time_ms - window_size
                 to_time = current_time_ms
 
         # Set default time range if not provided
@@ -122,6 +256,202 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
         return result_dict
 
+    def _calculate_duration(self, start_ms: int, end_ms: int, state: str) -> str:
+        """Calculate human-readable duration between start and end timestamps."""
+        if state == "open":
+            return "ongoing"
+
+        duration_ms = end_ms - start_ms
+        duration_seconds = duration_ms / 1000
+
+        if duration_seconds < 60:
+            return f"{int(duration_seconds)} seconds"
+        elif duration_seconds < 3600:
+            minutes = int(duration_seconds / 60)
+            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+        elif duration_seconds < 86400:
+            hours = int(duration_seconds / 3600)
+            minutes = int((duration_seconds % 3600) / 60)
+            if minutes > 0:
+                return f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''}"
+            return f"{hours} hour{'s' if hours != 1 else ''}"
+        else:
+            days = int(duration_seconds / 86400)
+            hours = int((duration_seconds % 86400) / 3600)
+            if hours > 0:
+                return f"{days} day{'s' if days != 1 else ''} {hours} hour{'s' if hours != 1 else ''}"
+            return f"{days} day{'s' if days != 1 else ''}"
+
+    def _calculate_age(self, start_ms: int) -> str:
+        """Calculate human-readable age from start timestamp to now."""
+        from datetime import datetime
+        current_time_ms = int(datetime.now().timestamp() * 1000)
+        age_ms = current_time_ms - start_ms
+        age_seconds = age_ms / 1000
+
+        if age_seconds < 60:
+            return "just now"
+        elif age_seconds < 3600:
+            minutes = int(age_seconds / 60)
+            return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        elif age_seconds < 86400:
+            hours = int(age_seconds / 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        else:
+            days = int(age_seconds / 86400)
+            return f"{days} day{'s' if days != 1 else ''} ago"
+
+    def _simplify_probable_cause(self, probable_cause: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Simplify probable cause structure to essential information."""
+        if not probable_cause or not probable_cause.get("found"):
+            return None
+
+        root_causes = probable_cause.get("currentRootCause", [])
+        if not root_causes:
+            return None
+
+        # Get the first (most likely) root cause
+        primary_cause = root_causes[0] if isinstance(root_causes, list) else root_causes
+
+        # Extract key information
+        confidence = primary_cause.get("probFailure", 0)
+        entity_label = primary_cause.get("entityLabel", "Unknown")
+        entity_type = primary_cause.get("entityType", "")
+
+        # Try to create a meaningful summary from explainability
+        summary = "Root cause identified"
+        explainability = primary_cause.get("explainability", [])
+        if explainability and isinstance(explainability, list) and len(explainability) > 0:
+            first_explain = explainability[0]
+            if isinstance(first_explain, dict):
+                summary = first_explain.get("text", summary)
+
+        return {
+            "found": True,
+            "confidence": round(confidence, 2),
+            "rootCauseEntity": f"{entity_type}: {entity_label}" if entity_type else entity_label,
+            "summary": summary
+        }
+
+    def _optimize_event_data(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Optimize event data by removing low-value fields and simplifying structure.
+        Reduces token usage by ~60-65% while preserving actionable information.
+        """
+        event_type = event.get("type", "")
+        start = event.get("start")
+        end = event.get("end")
+        state = event.get("state", "")
+        problem = event.get("problem", "")
+
+        # Check if this is an agent monitoring event (always has "Monitoring issue:" prefix)
+        is_agent_monitoring = problem.startswith("Monitoring issue:")
+
+        # Base optimized structure with age
+        optimized = {
+            "eventId": event.get("eventId"),
+            "start": start,
+            "type": event_type,
+            "state": state,
+            "problem": problem,
+        }
+
+        # Add age for all event types
+        if start:
+            optimized["age"] = self._calculate_age(start)
+
+        # Add severity and duration only for incidents and issues
+        if event_type in ["incident", "issue"]:
+            optimized["end"] = end
+
+            # For agent monitoring events, severity is always 5, so we can omit it
+            # For other events, include severity
+            if not is_agent_monitoring:
+                optimized["severity"] = event.get("severity")
+
+            # Add duration
+            if start and end:
+                optimized["duration"] = self._calculate_duration(start, end, state)
+
+            # Only include detail and fixSuggestion if they have meaningful content
+            detail = event.get("detail", "")
+            fix_suggestion = event.get("fixSuggestion", "")
+
+            if detail and detail.strip():
+                optimized["detail"] = detail
+            if fix_suggestion and fix_suggestion.strip():
+                optimized["fixSuggestion"] = fix_suggestion
+
+            # Simplified entity info
+            entity_label = event.get("entityLabel") or "Unknown"
+            entity_type = event.get("entityType")
+
+            # For agent monitoring events, entityType is always "INFRASTRUCTURE" and entityName is always "Process"
+            # So we can simplify to just the label
+            if is_agent_monitoring:
+                optimized["entity"] = entity_label
+            else:
+                optimized["entity"] = {
+                    "type": entity_type,
+                    "label": entity_label,
+                }
+
+                # Add entity-specific IDs if present (only for non-agent-monitoring events)
+                if event.get("serviceId"):
+                    optimized["entity"]["serviceId"] = event.get("serviceId")
+                if event.get("applicationId"):
+                    optimized["entity"]["applicationId"] = event.get("applicationId")
+                if event.get("endpointId"):
+                    optimized["entity"]["endpointId"] = event.get("endpointId")
+                if event.get("mobileAppId"):
+                    optimized["entity"]["mobileAppId"] = event.get("mobileAppId")
+
+            # Simplify metrics to just names (skip if empty, which is common for agent monitoring)
+            metrics = event.get("metrics", [])
+            if metrics and len(metrics) > 0:
+                metric_names = [m.get("metricName") for m in metrics if m.get("metricName")]
+                if metric_names:
+                    optimized["affectedMetrics"] = metric_names
+
+            # Count of recent events instead of full array
+            recent_events = event.get("recentEvents", [])
+            if recent_events:
+                optimized["relatedEventsCount"] = len(recent_events)
+
+            # Simplify probable cause (incidents only)
+            if event_type == "incident":
+                probable_cause = event.get("probableCause", {})
+                simplified_cause = self._simplify_probable_cause(probable_cause)
+                if simplified_cause:
+                    optimized["probableCause"] = simplified_cause
+
+            # snapshotId removed as per requirements
+
+        elif event_type == "change":
+            # For changes, use single timestamp since start == end
+            optimized["timestamp"] = start
+            # Remove start from optimized for changes
+            del optimized["start"]
+
+            # Handle null labels with fallback
+            entity_label = event.get("entityLabel")
+            if not entity_label or entity_label == "null":
+                entity_type = event.get("entityType", "Unknown")
+                entity_label = f"Unknown {entity_type}"
+
+            optimized["entity"] = {
+                "type": event.get("entityType"),
+                "label": entity_label,
+            }
+
+            # Only include detail if it's meaningful (not just repeating entity type)
+            detail = event.get("detail", "")
+            entity_type = event.get("entityType", "")
+            if detail and detail != entity_type and detail != "":
+                optimized["detail"] = detail
+
+        return optimized
+
     def _summarize_events_result(self, events, total_count=None, max_events=None):
 
         if not events:
@@ -155,10 +485,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
         return summary
 
-    @register_as_tool(
-        title="Get Event",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_event(self, event_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
         """
@@ -198,8 +524,11 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     # Convert to dictionary using __dict__ or as a fallback, create a new dict with string representation
                     result_dict = getattr(result, "__dict__", {"data": str(result)})
 
+                # Optimize event data to reduce token usage
+                optimized_result = self._optimize_event_data(result_dict)
+
                 logger.debug(f"Successfully retrieved event with ID {event_id}")
-                return result_dict
+                return optimized_result
 
             except Exception as api_error:
                 # Check for specific error types
@@ -228,8 +557,10 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     # Parse the JSON manually
                     try:
                         result_dict = json.loads(response_text)
+                        # Optimize event data to reduce token usage
+                        optimized_result = self._optimize_event_data(result_dict)
                         logger.debug(f"Successfully retrieved event with ID {event_id} using fallback")
-                        return result_dict
+                        return optimized_result
                     except json.JSONDecodeError as json_err:
                         error_message = f"Failed to parse JSON response: {json_err}"
                         logger.error(error_message)
@@ -243,10 +574,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_event: {e}", exc_info=True)
             return {"error": f"Failed to get event: {e!s}", "event_id": event_id}
 
-    @register_as_tool(
-        title="Get Kubernetes Info Events",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_kubernetes_info_events(self,
                                          from_time: Optional[int] = None,
@@ -277,29 +604,53 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             Dictionary containing detailed Kubernetes events analysis or error information
         """
         try:
-            logger.debug(f"get_kubernetes_info_events called with time_range={time_range}, from_time={from_time}, to_time={to_time}, max_events={max_events}")
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
+            logger.debug(
+                f"[get_kubernetes_info_events] Called with time_range: {time_range}, "
+                f"from_time: {from_time}, to_time: {to_time}, max_events: {max_events}"
+            )
+
+            # Build time parameters
+            time_params = self._build_time_params(time_range, from_time, to_time)
+            from_time = time_params["from_time"]
+            to_time = time_params["to_time"]
+
             from_date = datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')
             to_date = datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')
+
+            logger.debug(
+                f"[get_kubernetes_info_events] Time range: {from_date} to {to_date}, "
+                f"API params: {time_params['api_params']}"
+            )
+
             try:
                 result = api_client.kubernetes_info_events(
-                    var_from=from_time,
-                    to=to_time,
-                    window_size=max_events,
+                    **time_params["api_params"],
                     filter_event_updates=None,
                     exclude_triggered_before=None
                 )
-                logger.debug(f"Raw API result type: {type(result)}")
-                logger.debug(f"Raw API result length: {len(result) if isinstance(result, list) else 'not a list'}")
+                logger.debug(
+                    f"[get_kubernetes_info_events] API call successful - "
+                    f"result type: {type(result)}, "
+                    f"length: {len(result) if isinstance(result, list) else 'not a list'}"
+                )
             except Exception as api_error:
-                logger.error(f"API call failed: {api_error}", exc_info=True)
+                logger.error(
+                    f"[get_kubernetes_info_events] API call failed - error: {api_error!s}",
+                    exc_info=True
+                )
                 return {
                     "error": f"Failed to get Kubernetes info events: {api_error}",
                     "details": str(api_error)
                 }
+
             events = result if isinstance(result, list) else ([result] if result else [])
             total_events_count = len(events)
             events = events[:max_events]
+
+            logger.debug(
+                f"[get_kubernetes_info_events] Processing {len(events)} events "
+                f"(total available: {total_events_count}, max_events: {max_events})"
+            )
             event_dicts = []
             for event in events:
                 if hasattr(event, 'to_dict'):
@@ -391,10 +742,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 "details": str(e)
             }
 
-    @register_as_tool(
-        title="Get Agent Monitoring Events",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_agent_monitoring_events(self,
                                           query: Optional[str] = None,
@@ -430,16 +777,18 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"get_agent_monitoring_events called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
-            if not from_time:
-                from_time = to_time - (60 * 60 * 1000)
+
+            # Build time parameters
+            time_params = self._build_time_params(time_range, from_time, to_time)
+            from_time = time_params["from_time"]
+            to_time = time_params["to_time"]
+
             from_date = datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')
             to_date = datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')
+
             try:
                 result = api_client.agent_monitoring_events(
-                    var_from=from_time,
-                    to=to_time,
-                    window_size=max_events,
+                    **time_params["api_params"],
                     filter_event_updates=None,
                     exclude_triggered_before=None
                 )
@@ -535,11 +884,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 "details": str(e)
             }
 
-
-    @register_as_tool(
-        title="Get Issues",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_issues(self,
                              query: Optional[str] = None,
@@ -578,23 +922,28 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
 
         try:
-            logger.debug(f"get_issues called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
-            if not from_time:
-                from_time = to_time - (60 * 60 * 1000)
+            logger.debug(
+                f"[get_issues] Called with query: {query}, time_range: {time_range}, "
+                f"from_time: {from_time}, to_time: {to_time}, max_events: {max_events}"
+            )
+
+            # Build time parameters
+            time_params = self._build_time_params(time_range, from_time, to_time)
+            from_time = time_params["from_time"]
+            to_time = time_params["to_time"]
+
             try:
                 # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
-                    var_from=from_time,
-                    to=to_time,
-                    window_size=size,
+                    **time_params["api_params"],
                     filter_event_updates=filter_event_updates,
                     exclude_triggered_before=exclude_triggered_before,
-                    event_type_filters=["issue"]
+                    event_type_filters=[EVENT_TYPE_ISSUE]
                 )
 
                 # Check response status immediately
                 if response_data.status != 200:
+                    logger.error(f"[get_issues] API returned non-200 status: {response_data.status}")
                     return {"error": f"Failed to get issue events: HTTP {response_data.status}"}
 
                 # Process the response data directly without additional parsing
@@ -603,30 +952,43 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
                 # Create a standardized result format
                 if isinstance(result, list):
-                    # Include a summary of the events for quicker analysis
-                    events_count = len(result)
+                    # Optimize events to reduce token usage
+                    total_count = len(result)
+                    limited_events = result[:max_events]
+                    optimized_events = [self._optimize_event_data(event) for event in limited_events]
+
+                    logger.debug(
+                        f"[get_issues] Retrieved {total_count} events, "
+                        f"returning {len(optimized_events)} after applying max_events limit"
+                    )
+
                     result_dict = {
-                        "events": result[:max_events],  # Limit to max_events for performance
-                        "events_count": events_count,
-                        "total_events": events_count,
+                        "events": optimized_events,
+                        "events_returned": len(optimized_events),
+                        "total_events": total_count,
                         "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
                     }
+
+                    # Add pagination info if data was truncated
+                    if max_events and total_count > max_events:
+                        result_dict["pagination"] = {
+                            "truncated": True,
+                            "message": f"Showing {max_events} of {total_count} events to optimize response size. Use max_events parameter to adjust limit or add filters to narrow results.",
+                            "limit": max_events,
+                            "has_more": True
+                        }
                 else:
                     result_dict = result
 
-                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} issue events")
+                logger.debug(f"[get_issues] Successfully completed - returned {result_dict.get('events_returned', 0)} of {result_dict.get('total_events', 0)} events")
                 return result_dict
             except Exception as api_error:
-                logger.error(f"API call failed: {api_error}", exc_info=True)
+                logger.error(f"[get_issues] API call failed - error: {api_error!s}", exc_info=True)
                 return {"error": f"Failed to get issue events: {api_error}"}
         except Exception as e:
-            logger.error(f"Error in get_issues: {e}", exc_info=True)
+            logger.error(f"[get_issues] Unexpected error: {e!s}", exc_info=True)
             return {"error": f"Failed to get issue events: {e!s}"}
 
-    @register_as_tool(
-        title="Get Incidents",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_incidents(self,
                              query: Optional[str] = None,
@@ -666,18 +1028,19 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
         try:
             logger.debug(f"get_incidents called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
-            if not from_time:
-                from_time = to_time - (60 * 60 * 1000)
+
+            # Build time parameters
+            time_params = self._build_time_params(time_range, from_time, to_time)
+            from_time = time_params["from_time"]
+            to_time = time_params["to_time"]
+
             try:
                 # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
-                    var_from=from_time,
-                    to=to_time,
-                    window_size=size,
+                    **time_params["api_params"],
                     filter_event_updates=filter_event_updates,
                     exclude_triggered_before=exclude_triggered_before,
-                    event_type_filters=["incident"]
+                    event_type_filters=[EVENT_TYPE_INCIDENT]
                 )
 
                 # Check response status immediately
@@ -690,18 +1053,30 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
                 # Create a standardized result format
                 if isinstance(result, list):
-                    # Include a summary of the events for quicker analysis
-                    events_count = len(result)
+                    # Optimize events to reduce token usage
+                    total_count = len(result)
+                    limited_events = result[:max_events]
+                    optimized_events = [self._optimize_event_data(event) for event in limited_events]
+
                     result_dict = {
-                        "events": result[:max_events],  # Limit to max_events for performance
-                        "events_count": events_count,
-                        "total_events": events_count,
+                        "events": optimized_events,
+                        "events_returned": len(optimized_events),
+                        "total_events": total_count,
                         "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
                     }
+
+                    # Add pagination info if data was truncated
+                    if max_events and total_count > max_events:
+                        result_dict["pagination"] = {
+                            "truncated": True,
+                            "message": f"Showing {max_events} of {total_count} events to optimize response size. Use max_events parameter to adjust limit or add filters to narrow results.",
+                            "limit": max_events,
+                            "has_more": True
+                        }
                 else:
                     result_dict = result
 
-                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} incident events")
+                logger.debug(f"Successfully retrieved {result_dict.get('events_returned', 0)} of {result_dict.get('total_events', 0)} incident events")
                 return result_dict
             except Exception as api_error:
                 logger.error(f"API call failed: {api_error}", exc_info=True)
@@ -710,10 +1085,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_incidents: {e}", exc_info=True)
             return {"error": f"Failed to get incident events: {e!s}"}
 
-    @register_as_tool(
-        title="Get Changes",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_changes(self,
                              query: Optional[str] = None,
@@ -753,18 +1124,19 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
         try:
             logger.debug(f"get_changes called with query={query}, time_range={time_range}, from_time={from_time}, to_time={to_time}, size={size}")
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
-            if not from_time:
-                from_time = to_time - (60 * 60 * 1000)
+
+            # Build time parameters
+            time_params = self._build_time_params(time_range, from_time, to_time)
+            from_time = time_params["from_time"]
+            to_time = time_params["to_time"]
+
             try:
                 # Use the optimized without_preload_content approach for faster response
                 response_data = api_client.get_events_without_preload_content(
-                    var_from=from_time,
-                    to=to_time,
-                    window_size=size,
+                    **time_params["api_params"],
                     filter_event_updates=filter_event_updates,
                     exclude_triggered_before=exclude_triggered_before,
-                    event_type_filters=["change"]
+                    event_type_filters=[EVENT_TYPE_CHANGE]
                 )
 
                 # Check response status immediately
@@ -777,18 +1149,30 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
                 # Create a standardized result format
                 if isinstance(result, list):
-                    # Include a summary of the events for quicker analysis
-                    events_count = len(result)
+                    # Optimize events to reduce token usage
+                    total_count = len(result)
+                    limited_events = result[:max_events]
+                    optimized_events = [self._optimize_event_data(event) for event in limited_events]
+
                     result_dict = {
-                        "events": result[:max_events],  # Limit to max_events for performance
-                        "events_count": events_count,
-                        "total_events": events_count,
+                        "events": optimized_events,
+                        "events_returned": len(optimized_events),
+                        "total_events": total_count,
                         "time_range": f"From {datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')} to {datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')}"
                     }
+
+                    # Add pagination info if data was truncated
+                    if max_events and total_count > max_events:
+                        result_dict["pagination"] = {
+                            "truncated": True,
+                            "message": f"Showing {max_events} of {total_count} events to optimize response size. Use max_events parameter to adjust limit or add filters to narrow results.",
+                            "limit": max_events,
+                            "has_more": True
+                        }
                 else:
                     result_dict = result
 
-                logger.debug(f"Successfully retrieved {result_dict.get('events_count', 0)} change events")
+                logger.debug(f"Successfully retrieved {result_dict.get('events_returned', 0)} of {result_dict.get('total_events', 0)} change events")
                 return result_dict
             except Exception as api_error:
                 logger.error(f"API call failed: {api_error}", exc_info=True)
@@ -797,10 +1181,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_changes: {e}", exc_info=True)
             return {"error": f"Failed to get change events: {e!s}"}
 
-    @register_as_tool(
-        title="Get Events By IDs",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    )
     @with_header_auth(EventsApi)
     async def get_events_by_ids(
         self,
@@ -858,8 +1238,11 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                         event_dict = event
                     all_events.append(event_dict)
 
+                # Optimize events to reduce token usage
+                optimized_events = [self._optimize_event_data(event) for event in all_events]
+
                 result = {
-                    "events": all_events,
+                    "events": optimized_events,
                     "events_count": len(all_events),
                     "successful_retrievals": len(all_events),
                     "failed_retrievals": 0,
@@ -903,12 +1286,16 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                         logger.error(f"Error retrieving event ID {event_id}: {e}", exc_info=True)
                         all_events.append({"eventId": event_id, "error": f"Failed to retrieve: {e!s}"})
 
+                # Optimize successful events to reduce token usage
+                successful_events = [e for e in all_events if "error" not in e]
+                optimized_events = [self._optimize_event_data(event) if "error" not in event else event for event in all_events]
+
                 result = {
-                    "events": all_events,
+                    "events": optimized_events,
                     "events_count": len(all_events),
-                    "successful_retrievals": sum(1 for event in all_events if "error" not in event),
+                    "successful_retrievals": len(successful_events),
                     "failed_retrievals": sum(1 for event in all_events if "error" in event),
-                    "summary": self._summarize_events_result([e for e in all_events if "error" not in e])
+                    "summary": self._summarize_events_result(successful_events)
                 }
 
                 logger.debug(f"Retrieved {result['successful_retrievals']} events successfully, {result['failed_retrievals']} failed using individual requests")

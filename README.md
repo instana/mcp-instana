@@ -657,15 +657,19 @@ Here is an example of a GitHub Copilot response:
   - [x] Advanced filtering by tags and properties
   - [x] Grouping and ordering capabilities
   - [x] Time range queries
-- [x] **Events**
-    - [x] Events
-      - [x] Get Event
-      - [x] Get Events by IDs
-      - [x] Get Agent Monitoring Events
-      - [x] Get Kubernetes Info Events
-      - [x] Get Issues
-      - [x] Get Incidents
-      - [x] Get Changes
+- [x] **Unified Events Management** (`manage_events_resources`)
+  - [x] Events Monitoring
+    - [x] Get Event by ID (operation="get_event")
+    - [x] Get Events by IDs (operation="get_events_by_ids")
+    - [x] Get Agent Monitoring Events (operation="get_agent_monitoring_events")
+    - [x] Get Kubernetes Info Events (operation="get_kubernetes_info_events")
+    - [x] Get Issues (operation="get_issues")
+    - [x] Get Incidents (operation="get_incidents")
+    - [x] Get Changes (operation="get_changes")
+  - [x] Smart routing to specialized event tools
+  - [x] Unified parameter validation (time ranges, max_events)
+  - [x] Support for natural language time ranges ("last 24 hours", "last 2 days")
+  - [x] Event filtering and optimization
 - [x] **Unified Website Management** (`manage_website_resources`)
   - [x] Website Analyze (resource_type="analyze")
     - [x] Get Website Beacon Groups - grouped/aggregated beacon data (operation="get_beacon_groups")
@@ -709,13 +713,7 @@ Here is an example of a GitHub Copilot response:
 | `get_action_instance_details`                                 | Automation                     | Get details of an automation action run result         |
 | `list_action_instances`                                       | Automation                     | List automation action run results                     |
 | `delete_action_instance`                                      | Automation                     | Delete an automation action run result                 |
-| `get_event`                                                   | Events                         | Get Specific Event by ID                               |
-| `get_kubernetes_info_events`                                  | Events                         | Get Kubernetes Info Events                             |
-| `get_agent_monitoring_events`                                 | Events                         | Get Agent Monitoring Events                            |
-| `get_issues`                                                  | Events                         | Get Issues                                             |
-| `get_incidents`                                               | Events                         | Get Incidents                                          |
-| `get_changes`                                                 | Events                         | Get Changes                                            |
-| `get_events_by_ids`                                           | Events                         | Get Events by IDs                                      |
+| `manage_events_resources`                                     | Events                         | Unified smart router for events monitoring: get event by ID, get events by IDs, Kubernetes events, agent monitoring, issues, incidents, and changes |
 
 
 ## Tool Filtering
