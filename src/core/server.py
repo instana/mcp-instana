@@ -394,14 +394,11 @@ def main():
             help="Port to listen on (default: 8080, can be overridden with PORT env var)"
         )
         parser.add_argument(
-            "--api-token",
-            type=str,
-            help="Instana API token (overrides INSTANA_API_TOKEN env var)"
-        )
-        parser.add_argument(
-            "--base-url",
-            type=str,
-            help="Instana base URL (overrides INSTANA_BASE_URL env var)"
+            "--env",
+            action="append",
+            metavar="KEY=VALUE",
+            default=None,
+            help="Set environment variable (e.g. --env INSTANA_BASE_URL=https://... --env INSTANA_API_TOKEN=...). Can be repeated."
         )
         # Check for help arguments before parsing
         if len(sys.argv) > 1 and any(arg in ['-h','--h','--help','-help'] for arg in sys.argv[1:]):
@@ -430,6 +427,17 @@ def main():
                 sys.exit(0)  # Still exit with 0 for help
 
         args = parser.parse_args()
+
+        # Apply --env KEY=VALUE overrides (e.g. INSTANA_BASE_URL, INSTANA_API_TOKEN)
+        if args.env:
+            for env_spec in args.env:
+                if "=" in env_spec:
+                    key, _, value = env_spec.partition("=")
+                    key = key.strip()
+                    if key:
+                        os.environ[key] = value
+                else:
+                    logger.warning("Ignoring malformed --env (expected KEY=VALUE): %s", env_spec)
 
         # Set log level based on command line arguments
         if args.debug:
@@ -488,9 +496,10 @@ def main():
                 f"Total enabled tools: {len(enabled_tool_classes)}"
             )
 
-        # Get credentials from command line args or environment variables
-        INSTANA_API_TOKEN = args.api_token if args.api_token else os.getenv("INSTANA_API_TOKEN", "")
-        INSTANA_BASE_URL = args.base_url if args.base_url else os.getenv("INSTANA_BASE_URL", "")
+        # Get credentials from environment variables for stdio mode
+        INSTANA_API_TOKEN, INSTANA_BASE_URL = get_instana_credentials()
+        logger.debug(f"INSTANA_API_TOKEN: {INSTANA_API_TOKEN}")
+        logger.debug(f"INSTANA_BASE_URL: {INSTANA_BASE_URL}")
 
         if args.transport == "stdio" or args.transport is None:
             if not validate_credentials(INSTANA_API_TOKEN, INSTANA_BASE_URL):

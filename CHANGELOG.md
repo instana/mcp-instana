@@ -1,5 +1,8 @@
 # Changelog
 
+### 0.8.1
+-  **Fix:** Add `--env` flag for setting environment variables via CLI
+
 ### 0.8.0
 
 -   **Enhancement:** Introduced separate unified smart router to handle all automation and event related operations, improving routing consistency and maintainability.

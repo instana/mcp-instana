@@ -216,6 +216,7 @@ uv run src/core/server.py [OPTIONS]
 
 **Available Options:**
 - `--transport <mode>`: Transport mode (choices: `streamable-http`, `stdio`)
+- `--env KEY=VALUE`: Set environment variable (can be repeated for multiple variables, e.g., `--env INSTANA_BASE_URL=https://... --env INSTANA_API_TOKEN=...`)
 - `--debug`: Enable debug mode with additional logging
 - `--log-level <level>`: Set the logging level (choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events,website). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
@@ -279,7 +280,7 @@ uv run src/core/server.py --transport streamable-http --log-level DEBUG --tools 
 #### Using CLI (PyPI Installation)
 
 ```bash
-# Set environment variables first
+# Option 1: Set environment variables first
 export INSTANA_BASE_URL="https://your-instana-instance.instana.io"
 export INSTANA_API_TOKEN="your_instana_api_token"
 
@@ -288,12 +289,18 @@ mcp-instana
 
 # Or explicitly specify stdio mode
 mcp-instana --transport stdio
+
+# Option 2: Use --env flag to set environment variables directly
+mcp-instana --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+
+# Or with explicit stdio mode
+mcp-instana --transport stdio --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
 ```
 
 #### Using Development Installation
 
 ```bash
-# Set environment variables first
+# Option 1: Set environment variables first
 export INSTANA_BASE_URL="https://your-instana-instance.instana.io"
 export INSTANA_API_TOKEN="your_instana_api_token"
 
@@ -302,12 +309,19 @@ uv run src/core/server.py
 
 # Or explicitly specify stdio mode
 uv run src/core/server.py --transport stdio
+
+# Option 2: Use --env flag to set environment variables directly
+uv run src/core/server.py --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+
+# Or with explicit stdio mode
+uv run src/core/server.py --transport stdio --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
 ```
 
 **Key Features of Stdio Mode:**
-- Uses environment variables for authentication
+- Uses environment variables for authentication (can be set via `export` or `--env` flag)
 - Direct communication via stdin/stdout
 - Required for certain MCP client configurations
+- The `--env` flag provides a convenient way to set credentials without modifying shell environment
 
 ### Tool Categories
 
@@ -438,6 +452,7 @@ get me all endpoints from Instana
 
 **Configuration using CLI (PyPI Installation - Recommended):**
 
+**Option 1: Using environment variables in config:**
 ```json
 {
   "mcpServers": {
@@ -453,10 +468,27 @@ get me all endpoints from Instana
 }
 ```
 
+**Option 2: Using --env flag (alternative method):**
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": [
+        "--transport", "stdio",
+        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
+      ]
+    }
+  }
+}
+```
+
 **Note:** If you encounter "command not found" errors, use the full path to mcp-instana. Find it with `which mcp-instana` and use that path instead.
 
 **Configuration using Development Installation:**
 
+**Option 1: Using environment variables in config:**
 ```json
 {
   "mcpServers": {
@@ -476,6 +508,25 @@ get me all endpoints from Instana
   }
 }
 ```
+
+**Option 2: Using --env flag (alternative method):**
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "<path-to-mcp-instana-folder>",
+        "run",
+        "src/core/server.py",
+        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
+      ]
+    }
+  }
+}
+```
 ### Kiro Setup
 
 Kiro is an agentic IDE, not an extension that can be downloaded into VS Code or some other IDE.
@@ -491,7 +542,9 @@ Kiro is an agentic IDE, not an extension that can be downloaded into VS Code or 
 **Step 4: Select the Edit Config icon in the top right corner of the MCP Servers section.**
 ![alt text](./images/edir-kiro-config.png)
 
-**Step 5: Open the MCP server configuration file (mcp.json), similar to how it works in Claude, and update it with your server's name, commands, and headers as shown in the image below.**
+**Step 5: Open the MCP server configuration file (mcp.json) and configure it based on your preferred transport mode:**
+
+#### Streamable HTTP Mode (Recommended for Kiro)
 
 ```json
 {
@@ -499,10 +552,49 @@ Kiro is an agentic IDE, not an extension that can be downloaded into VS Code or 
     "Instana MCP Server": {
       "command": "npx",
       "args": [
-        "mcp-remote", "<YOUR_MCP_PORT>/mcp",
+        "mcp-remote", "http://0.0.0.0:8080/mcp/",
         "--allow-http",
-        "--header", "instana-base-url: <INSTANA_BASE_URL>",
-        "--header", "instana-api-token: <INSTANA_API_TOKEN>"
+        "--header", "instana-base-url: https://your-instana-instance.instana.io",
+        "--header", "instana-api-token: your_instana_api_token"
+      ]
+    }
+  }
+}
+```
+
+**Note:** Make sure to start the MCP server in streamable-http mode before using this configuration:
+```bash
+mcp-instana --transport streamable-http
+```
+
+#### Stdio Mode
+
+**Option 1: Using environment variables in config:**
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
+        "INSTANA_API_TOKEN": "your_instana_api_token"
+      }
+    }
+  }
+}
+```
+
+**Option 2: Using --env flag (alternative method):**
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": [
+        "--transport", "stdio",
+        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
       ]
     }
   }
@@ -567,6 +659,7 @@ You can directly create or update `.vscode/mcp.json` with the following configur
 
 Create `.vscode/mcp.json` in your project root:
 
+**Option 1: Using environment variables in config:**
 ```json:.vscode/mcp.json
 {
   "servers": {
@@ -582,10 +675,27 @@ Create `.vscode/mcp.json` in your project root:
 }
 ```
 
+**Option 2: Using --env flag (alternative method):**
+```json:.vscode/mcp.json
+{
+  "servers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": [
+        "--transport", "stdio",
+        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
+      ]
+    }
+  }
+}
+```
+
 **Using Development Installation:**
 
 Create `.vscode/mcp.json` in your project root:
 
+**Option 1: Using environment variables in config:**
 ```json:.vscode/mcp.json
 {
   "servers": {
@@ -601,6 +711,25 @@ Create `.vscode/mcp.json` in your project root:
         "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
         "INSTANA_API_TOKEN": "your_instana_api_token"
       }
+    }
+  }
+}
+```
+
+**Option 2: Using --env flag (alternative method):**
+```json:.vscode/mcp.json
+{
+  "servers": {
+    "Instana MCP Server": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/absolute/path/to/your/project/mcp-instana",
+        "run",
+        "src/core/server.py",
+        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
+      ]
     }
   }
 }
