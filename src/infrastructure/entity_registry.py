@@ -4,14 +4,14 @@ Entity Capability Registry Module
 Manages entity type capabilities (metrics, tags, filters).
 Loads from schema files and provides exact constant resolution.
 """
+import asyncio
 import json
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import requests
+from src.core.utils import BaseInstanaClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class EntityCapability:
     tag_filters: List[str]  # e.g., ["kubernetes.namespace.name", ...]
     aggregations: List[str]  # e.g., ["mean", "sum", "max", "min"]
 
-class EntityCapabilityRegistry:
+class EntityCapabilityRegistry(BaseInstanaClient):
     """
     Central registry for entity type capabilities.
 
@@ -37,6 +37,7 @@ class EntityCapabilityRegistry:
     3. Resolve entity types from normalized intent
     4. Find exact metric names from categories
     5. Find exact tag filter names from simple names
+    6. Load entity type mappings from Instana API
     """
 
     # Fallback mapping from normalized (class, kind) to entity type
@@ -65,11 +66,11 @@ class EntityCapabilityRegistry:
             base_url: Instana API base URL (optional, can be set via env var)
             read_token: Instana API read token (optional, can be set via env var)
         """
+        # Initialize BaseInstanaClient with credentials
+        super().__init__(read_token=read_token or "", base_url=base_url or "")
 
         self.schema_dir = Path(schema_dir)
         self._cache: Dict[str, EntityCapability] = {}
-        self.base_url = base_url or os.getenv("INSTANA_BASE_URL")
-        self.read_token = read_token or os.getenv("INSTANA_READ_TOKEN")
 
         # Dynamic entity type mapping (populated from API)
         self.entity_type_mapping: Dict[tuple, str] = {}
@@ -170,23 +171,24 @@ class EntityCapabilityRegistry:
             return
 
         try:
-            # Construct the API endpoint
-            url = f"{self.base_url}/api/infrastructure-monitoring/catalog/plugins"
+            # Use BaseInstanaClient's make_request method
+            # Create event loop if needed for async call
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
 
-            # Set up headers with authentication
-            headers = {
-                "Authorization": f"apiToken {self.read_token}",
-                "Accept": "application/json"
-            }
+            # Make the API request using BaseInstanaClient
+            plugins = loop.run_until_complete(
+                self.make_request("api/infrastructure-monitoring/catalog/plugins")
+            )
 
-            logger.debug(f"Fetching entity type mapping from {url}")
-
-            # Make the API request
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-
-            # Parse the response
-            plugins = response.json()
+            # Check for error response
+            if isinstance(plugins, dict) and "error" in plugins:
+                logger.warning(f"API request failed: {plugins['error']}")
+                self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
+                return
 
             if not isinstance(plugins, list):
                 logger.warning(f"Unexpected API response format: {type(plugins)}")
@@ -221,12 +223,9 @@ class EntityCapabilityRegistry:
             self.entity_type_mapping = mapping
             logger.info(f"Built entity type mapping with {len(mapping)} entries")
 
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             logger.warning(f"Failed to fetch entity type mapping from API: {e}")
             logger.info("Using fallback entity type mapping")
-            self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
-        except Exception as e:
-            logger.error(f"Unexpected error loading entity type mapping: {e}")
             self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
 
     def _extract_normalized_mappings(self, plugin_id: str) -> List[tuple]:
