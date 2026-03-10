@@ -6,9 +6,10 @@ Tests schema loading, entity resolution, and metric/tag finding.
 
 import json
 from pathlib import Path
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
+import responses
 
 from src.infrastructure.entity_registry import (
     EntityCapability,
@@ -85,18 +86,20 @@ class TestEntityCapabilityRegistry:
 
     def test_registry_initialization(self, temp_schema_dir):
         """Test registry initializes and loads schemas"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         assert "kubernetesPod" in registry._cache
         capability = registry._cache["kubernetesPod"]
         assert capability.entity_type == "kubernetesPod"
         assert len(capability.metrics) == 6
         assert len(capability.tag_filters) == 3
+        # Should use fallback mapping when no API credentials provided
+        assert len(registry.entity_type_mapping) > 0
 
     def test_registry_with_nonexistent_dir(self, tmp_path):
         """Test registry handles nonexistent directory gracefully"""
         nonexistent_dir = tmp_path / "nonexistent"
-        registry = EntityCapabilityRegistry(nonexistent_dir)
+        registry = EntityCapabilityRegistry(schema_dir=nonexistent_dir)
 
         assert len(registry._cache) == 0
 
@@ -129,7 +132,7 @@ class TestEntityCapabilityRegistry:
 
     def test_find_metric_with_aggregation(self, temp_schema_dir):
         """Test finding metric with aggregation hint"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         metric = registry.find_metric("kubernetesPod", "cpu", "used")
 
@@ -138,7 +141,7 @@ class TestEntityCapabilityRegistry:
 
     def test_find_metric_no_match(self, temp_schema_dir):
         """Test finding metric with no matches"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         metric = registry.find_metric("kubernetesPod", "nonexistent")
 
@@ -146,7 +149,7 @@ class TestEntityCapabilityRegistry:
 
     def test_find_metric_unknown_entity(self, temp_schema_dir):
         """Test finding metric for unknown entity"""
-        EntityCapabilityRegistry(temp_schema_dir)
+        EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
 
     def test_get_full_schema_success(self, temp_schema_dir):
@@ -163,7 +166,7 @@ class TestEntityCapabilityRegistry:
 
     def test_get_full_schema_unknown_entity(self, temp_schema_dir):
         """Test getting full schema for unknown entity type"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         schema = registry.get_full_schema("unknownEntity")
 
@@ -191,7 +194,7 @@ class TestEntityCapabilityRegistry:
 
     def test_find_all_matching_metrics(self, temp_schema_dir):
         """Test finding all metrics matching a category"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         metrics = registry.find_all_matching_metrics("kubernetesPod", "cpu")
 
@@ -210,7 +213,7 @@ class TestEntityCapabilityRegistry:
 
     def test_find_tag_filter_no_match(self, temp_schema_dir):
         """Test finding tag filter with no match"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         tag = registry.find_tag_filter("kubernetesPod", "nonexistent")
 
@@ -218,7 +221,7 @@ class TestEntityCapabilityRegistry:
 
     def test_get_all_metrics(self, temp_schema_dir):
         """Test getting all metrics for entity"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         metrics = registry.get_all_metrics("kubernetesPod")
 
@@ -228,7 +231,7 @@ class TestEntityCapabilityRegistry:
 
     def test_get_all_tag_filters(self, temp_schema_dir):
         """Test getting all tag filters for entity"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         tags = registry.get_all_tag_filters("kubernetesPod")
 
@@ -237,7 +240,7 @@ class TestEntityCapabilityRegistry:
 
     def test_get_entity_types(self, temp_schema_dir):
         """Test getting all loaded entity types"""
-        registry = EntityCapabilityRegistry(temp_schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
 
         entity_types = registry.get_entity_types()
 
@@ -263,7 +266,7 @@ class TestSchemaLoading:
         with open(schema_file, 'w') as f:
             json.dump(invalid_schema, f)
 
-        registry = EntityCapabilityRegistry(schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=schema_dir)
 
         # Should not crash, just skip invalid schema
         assert len(registry._cache) == 0
@@ -287,7 +290,7 @@ class TestSchemaLoading:
         with open(schema_file, 'w') as f:
             json.dump(schema, f)
 
-        registry = EntityCapabilityRegistry(schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=schema_dir)
 
         assert "testEntity" in registry._cache
         assert len(registry._cache["testEntity"].metrics) == 0
@@ -310,10 +313,105 @@ class TestSchemaLoading:
             with open(schema_file, 'w') as f:
                 json.dump(schema, f)
 
-        registry = EntityCapabilityRegistry(schema_dir)
+        registry = EntityCapabilityRegistry(schema_dir=schema_dir)
 
         assert len(registry._cache) == 2
         assert "entity1" in registry._cache
+
+
+class TestAPIEntityTypeMapping:
+    """Test API-based entity type mapping"""
+
+    @responses.activate
+    def test_load_entity_type_mapping_from_api(self, temp_schema_dir):
+        """Test loading entity type mapping from API"""
+        # Mock API response
+        mock_plugins = [
+            {"plugin": "kubernetesPod"},
+            {"plugin": "kubernetesDeployment"},
+            {"plugin": "jvmRuntimePlatform"},
+            {"plugin": "host"},
+            {"plugin": "docker"},
+            {"plugin": "db2Database"},
+            {"plugin": "ibmMqQueue"},
+            {"plugin": "oTelLLM"}
+        ]
+
+        responses.add(
+            responses.GET,
+            "https://test.instana.io/api/infrastructure-monitoring/catalog/plugins",
+            json=mock_plugins,
+            status=200
+        )
+
+        registry = EntityCapabilityRegistry(
+            schema_dir=temp_schema_dir,
+            base_url="https://test.instana.io",
+            read_token="test-token"
+        )
+
+        # Verify mapping was loaded from API
+        assert len(registry.entity_type_mapping) > 0
+        assert registry.entity_type_mapping.get(("kubernetes", "pod")) == "kubernetesPod"
+        assert registry.entity_type_mapping.get(("kubernetes", "deployment")) == "kubernetesDeployment"
+        assert registry.entity_type_mapping.get(("jvm", "runtime")) == "jvmRuntimePlatform"
+        assert registry.entity_type_mapping.get(("host", "host")) == "host"
+
+    def test_fallback_to_hardcoded_mapping_no_credentials(self, temp_schema_dir):
+        """Test fallback to hardcoded mapping when no API credentials provided"""
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
+
+        # Should use fallback mapping
+        assert len(registry.entity_type_mapping) > 0
+        assert registry.entity_type_mapping.get(("kubernetes", "pod")) == "kubernetesPod"
+
+    @responses.activate
+    def test_fallback_to_hardcoded_mapping_api_failure(self, temp_schema_dir):
+        """Test fallback to hardcoded mapping when API call fails"""
+        # Mock API failure
+        responses.add(
+            responses.GET,
+            "https://test.instana.io/api/infrastructure-monitoring/catalog/plugins",
+            json={"error": "Internal Server Error"},
+            status=500
+        )
+
+        registry = EntityCapabilityRegistry(
+            schema_dir=temp_schema_dir,
+            base_url="https://test.instana.io",
+            read_token="test-token"
+        )
+
+        # Should fall back to hardcoded mapping
+        assert len(registry.entity_type_mapping) > 0
+        assert registry.entity_type_mapping.get(("kubernetes", "pod")) == "kubernetesPod"
+
+    def test_extract_normalized_mappings_kubernetes(self, temp_schema_dir):
+        """Test extracting normalized mappings for Kubernetes entities"""
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
+
+        mappings = registry._extract_normalized_mappings("kubernetesPod")
+        assert ("kubernetes", "pod") in mappings
+
+        mappings = registry._extract_normalized_mappings("kubernetesDeployment")
+        assert ("kubernetes", "deployment") in mappings
+
+    def test_extract_normalized_mappings_special_cases(self, temp_schema_dir):
+        """Test extracting normalized mappings for special cases"""
+        registry = EntityCapabilityRegistry(schema_dir=temp_schema_dir)
+
+        # Host should map to multiple tuples
+        mappings = registry._extract_normalized_mappings("host")
+        assert ("host", "host") in mappings
+        assert ("infrastructure", "host") in mappings
+        assert ("server", "host") in mappings
+
+        # oTelLLM should map to multiple tuples
+        mappings = registry._extract_normalized_mappings("oTelLLM")
+        assert ("otelllm", "llm") in mappings
+        assert ("genai", "llm") in mappings
+        assert ("llm", "llm") in mappings
+        assert ("ai", "llm") in mappings
         assert "entity2" in registry._cache
 
 

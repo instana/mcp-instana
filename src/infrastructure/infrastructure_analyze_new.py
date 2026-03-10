@@ -75,7 +75,11 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
                 # Fallback to development path (will log warning if doesn't exist)
                 schema_dir = dev_schema_dir
 
-        self.registry = EntityCapabilityRegistry(schema_dir)
+        self.registry = EntityCapabilityRegistry(
+            schema_dir=schema_dir,
+            base_url=base_url,
+            read_token=read_token
+        )
         self.elicitation_handler = ElicitationHandler()
 
         logger.info(f"Initialized Option 2 tool with {len(self.registry.get_entity_types())} entity types")
@@ -98,17 +102,22 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         **Pass 1 - Intent to Schema:**
         Provide intent and entity hint. Server returns full schema via MCP elicitation.
+        The server dynamically loads available entity types from the Instana API catalog,
+        ensuring support for all monitored technologies in your environment.
 
         Parameters:
         - intent: Natural language query (e.g., "maximum heap size of JVM on host galactica1")
-        - entity: Entity hint (e.g., "jvm", "kubernetes", "docker", "genai")
+        - entity: Entity hint (e.g., "jvm", "kubernetes", "docker", "genai", "host", "db2", "ibmmq")
+          The system supports all entity types available in your Instana installation, including
+          Kubernetes pods/deployments, JVM runtimes, hosts, databases, message queues, containers,
+          and any custom or newly added entity types.
 
         **Pass 2 - Selections to Results:**
         Provide exact selections from schema. Server builds payload and calls API.
 
         Parameters:
         - selections: Dict with:
-          - entity_type: Exact entity type from schema (e.g., "jvmRuntimePlatform")
+          - entity_type: Exact entity type from schema (e.g., "jvmRuntimePlatform", "kubernetesPod")
           - metrics: Array of exact metric names from schema (e.g., ["jvm.heap.maxSize", "jvm.heap.used"])
           - aggregation: Aggregation type (e.g., "max", "mean", "sum")
           - filters: List of dicts with name/value pairs (e.g., [{"name": "host.name", "value": "galactica1"}])
@@ -118,6 +127,9 @@ class InfrastructureAnalyzeOption2(BaseInstanaClient):
 
         Returns:
             List of MCP content blocks (TextContent or EmbeddedResource)
+
+        Note: Entity type support is automatically synchronized with your Instana installation's
+        plugin catalog, ensuring compatibility with all monitored technologies without manual updates.
         """
         try:
             # Route based on input

@@ -6,9 +6,12 @@ Loads from schema files and provides exact constant resolution.
 """
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +39,9 @@ class EntityCapabilityRegistry:
     5. Find exact tag filter names from simple names
     """
 
-    # Mapping from normalized (class, kind) to entity type
-    ENTITY_TYPE_MAPPING = {
+    # Fallback mapping from normalized (class, kind) to entity type
+    # Used only if API call fails
+    _FALLBACK_ENTITY_TYPE_MAPPING = {
         ("kubernetes", "pod"): "kubernetesPod",
         ("kubernetes", "deployment"): "kubernetesDeployment",
         ("jvm", "runtime"): "jvmRuntimePlatform",
@@ -53,15 +57,27 @@ class EntityCapabilityRegistry:
         ("ai", "llm"): "oTelLLM",
     }
 
-    def __init__(self, schema_dir: Path) -> None:
+    def __init__(self, schema_dir: Path, base_url: Optional[str] = None, read_token: Optional[str] = None) -> None:
         """
         Initialize the registry.
         Args:
             schema_dir: Path to directory containing schema JSON files
+            base_url: Instana API base URL (optional, can be set via env var)
+            read_token: Instana API read token (optional, can be set via env var)
         """
 
         self.schema_dir = Path(schema_dir)
         self._cache: Dict[str, EntityCapability] = {}
+        self.base_url = base_url or os.getenv("INSTANA_BASE_URL")
+        self.read_token = read_token or os.getenv("INSTANA_READ_TOKEN")
+
+        # Dynamic entity type mapping (populated from API)
+        self.entity_type_mapping: Dict[tuple, str] = {}
+
+        # Load entity type mapping from API
+        self._load_entity_type_mapping()
+
+        # Load schemas
         self._load_schemas()
 
     def _load_schemas(self) -> None:
@@ -140,6 +156,138 @@ class EntityCapabilityRegistry:
         except Exception as e:
             logger.error(f"Error loading schema {filename}: {e!s}")
 
+    def _load_entity_type_mapping(self) -> None:
+        """
+        Load entity type mapping from Instana API.
+
+        Fetches the plugin catalog from /api/infrastructure-monitoring/catalog/plugins
+        and builds a mapping from normalized (class, kind) tuples to entity types.
+        Falls back to hardcoded mapping if API call fails.
+        """
+        if not self.base_url or not self.read_token:
+            logger.warning("Instana API credentials not provided, using fallback entity type mapping")
+            self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
+            return
+
+        try:
+            # Construct the API endpoint
+            url = f"{self.base_url}/api/infrastructure-monitoring/catalog/plugins"
+
+            # Set up headers with authentication
+            headers = {
+                "Authorization": f"apiToken {self.read_token}",
+                "Accept": "application/json"
+            }
+
+            logger.debug(f"Fetching entity type mapping from {url}")
+
+            # Make the API request
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            # Parse the response
+            plugins = response.json()
+
+            if not isinstance(plugins, list):
+                logger.warning(f"Unexpected API response format: {type(plugins)}")
+                self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
+                return
+
+            logger.info(f"Fetched {len(plugins)} plugins from API")
+
+            # Build the mapping from plugin data
+            mapping = {}
+
+            for plugin_data in plugins:
+                if not isinstance(plugin_data, dict):
+                    continue
+
+                plugin_id = plugin_data.get("plugin")
+                if not plugin_id:
+                    continue
+
+                # Extract normalized class and kind from plugin ID
+                # Common patterns: kubernetesPod, kubernetesDeployment, jvmRuntimePlatform, etc.
+                normalized_mappings = self._extract_normalized_mappings(plugin_id)
+
+                for class_kind_tuple in normalized_mappings:
+                    mapping[class_kind_tuple] = plugin_id
+
+            # Add fallback mappings for any missing entries
+            for key, value in self._FALLBACK_ENTITY_TYPE_MAPPING.items():
+                if key not in mapping:
+                    mapping[key] = value
+
+            self.entity_type_mapping = mapping
+            logger.info(f"Built entity type mapping with {len(mapping)} entries")
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to fetch entity type mapping from API: {e}")
+            logger.info("Using fallback entity type mapping")
+            self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
+        except Exception as e:
+            logger.error(f"Unexpected error loading entity type mapping: {e}")
+            self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
+
+    def _extract_normalized_mappings(self, plugin_id: str) -> List[tuple]:
+        """
+        Extract normalized (class, kind) tuples from a plugin ID.
+
+        Args:
+            plugin_id: Plugin ID (e.g., "kubernetesPod", "jvmRuntimePlatform")
+
+        Returns:
+            List of (class, kind) tuples that map to this plugin
+
+        Examples:
+            "kubernetesPod" -> [("kubernetes", "pod")]
+            "kubernetesDeployment" -> [("kubernetes", "deployment")]
+            "jvmRuntimePlatform" -> [("jvm", "runtime")]
+            "host" -> [("host", "host"), ("infrastructure", "host"), ("server", "host")]
+        """
+        mappings = []
+        plugin_lower = plugin_id.lower()
+
+        # Handle special cases first
+        if plugin_id == "host":
+            mappings.extend([
+                ("host", "host"),
+                ("infrastructure", "host"),
+                ("server", "host")
+            ])
+        elif plugin_id == "oTelLLM":
+            mappings.extend([
+                ("otelllm", "llm"),
+                ("genai", "llm"),
+                ("llm", "llm"),
+                ("ai", "llm")
+            ])
+        elif plugin_id == "docker":
+            mappings.append(("docker", "container"))
+        elif plugin_lower.startswith("kubernetes"):
+            # Extract kind from plugin ID (e.g., kubernetesPod -> pod)
+            kind = plugin_id[10:]  # Remove "kubernetes" prefix
+            if kind:
+                kind_lower = kind[0].lower() + kind[1:] if len(kind) > 1 else kind.lower()
+                mappings.append(("kubernetes", kind_lower))
+        elif plugin_lower.startswith("jvm"):
+            # jvmRuntimePlatform -> ("jvm", "runtime")
+            mappings.append(("jvm", "runtime"))
+        elif plugin_lower.startswith("db2"):
+            # db2Database -> ("db2", "database")
+            mappings.append(("db2", "database"))
+        elif plugin_lower.startswith("ibmmq"):
+            # ibmMqQueue -> ("ibmmq", "queue")
+            kind = plugin_id[5:]  # Remove "ibmMq" prefix
+            if kind:
+                kind_lower = kind[0].lower() + kind[1:] if len(kind) > 1 else kind.lower()
+                mappings.append(("ibmmq", kind_lower))
+        else:
+            # Generic fallback: use plugin_id as both class and kind
+            mappings.append((plugin_lower, plugin_lower))
+
+        return mappings
+
     def resolve(self, entity_class: str, entity_kind: str) -> Optional[EntityCapability]:
         """
         Resolve normalized intent to entity capability.
@@ -155,8 +303,8 @@ class EntityCapabilityRegistry:
             resolve("kubernetes", "pod") → kubernetesPod capability
             resolve("jvm", "runtime") → jvmRuntimePlatform capability
         """
-        # Look up entity type from mapping
-        entity_type = self.ENTITY_TYPE_MAPPING.get((entity_class, entity_kind))
+        # Look up entity type from dynamic mapping
+        entity_type = self.entity_type_mapping.get((entity_class, entity_kind))
         if not entity_type:
             logger.warning(f"No entity type mapping found for {entity_class}/{entity_kind}")
             return None

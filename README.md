@@ -781,7 +781,8 @@ Here is an example of a GitHub Copilot response:
     - [x] Get application metric catalog
 - [x] **Infrastructure Analysis** (`analyze_infrastructure_elicitation`)
   - [x] Two-pass elicitation for entity/metric queries
-  - [x] Support for multiple entity types (JVM, Kubernetes, Docker, etc.)
+  - [x] Dynamic support for all entity types from Instana API catalog (JVM, Kubernetes, Docker, hosts, databases, message queues, and more)
+  - [x] Automatically synchronized with your Instana installation's available plugins
   - [x] Flexible metric aggregation (max, mean, sum, etc.)
   - [x] Advanced filtering by tags and properties
   - [x] Grouping and ordering capabilities
@@ -867,7 +868,8 @@ The MCP server supports selective tool loading to optimize performance and reduc
 
 - **`infra`**: Infrastructure analysis tools
   - `analyze_infrastructure_elicitation`: Two-pass infrastructure analysis with entity/metric elicitation
-  - Supports multiple entity types (JVM, Kubernetes, Docker, hosts, databases, etc.)
+  - Dynamically supports all entity types available in your Instana installation (automatically loaded from API catalog)
+  - Includes JVM, Kubernetes, Docker, hosts, databases, message queues, and any custom or newly added entity types
   - Flexible metric aggregation, filtering, grouping, and time range queries
 
 - **`automation`**: Automation action tools
