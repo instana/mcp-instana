@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.core.utils import BaseInstanaClient
+from src.infrastructure.infrastructure_catalog import InfrastructureCatalogMCPTools
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ class EntityCapabilityRegistry(BaseInstanaClient):
         """
         Load entity type mapping from Instana API.
 
-        Fetches the plugin catalog from /api/infrastructure-monitoring/catalog/plugins
+        Fetches the plugin catalog using InfrastructureCatalogMCPTools.get_infrastructure_catalog_plugins
         and builds a mapping from normalized (class, kind) tuples to entity types.
         Falls back to hardcoded mapping if API call fails.
         """
@@ -171,7 +172,12 @@ class EntityCapabilityRegistry(BaseInstanaClient):
             return
 
         try:
-            # Use BaseInstanaClient's make_request method
+            # Create InfrastructureCatalogMCPTools instance
+            catalog_tools = InfrastructureCatalogMCPTools(
+                read_token=self.read_token,
+                base_url=self.base_url
+            )
+
             # Create event loop if needed for async call
             try:
                 loop = asyncio.get_event_loop()
@@ -179,19 +185,23 @@ class EntityCapabilityRegistry(BaseInstanaClient):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
-            # Make the API request using BaseInstanaClient
-            plugins = loop.run_until_complete(
-                self.make_request("api/infrastructure-monitoring/catalog/plugins")
+            # Call get_infrastructure_catalog_plugins
+            result = loop.run_until_complete(
+                catalog_tools.get_infrastructure_catalog_plugins()
             )
 
             # Check for error response
-            if isinstance(plugins, dict) and "error" in plugins:
-                logger.warning(f"API request failed: {plugins['error']}")
+            if isinstance(result, dict) and "error" in result:
+                logger.warning(f"API request failed: {result['error']}")
                 self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
                 return
 
-            if not isinstance(plugins, list):
-                logger.warning(f"Unexpected API response format: {type(plugins)}")
+            # Extract plugin list from the structured response
+            # The method returns: {"plugins": [...], "total_available": N, ...}
+            plugins = result.get("plugins", [])
+            
+            if not plugins:
+                logger.warning("No plugins returned from API")
                 self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
                 return
 
@@ -200,11 +210,7 @@ class EntityCapabilityRegistry(BaseInstanaClient):
             # Build the mapping from plugin data
             mapping = {}
 
-            for plugin_data in plugins:
-                if not isinstance(plugin_data, dict):
-                    continue
-
-                plugin_id = plugin_data.get("plugin")
+            for plugin_id in plugins:
                 if not plugin_id:
                     continue
 
