@@ -199,7 +199,7 @@ class EntityCapabilityRegistry(BaseInstanaClient):
             # Extract plugin list from the structured response
             # The method returns: {"plugins": [...], "total_available": N, ...}
             plugins = result.get("plugins", [])
-            
+
             if not plugins:
                 logger.warning("No plugins returned from API")
                 self.entity_type_mapping = self._FALLBACK_ENTITY_TYPE_MAPPING.copy()
