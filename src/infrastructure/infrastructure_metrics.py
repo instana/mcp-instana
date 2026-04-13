@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 from pydantic import StrictBool
 
@@ -52,7 +53,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
                                          rollup: Optional[int] = None,
                                          query: Optional[str] = None,
                                          plugin: Optional[str]=None,
-                                         ctx=None, api_client=None) -> Dict[str, Any]:
+                                         ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get infrastructure metrics from Instana server.
         This tool retrieves infrastructure metrics for specific components in your environment.

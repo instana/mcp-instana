@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 try:
     from instana_client.api.service_levels_alert_configuration_api import (
         ServiceLevelsAlertConfigurationApi,
@@ -420,8 +422,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def find_active_alert_configs(self,
         slo_id: Optional[str] = None,
         alert_ids: Optional[List[str]] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Find active SLO alert configurations."""
         try:
@@ -453,8 +455,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def find_alert_config(self,
         id: str,
         valid_on: Optional[int] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Find specific SLO alert configuration by ID."""
         try:
@@ -488,8 +490,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsAlertConfigurationApi)
     async def find_alert_config_versions(self,
         id: str,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Find all versions of an SLO alert configuration."""
         try:
@@ -516,8 +518,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsAlertConfigurationApi)
     async def create_alert_config(self,
         payload: Union[Dict[str, Any], str],
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Create new SLO alert configuration."""
         try:
@@ -563,8 +565,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def update_alert_config(self,
         id: str,
         payload: Union[Dict[str, Any], str],
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Update existing SLO alert configuration."""
         try:
@@ -619,8 +621,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsAlertConfigurationApi)
     async def delete_alert_config(self,
         id: str,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Delete SLO alert configuration."""
         try:
@@ -639,8 +641,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsAlertConfigurationApi)
     async def disable_alert_config(self,
         id: str,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Disable SLO alert configuration."""
         try:
@@ -659,8 +661,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsAlertConfigurationApi)
     async def enable_alert_config(self,
         id: str,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Enable SLO alert configuration."""
         try:
@@ -680,8 +682,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def restore_alert_config(self,
         id: str,
         created: int,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """Restore SLO alert configuration to a specific version by creation timestamp."""
         try:

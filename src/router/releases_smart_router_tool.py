@@ -8,6 +8,7 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_to_timestamp
@@ -57,7 +58,7 @@ class ReleasesSmartRouterMCPTool(BaseInstanaClient):
         self,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified releases manager for tracking deployments and analyzing release impact.

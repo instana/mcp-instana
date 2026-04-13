@@ -8,6 +8,8 @@ import logging
 from email.message import Message
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.website_catalog_api import WebsiteCatalogApi
@@ -66,7 +68,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
 
 
     @with_header_auth(WebsiteCatalogApi)
-    async def get_website_catalog_metrics(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website_catalog_metrics(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get website monitoring metrics catalog.
 
@@ -123,7 +125,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get website catalog metrics: {e!s}"}
 
     @with_header_auth(WebsiteCatalogApi)
-    async def get_website_catalog_tags(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website_catalog_tags(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get website monitoring tags catalog.
 
@@ -173,7 +175,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
     async def get_website_tag_catalog(self,
                                     beacon_type: str,
                                     use_case: str,
-                                    ctx=None, api_client=None) -> Dict[str, Any]:
+                                    ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get website monitoring tag catalog.
 

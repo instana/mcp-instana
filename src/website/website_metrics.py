@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.website_metrics_api import WebsiteMetricsApi
@@ -36,7 +38,7 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
     async def get_website_page_load(self,
                                    page_id: str,
                                    timestamp: int,
-                                   ctx=None, api_client=None) -> List[Dict[str, Any]]:
+                                   ctx: Optional[Context] = None, api_client: Any = None) -> List[Dict[str, Any]]:
         """
         Get website monitoring beacons for a specific page load.
 
@@ -89,7 +91,7 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
     @with_header_auth(WebsiteMetricsApi)
     async def get_website_beacon_metrics_v2(self,
                                            payload: Optional[Union[Dict[str, Any], str]] = None,
-                                           ctx=None, api_client=None) -> Dict[str, Any]:
+                                           ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get website beacon metrics using the v2 API.
 

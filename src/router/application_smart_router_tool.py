@@ -8,6 +8,7 @@ application-specific tools for Instana monitoring.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_to_timestamp
@@ -56,7 +57,7 @@ class ApplicationSmartRouterMCPTool(BaseInstanaClient):
         resource_type: str,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified Instana application resource manager for metrics, alerts, configurations, and catalog.

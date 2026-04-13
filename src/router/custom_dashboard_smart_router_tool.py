@@ -8,6 +8,7 @@ custom dashboard-specific tools for Instana monitoring.
 import logging
 from typing import Any, Dict, Optional
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -40,7 +41,7 @@ class CustomDashboardSmartRouterMCPTool(BaseInstanaClient):
         self,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified Instana custom dashboard manager for CRUD operations.

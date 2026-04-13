@@ -11,6 +11,8 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 try:
     from instana_client.api.events_api import (
         EventsApi,
@@ -486,7 +488,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         return summary
 
     @with_header_auth(EventsApi)
-    async def get_event(self, event_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_event(self, event_id: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get a specific event by ID.
 
@@ -580,7 +582,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                                          to_time: Optional[int] = None,
                                          time_range: Optional[str] = None,
                                          max_events: Optional[int] = 50,
-                                         ctx=None, api_client=None) -> Dict[str, Any]:
+                                         ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get Kubernetes info events based on the provided parameters and return a detailed analysis.
 
@@ -750,7 +752,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                                           size: Optional[int] = 100,
                                           max_events: Optional[int] = 50,
                                           time_range: Optional[str] = None,
-                                          ctx=None, api_client=None) -> Dict[str, Any]:
+                                          ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get agent monitoring events from Instana and return a detailed analysis.
 
@@ -894,7 +896,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                              max_events: Optional[int] = 50,
                              size: Optional[int] = 100,
                              time_range: Optional[str] = None,
-                             ctx=None, api_client=None) -> Dict[str, Any]:
+                             ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get issue events from Instana based on the provided parameters.
 
@@ -999,7 +1001,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                              max_events: Optional[int] = 50,
                              size: Optional[int] = 100,
                              time_range: Optional[str] = None,
-                             ctx=None, api_client=None) -> Dict[str, Any]:
+                             ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get incident events from Instana based on the provided parameters.
 
@@ -1095,7 +1097,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                              max_events: Optional[int] = 50,
                              size: Optional[int] = 100,
                              time_range: Optional[str] = None,
-                             ctx=None, api_client=None) -> Dict[str, Any]:
+                             ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get change events from Instana based on the provided parameters.
 
@@ -1185,7 +1187,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
     async def get_events_by_ids(
         self,
         event_ids: Union[List[str], str],
-        ctx=None, api_client=None) -> Dict[str, Any]:
+        ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get events by their IDs.
         This tool retrieves multiple events at once using their unique IDs.

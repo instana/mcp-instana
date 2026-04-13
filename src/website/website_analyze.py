@@ -10,6 +10,8 @@ from datetime import datetime
 from email.message import Message
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 # Constants
 DEFAULT_CHARSET = 'utf-8'
 DEFAULT_GROUP_BY_TAG = 'beacon.location.path'  # Default grouping by URL path
@@ -98,8 +100,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
     fill_time_series: Optional[bool] = True,
     order: Optional[Dict[str, str]] = None,
     pagination: Optional[Dict[str, int]] = None,
-    ctx=None,
-    api_client=None) -> Dict[str, Any]:
+    ctx: Optional[Context] = None,
+    api_client: Any = None) -> Dict[str, Any]:
         """
         Get grouped website beacon metrics.
 
@@ -459,8 +461,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         time_frame: Optional[Dict[str, int]] = None,
         beacon_type: Optional[str] = None,
         pagination: Optional[Dict[str, int]] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """
         Get website beacon metrics with pagination support.

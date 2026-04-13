@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
+
 # Import the necessary classes from the Instana SDK
 try:
     from instana_client.api.service_levels_objective_slo_report_api import (
@@ -78,8 +80,8 @@ class SLOReportMCPTools(BaseInstanaClient):
         to: Optional[str] = None,
         exclude_correction_id: Optional[List[str]] = None,
         include_correction_id: Optional[List[str]] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """
         Generate Service Levels report for a specific SLO configuration.

@@ -13,6 +13,7 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
@@ -81,7 +82,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         id: Optional[str] = None,
         payload: Optional[Union[Dict[str, Any], str]] = None,
         request_body: Optional[List[str]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Execute Application Settings CRUD operations.
@@ -166,8 +167,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     # )
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_applications_configs(self,
-                                           ctx=None,
-                                           api_client=None) -> List[Dict[str, Any]]:
+                                           ctx: Optional[Context] = None,
+                                           api_client: Any = None) -> List[Dict[str, Any]]:
         """
         All Application Perspectives Configuration
         Get a list of all Application Perspectives with their configuration settings.
@@ -332,8 +333,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _add_application_config(self,
                                       payload: Union[Dict[str, Any], str],
-                                      ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None,
+                                      api_client: Any = None) -> Dict[str, Any]:
         """
         Add a new Application Perspective configuration.
 
@@ -397,8 +398,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_application_config(self,
                                       id: str,
-                                      ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None,
+                                      api_client: Any = None) -> Dict[str, Any]:
         """
         Get an Application Perspective configuration by ID.
 
@@ -430,8 +431,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _update_application_config(self,
                                          id: str,
                                          payload: Union[Dict[str, Any], str],
-                                         ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         ctx: Optional[Context] = None,
+                                         api_client: Any = None) -> Dict[str, Any]:
         """Update an existing Application Perspective configuration."""
         try:
             if not id or not payload:
@@ -495,8 +496,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _delete_application_config(self,
                                          id: str,
-                                         ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         ctx: Optional[Context] = None,
+                                         api_client: Any = None) -> Dict[str, Any]:
         """Delete an Application Perspective configuration."""
         try:
             if not id:
@@ -511,8 +512,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     # Endpoint Config Operations
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_endpoint_configs(self,
-                                        ctx=None,
-                                        api_client=None) -> List[Dict[str, Any]]:
+                                        ctx: Optional[Context] = None,
+                                        api_client: Any = None) -> List[Dict[str, Any]]:
         """Get all Endpoint Perspectives Configuration."""
         try:
             result = api_client.get_endpoint_configs_without_preload_content()
@@ -527,8 +528,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_endpoint_config(self,
                                    id: str,
-                                   ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+                                   ctx: Optional[Context] = None,
+                                   api_client: Any = None) -> Dict[str, Any]:
         """Get an Endpoint configuration by ID."""
         try:
             if not id:
@@ -544,8 +545,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _create_endpoint_config(self,
                                       payload: Union[Dict[str, Any], str],
-                                      ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None,
+                                      api_client: Any = None) -> Dict[str, Any]:
         """Create or update endpoint configuration for a service."""
         try:
             if not payload:
@@ -574,8 +575,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _update_endpoint_config(self,
                                       id: str,
                                       payload: Union[Dict[str, Any], str],
-                                      ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None,
+                                      api_client: Any = None) -> Dict[str, Any]:
         """Update an endpoint configuration."""
         try:
             if not id or not payload:
@@ -603,8 +604,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _delete_endpoint_config(self,
                                       id: str,
-                                      ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None,
+                                      api_client: Any = None) -> Dict[str, Any]:
         """Delete an endpoint configuration."""
         try:
             if not id:
@@ -618,8 +619,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     # Service Config Operations
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_service_configs(self,
-                                       ctx=None,
-                                       api_client=None) -> List[Dict[str, Any]]:
+                                       ctx: Optional[Context] = None,
+                                       api_client: Any = None) -> List[Dict[str, Any]]:
         """Get all Service configurations."""
         try:
             result = api_client.get_service_configs_without_preload_content()
@@ -634,8 +635,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_service_config(self,
                                   id: str,
-                                  ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None,
+                                  api_client: Any = None) -> Dict[str, Any]:
         """Get a Service configuration by ID."""
         try:
             if not id:
@@ -651,8 +652,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _add_service_config(self,
                                   payload: Union[Dict[str, Any], str],
-                                  ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None,
+                                  api_client: Any = None) -> Dict[str, Any]:
         """Add a new Service configuration."""
         try:
             if not payload:
@@ -681,8 +682,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _update_service_config(self,
                                      id: str,
                                      payload: Union[Dict[str, Any], str],
-                                     ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     ctx: Optional[Context] = None,
+                                     api_client: Any = None) -> Dict[str, Any]:
         """Update a Service configuration."""
         try:
             if not id or not payload:
@@ -710,8 +711,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _delete_service_config(self,
                                      id: str,
-                                     ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     ctx: Optional[Context] = None,
+                                     api_client: Any = None) -> Dict[str, Any]:
         """Delete a Service configuration."""
         try:
             if not id:
@@ -725,8 +726,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _order_service_config(self,
                                     request_body: List[str],
-                                    ctx=None,
-                                    api_client=None) -> Dict[str, Any]:
+                                    ctx: Optional[Context] = None,
+                                    api_client: Any = None) -> Dict[str, Any]:
         """Order Service configurations."""
         try:
             if not request_body:
@@ -740,8 +741,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _replace_all_service_configs(self,
                                            payload: Union[Dict[str, Any], str],
-                                           ctx=None,
-                                           api_client=None) -> Dict[str, Any]:
+                                           ctx: Optional[Context] = None,
+                                           api_client: Any = None) -> Dict[str, Any]:
         """Replace all Service configurations."""
         try:
             if not payload:
@@ -768,8 +769,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     # Manual Service Config Operations
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_manual_service_configs(self,
-                                              ctx=None,
-                                              api_client=None) -> List[Dict[str, Any]]:
+                                              ctx: Optional[Context] = None,
+                                              api_client: Any = None) -> List[Dict[str, Any]]:
         """Get all Manual Service configurations."""
         try:
             result = api_client.get_manual_service_configs_without_preload_content()
@@ -784,8 +785,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _add_manual_service_config(self,
                                          payload: Union[Dict[str, Any], str],
-                                         ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         ctx: Optional[Context] = None,
+                                         api_client: Any = None) -> Dict[str, Any]:
         """Add a new Manual Service configuration."""
         try:
             if not payload:
@@ -814,8 +815,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _update_manual_service_config(self,
                                             id: str,
                                             payload: Union[Dict[str, Any], str],
-                                            ctx=None,
-                                            api_client=None) -> Dict[str, Any]:
+                                            ctx: Optional[Context] = None,
+                                            api_client: Any = None) -> Dict[str, Any]:
         """Update a Manual Service configuration."""
         try:
             if not id or not payload:
@@ -843,8 +844,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _delete_manual_service_config(self,
                                             id: str,
-                                            ctx=None,
-                                            api_client=None) -> Dict[str, Any]:
+                                            ctx: Optional[Context] = None,
+                                            api_client: Any = None) -> Dict[str, Any]:
         """Delete a Manual Service configuration."""
         try:
             if not id:
@@ -858,8 +859,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _replace_all_manual_service_config(self,
                                                  payload: Union[Dict[str, Any], str],
-                                                 ctx=None,
-                                                 api_client=None) -> Dict[str, Any]:
+                                                 ctx: Optional[Context] = None,
+                                                 api_client: Any = None) -> Dict[str, Any]:
         """Replace all Manual Service configurations."""
         try:
             if not payload:

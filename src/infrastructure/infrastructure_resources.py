@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.infrastructure_resources_api import (  #type: ignore
@@ -41,7 +43,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureResourcesApi)
-    async def get_monitoring_state(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_monitoring_state(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get the current monitoring state of the Instana system. This tool retrieves details about the number of monitored hosts and serverless entities in your environment.
         Use this when you need an overview of your monitoring coverage, want to check how many hosts are being monitored, or need to verify the scale of your Instana deployment.
@@ -72,7 +74,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                                  payload_key: str,
                                  to_time: Optional[int] = None,
                                  window_size: Optional[int] = None,
-                                 ctx=None, api_client=None) -> Dict[str, Any]:
+                                 ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get detailed payload data for a specific snapshot in Instana. This tool retrieves raw monitoring data for a particular entity snapshot using its ID and a specific payload key.
         Use this when you need to access detailed, low-level monitoring information that isn't available through other APIs.
@@ -112,7 +114,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                            snapshot_id: str,
                            to_time: Optional[int] = None,
                            window_size: Optional[int] = None,
-                           ctx=None, api_client=None) -> Dict[str, Any]:
+                           ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get detailed information about a specific snapshot in Instana using its ID.
 
@@ -224,7 +226,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                             plugin: Optional[str] = None,
                             offline: Optional[bool] = False,
                             detailed: Optional[bool] = False,
-                            ctx=None, api_client=None) -> Dict[str, Any]:
+                            ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Search and discover snapshots based on search criteria.
 
@@ -376,7 +378,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                              to_time: Optional[int] = None,
                              window_size: Optional[int] = None,
                              detailed: Optional[bool] = False,
-                             ctx=None, api_client=None) -> Dict[str, Any]:
+                             ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get details for multiple snapshots by their IDs using SDK.
 
@@ -549,7 +551,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureResourcesApi)
-    async def software_versions(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def software_versions(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get information about installed software versions across the monitored infrastructure.
         Retrieve information about the software that are sensed by the agent remotely, natively, or both. This includes runtime and package manager information.

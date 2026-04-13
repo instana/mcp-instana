@@ -7,6 +7,8 @@ This module provides automation action catalog tools for Instana Automation.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.action_catalog_api import (
@@ -34,8 +36,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     async def get_action_matches(self,
                             payload: Union[Dict[str, Any], str],
                             target_snapshot_id: Optional[str] = None,
-                            ctx=None,
-                            api_client=None) -> Dict[str, Any]:
+                            ctx: Optional[Context] = None,
+                            api_client: Any = None) -> Dict[str, Any]:
         """
         Get action matches for a given action search space and target snapshot ID.
         Args:
@@ -217,8 +219,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
 
     @with_header_auth(ActionCatalogApi)
     async def get_actions(self,
-                         ctx=None,
-                         api_client=None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+                         ctx: Optional[Context] = None,
+                         api_client: Any = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Get a list of available automation actions from the action catalog.
 
@@ -283,8 +285,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     @with_header_auth(ActionCatalogApi)
     async def get_action_details(self,
                                 action_id: str,
-                                ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                ctx: Optional[Context] = None,
+                                api_client: Any = None) -> Dict[str, Any]:
         """
         Get detailed information about a specific automation action by ID.
 
@@ -332,8 +334,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
 
     @with_header_auth(ActionCatalogApi)
     async def get_action_types(self,
-                              ctx=None,
-                              api_client=None) -> Dict[str, Any]:
+                              ctx: Optional[Context] = None,
+                              api_client: Any = None) -> Dict[str, Any]:
         """
         Get a list of available action types in the action catalog.
 
@@ -384,8 +386,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
 
     @with_header_auth(ActionCatalogApi)
     async def get_action_tags(self,
-                             ctx=None,
-                             api_client=None) -> Dict[str, Any]:
+                             ctx: Optional[Context] = None,
+                             api_client: Any = None) -> Dict[str, Any]:
         """
         Get a list of available action tags from the action catalog.
 
@@ -452,8 +454,8 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                                                        snapshot_id: Optional[str] = None,
                                                        to: Optional[int] = None,
                                                        window_size: Optional[int] = None,
-                                                       ctx=None,
-                                                       api_client=None) -> Dict[str, Any]:
+                                                       ctx: Optional[Context] = None,
+                                                       api_client: Any = None) -> Dict[str, Any]:
         """
         Get automation actions that match based on application ID or snapshot ID within a specified time window.
 

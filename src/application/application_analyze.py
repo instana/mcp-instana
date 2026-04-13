@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.prompts import mcp
@@ -63,7 +64,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         self,
         operation: str,
         params: Optional[Union[Dict[str, Any], str]] = None,
-        ctx=None,
+        ctx: Optional[Context] = None,
     ) -> Dict[str, Any]:
         """
         Execute Application Analyze operations.
@@ -105,7 +106,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
     #     self,
     #     trace_id: str,
     #     call_id: str,
-    #     ctx=None,
+    #     ctx: Optional[Context] = None,
     #     api_client=None
     # ) -> Dict[str, Any]:
     #     """
@@ -160,8 +161,8 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         retrievalSize: Optional[int] = None,
         offset: Optional[int] = None,
         ingestionTime: Optional[int] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """
         Get details of a specific trace.
@@ -258,7 +259,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         self,
         payload: Optional[Union[Dict[str, Any], str]]=None,
         api_client = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Get traces from Instana API and save to JSONL file.
@@ -382,8 +383,8 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
     #     self,
     #     payload: Optional[Union[Dict[str, Any], str]]=None,
     #     fill_time_series: Optional[bool] = None,
-    #     api_client=None,
-    #     ctx=None
+    #     api_client: Any = None,
+    #     ctx: Optional[Context] = None
     # ) -> Dict[str, Any]:
     #     """
     #     The API endpoint retrieves metrics for traces that are grouped in the endpoint or service name.
@@ -530,7 +531,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
     # #     fillTimeSeries: Optional[str] = None,
     # #     payload: Optional[Union[Dict[str, Any], str]]=None,
     # #     api_client = None,
-    # #     ctx=None
+    # #     ctx: Optional[Context] = None
     # # ) -> Dict[str, Any]:
     # #     """
     # #     Get grouped calls metrics.
@@ -686,7 +687,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
     #     self,
     #     correlation_id: str,
     #     api_client = None,
-    #     ctx=None
+    #     ctx: Optional[Context] = None
     # ) -> Dict[str, Any]:
     #     """
     #     Resolve Trace IDs from Monitoring Beacons.

@@ -8,6 +8,7 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -67,7 +68,7 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         resource_type: str,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations.

@@ -8,6 +8,8 @@ import logging
 import sys
 from typing import Any, Dict, Optional
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.infrastructure_topology_api import (
@@ -57,8 +59,8 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                                 snapshot_id: str,
                                 to_time: Optional[int] = None,
                                 window_size: Optional[int] = None,
-                                ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                ctx: Optional[Context] = None,
+                                api_client: Any = None) -> Dict[str, Any]:
         """
         Get hosts related to a specific snapshot.
 
@@ -116,8 +118,8 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
     @with_header_auth(InfrastructureTopologyApi)
     async def get_topology(self,
                            include_data: Optional[bool] = False,
-                           ctx=None,
-                           api_client=None) -> Dict[str, Any]:
+                           ctx: Optional[Context] = None,
+                           api_client: Any = None) -> Dict[str, Any]:
         """
         Get the infrastructure topology information.
 

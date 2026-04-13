@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import (
@@ -42,7 +43,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     )
     @with_header_auth(CustomDashboardsApi)
     async def get_custom_dashboards(self,
-                                   ctx=None, api_client=None) -> Dict[str, Any]:
+                                   ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get all custom dashboards from Instana server.
         This tool retrieves a list of all custom dashboards configured in your Instana environment.
@@ -101,7 +102,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_custom_dashboard(self,
                                   dashboard_id: str,
-                                  ctx=None, api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get a specific custom dashboard by ID from Instana server.
         This tool retrieves detailed information about a specific custom dashboard including
@@ -152,7 +153,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def add_custom_dashboard(self,
                                   custom_dashboard: Dict[str, Any],
-                                  ctx=None, api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Add a new custom dashboard to Instana server.
         This tool creates a new custom dashboard with the specified configuration,
@@ -211,7 +212,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     async def update_custom_dashboard(self,
                                      dashboard_id: str,
                                      custom_dashboard: Dict[str, Any],
-                                     ctx=None, api_client=None) -> Dict[str, Any]:
+                                     ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Update an existing custom dashboard in Instana server.
         This tool updates a custom dashboard with new configuration, widgets, or access rules.
@@ -272,7 +273,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def delete_custom_dashboard(self,
                                      dashboard_id: str,
-                                     ctx=None, api_client=None) -> Dict[str, Any]:
+                                     ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Delete a custom dashboard from Instana server.
         This tool removes a custom dashboard from your Instana environment.
@@ -322,7 +323,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_users(self,
                                  dashboard_id: str,
-                                 ctx=None, api_client=None) -> Dict[str, Any]:
+                                 ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get shareable users for a custom dashboard from Instana server.
         This tool retrieves the list of users who can be granted access to a specific custom dashboard.
@@ -384,7 +385,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_api_tokens(self,
                                       dashboard_id: str,
-                                      ctx=None, api_client=None) -> Dict[str, Any]:
+                                      ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get shareable API tokens for a custom dashboard from Instana server.
         This tool retrieves the list of API tokens that can be used to access a specific custom dashboard.

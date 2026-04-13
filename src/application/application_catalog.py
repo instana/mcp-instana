@@ -11,6 +11,7 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import (
@@ -46,7 +47,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
                                           use_case: Optional[str] = None,
                                           data_source: Optional[str] = None,
                                           var_from: Optional[int] = None,
-                                          ctx = None, api_client=None) -> Dict[str, Any]:
+                                          ctx = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get application tag catalog data from Instana Server.
         This tool retrieves application tag catalog data for a specific use case and data source.
@@ -109,7 +110,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
 
 
     @with_header_auth(ApplicationCatalogApi)
-    async def get_application_metric_catalog(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_application_metric_catalog(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         This API endpoint retrieves  all available metric definitions for application monitoring.
         This tool allows you to discover what metrics are available for monitoring different components in your application environment.

@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
+
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def create_log_alert_config(self, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:
+    async def create_log_alert_config(self, config: Dict[str, Any], ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Create a new log alert configuration.
 
@@ -103,7 +105,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def delete_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def delete_log_alert_config(self, id: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Delete a log alert configuration.
 
@@ -133,7 +135,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def disable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def disable_log_alert_config(self, id: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Disable a log alert configuration.
 
@@ -163,7 +165,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def enable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def enable_log_alert_config(self, id: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Enable a log alert configuration.
 
@@ -193,7 +195,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def find_active_log_alert_configs(self, alert_ids: Optional[List[str]] = None, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def find_active_log_alert_configs(self, alert_ids: Optional[List[str]] = None, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get all active log alert configurations.
 
@@ -235,7 +237,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def find_log_alert_config(self, id: str, valid_on: Optional[int] = None, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def find_log_alert_config(self, id: str, valid_on: Optional[int] = None, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get a specific log alert configuration by ID.
 
@@ -278,7 +280,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def find_log_alert_config_versions(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def find_log_alert_config_versions(self, id: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get all versions of a log alert configuration.
 
@@ -320,7 +322,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def restore_log_alert_config(self, id: str, created: int, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def restore_log_alert_config(self, id: str, created: int, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Restore a log alert configuration to a previous version.
 
@@ -354,7 +356,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
-    async def update_log_alert_config(self, id: str, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:
+    async def update_log_alert_config(self, id: str, config: Dict[str, Any], ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Update a log alert configuration.
 

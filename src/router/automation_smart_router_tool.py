@@ -7,6 +7,7 @@ Automation-specific tools for Instana monitoring.
 import logging
 from typing import Any, Dict, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -101,7 +102,7 @@ class AutomationSmartRouterMCPTool(BaseInstanaClient):
         resource_type: str,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified Instana automation action manager for catalog and execution history.

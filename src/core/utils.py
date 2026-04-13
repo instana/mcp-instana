@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Union
 import requests
 
 # Import MCP dependencies
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 # Import for getting package version from meta data rather than server.py
@@ -75,16 +76,31 @@ def with_header_auth(api_class, allow_mock=True):
         allow_mock: If True, allows mock clients to be passed directly (for testing). Defaults to True.
 
     Usage:
+        from typing import Any, Optional
+        from fastmcp import Context
+
         @with_header_auth(YourApiClass)
-        async def your_tool_method(self, param1, param2, ctx=None, api_client=None):
+        async def your_tool_method(self, param1, param2, ctx: Optional[Context] = None, api_client: Any = None):
             # The decorator automatically injects 'api_client' into the method
             result = api_client.your_api_method(param1, param2)
             return self._convert_to_dict(result)
 
-    Note: Always include 'api_client=None' in your method signature to receive the
-    injected API client from the decorator.
+    Note: Always type-annotate both 'ctx' (with Optional[Context]) and 'api_client' (with Any)
+    to exclude them from the published schema. These are internal parameters injected by the decorator.
     """
     def decorator(func: Callable) -> Callable:
+        # Get the original function signature
+        import inspect
+        sig = inspect.signature(func)
+
+        # Create a new signature excluding api_client parameter
+        # Keep parameters as Parameter objects, not just names
+        new_params = [
+            param for name, param in sig.parameters.items()
+            if name not in ('api_client',)  # Don't exclude 'self' here, it's needed
+        ]
+
+        # Create wrapper with modified signature for schema generation
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
             try:
@@ -160,10 +176,12 @@ def with_header_auth(api_class, allow_mock=True):
 
                 # Check if the class has the expected API attribute
                 api_attr_name = None
+                # Safely get the API class name
+                api_class_name = getattr(api_class, '__name__', str(api_class))
                 for attr_name in dir(self):
                     if attr_name.endswith('_api'):
                         attr = getattr(self, attr_name)
-                        if hasattr(attr, '__class__') and attr.__class__.__name__ == api_class.__name__:
+                        if hasattr(attr, '__class__') and attr.__class__.__name__ == api_class_name:
                             api_attr_name = attr_name
                             print(f"🔐 Found existing API client: {attr_name}", file=sys.stderr)
                             break
@@ -204,6 +222,9 @@ def with_header_auth(api_class, allow_mock=True):
                 else:
                     error_msg = f"Authentication error: {e!s}"
                 return {"error": error_msg}
+
+        # Apply the modified signature to the wrapper (excluding api_client from schema)
+        wrapper.__signature__ = sig.replace(parameters=new_params)
 
         return wrapper
     return decorator

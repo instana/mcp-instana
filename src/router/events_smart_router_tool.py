@@ -8,6 +8,7 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -83,7 +84,7 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         self,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """
         Unified Instana events resource manager for events monitoring operations.

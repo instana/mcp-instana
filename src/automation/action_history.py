@@ -7,6 +7,7 @@ This module provides automation action history tools for Instana Automation.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
@@ -37,8 +38,8 @@ class ActionHistoryMCPTools(BaseInstanaClient):
     @with_header_auth(ActionHistoryApi)
     async def submit_automation_action(self,
                                      payload: Union[Dict[str, Any], str],
-                                     ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     ctx: Optional[Context] = None,
+                                     api_client: Any = None) -> Dict[str, Any]:
         """
         Submit an automation action for execution on an agent.
         The automation action to execute and the agent on which to execute the action must be specified as actionId and hostId. For more details on the request payload see the request sample.
@@ -171,8 +172,8 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                                         action_instance_id: str,
                                         window_size: Optional[int] = None,
                                         to: Optional[int] = None,
-                                        ctx=None,
-                                        api_client=None) -> Dict[str, Any]:
+                                        ctx: Optional[Context] = None,
+                                        api_client: Any = None) -> Dict[str, Any]:
         """
         Get the details of an automation action run result by ID from action run history.
 
@@ -227,8 +228,8 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                                   action_statuses: Optional[List[str]] = None,
                                   order_by: Optional[str] = None,
                                   order_direction: Optional[str] = None,
-                                  ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None,
+                                  api_client: Any = None) -> Dict[str, Any]:
         """
         Get the details of automation action run results from action run history.
 
@@ -290,8 +291,8 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                                    action_instance_id: str,
                                    from_time: int,
                                    to_time: int,
-                                   ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+                                   ctx: Optional[Context] = None,
+                                   api_client: Any = None) -> Dict[str, Any]:
         """
         Delete an automation action run result from the action run history by ID.
 

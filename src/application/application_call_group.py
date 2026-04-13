@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.prompts import mcp
@@ -51,8 +52,8 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         order: Optional[Dict[str, str]] = None,
         pagination: Optional[Dict[str, int]] = None,
         fill_time_series: Optional[bool] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """
         Get grouped calls metrics.

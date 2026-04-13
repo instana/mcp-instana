@@ -7,6 +7,8 @@ This module provides infrastructure catalog-specific MCP tools for Instana monit
 import logging
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Context
+
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.infrastructure_catalog_api import (
@@ -38,7 +40,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
     @with_header_auth(InfrastructureCatalogApi)
     async def get_available_payload_keys_by_plugin_id(self,
                                                       plugin_id: str,
-                                                      ctx=None, api_client=None) -> Dict[str, Any]:
+                                                      ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get available payload keys for a specific plugin in Instana. This tool retrieves the list of payload keys that can be used to access detailed monitoring data
         for a particular plugin type. Use this when you need to understand what data is available for a specific entity type, want to explore the monitoring capabilities
@@ -144,7 +146,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
     async def get_infrastructure_catalog_metrics(self,
                                                  plugin: str,
                                                  filter: Optional[str] = None,
-                                                 ctx=None, api_client=None) -> List[str]:
+                                                 ctx: Optional[Context] = None, api_client: Any = None) -> List[str]:
         """
         Get metric catalog for a specific plugin in Instana. This tool retrieves all available metric definitions for a requested plugin type.
         Use this when you need to understand what metrics are available for a specific technology, want to explore the monitoring capabilities for a plugin,
@@ -244,7 +246,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_infrastructure_catalog_plugins(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_infrastructure_catalog_plugins(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get plugin catalog from Instana. This tool retrieves all available plugin IDs for your monitored system, showing what types of entities Instana is monitoring in your environment.
         Use this when you need to understand what technologies are being monitored, want to explore the monitoring capabilities of your Instana installation,
@@ -314,7 +316,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_infrastructure_catalog_plugins_with_custom_metrics(self, ctx=None, api_client=None) -> Dict[str, Any] | List[Dict[str, Any]]:
+    async def get_infrastructure_catalog_plugins_with_custom_metrics(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any] | List[Dict[str, Any]]:
         """
         Get all plugins with custom metrics catalog from Instana. This tool retrieves information about which entity types (plugins) in your environment have custom metrics configured.
         Use this when you need to identify which technologies have custom monitoring metrics defined, want to explore custom monitoring capabilities,
@@ -354,7 +356,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_tag_catalog(self, plugin: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_tag_catalog(self, plugin: str, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get available tags for a particular plugin. This tool retrieves the tag catalog filtered by plugin.
 
@@ -451,7 +453,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_tag_catalog_all(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_tag_catalog_all(self, ctx: Optional[Context] = None, api_client: Any = None) -> Dict[str, Any]:
         """
         Get all available tags. This tool retrieves the complete list of all tags available in your Instana-monitored environment. It returns every tag across all plugins, services, and technologies, allowing users to explore the full tagging taxonomy.
 
@@ -570,7 +572,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_infrastructure_catalog_search_fields(self, ctx=None, api_client=None) -> List[str] | Dict[str, Any]:
+    async def get_infrastructure_catalog_search_fields(self, ctx: Optional[Context] = None, api_client: Any = None) -> List[str] | Dict[str, Any]:
         """
         Get search field catalog from Instana. This tool retrieves all available search keywords and fields that can be used in dynamic focus queries for infrastructure monitoring.
         Use this when you need to understand what search criteria are available, want to build complex queries to filter entities, or need to find the correct search syntax for specific entity properties.

@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
+
 # Import the necessary classes from the Instana SDK
 try:
     from instana_client.api.service_levels_objective_slo_configurations_api import (
@@ -298,8 +300,8 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
         grouped: Optional[bool] = None,
         refresh: Optional[bool] = None,
         rbac_tags: Optional[List[str]] = None,
-        ctx=None,
-        api_client=None
+        ctx: Optional[Context] = None,
+        api_client: Any = None
     ) -> Dict[str, Any]:
         """
         Get all SLO configurations with optional filtering and pagination.
@@ -430,8 +432,8 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsObjectiveSLOConfigurationsApi)
     async def create_slo_config(self,
                                 payload: Union[Dict[str, Any], str],
-                                ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                ctx: Optional[Context] = None,
+                                api_client: Any = None) -> Dict[str, Any]:
         """
         Create a new SLO configuration.
 
@@ -610,8 +612,8 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     async def update_slo_config(self,
                                 id: str,
                                 payload: Union[Dict[str, Any], str],
-                                ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                ctx: Optional[Context] = None,
+                                api_client: Any = None) -> Dict[str, Any]:
         """
         Update an existing SLO configuration.
 
@@ -766,8 +768,8 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     @with_header_auth(ServiceLevelsObjectiveSLOConfigurationsApi)
     async def delete_slo_config(self,
                                 id: str,
-                                ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                ctx: Optional[Context] = None,
+                                api_client: Any = None) -> Dict[str, Any]:
         """
         Delete an SLO configuration.
 
@@ -803,8 +805,8 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
                                   query: Optional[str] = None,
                                   tag: Optional[List[str]] = None,
                                   entity_type: Optional[str] = None,
-                                  ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  ctx: Optional[Context] = None,
+                                  api_client: Any = None) -> Dict[str, Any]:
         """
         Get all available tags for SLO configurations with optional filtering.
 
