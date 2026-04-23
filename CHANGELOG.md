@@ -1,5 +1,8 @@
 # Changelog
 
+### 0.9.7
+-  **Maintenance:** CSRF Token authentication is now enforced for all routes to enhance security.
+
 ### 0.9.6
 -  **New Feature:** Introduced a unified smart router to handle all releases-related operations.
 

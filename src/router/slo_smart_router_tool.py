@@ -139,7 +139,102 @@ class SLOSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana SLO Resources",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified SLO manager for configurations, reports, alerts, and corrections.
+
+CONFIGURATION (resource_type="configuration") - Operations: get_all, get_by_id, create, update, delete, get_tags
+    get_all: List/filter configs - params: page_size (default: 10), page, order_by, order_direction, query, tag, entity_type, infra_entity_types, kubernetes_cluster_uuid, blueprint, slo_ids, slo_status, entity_ids, grouped, refresh, rbac_tags
+        page_size: Number of items per page (default: 10)
+        query: Filter by name or matching names (e.g., query="my-slo" to find SLOs with "my-slo" in name)
+    get_by_id: Get config by ID - params: id (required), refresh
+    create: Create config - params: payload (required) with name, entity, indicator, target (0.0-0.9999), timeWindow, tags
+        entity: {type: "application", applicationId: "...", boundaryScope: "ALL"/"INBOUND"/"DEFAULT"} (boundaryScope REQUIRED)
+        indicator: {type: "timeBased"/"eventBased", blueprint: "latency"/"availability", threshold: 100, aggregation: "P90"/"P95"}
+        timeWindow: {type: "rolling"/"fixed", duration: 1, durationUnit: "week"/"day"/"hour"/"minute"}
+    update: Update config (requires ALL fields) - params: id (required), payload (required, same as create)
+        CRITICAL: MUST use ID (not name). Fetch via get_by_id first, merge changes, then update with complete payload
+    delete: Delete config - params: id (required)
+    get_tags: List tags - params: query, tag, entity_type
+
+REPORT (resource_type="report") - Operations: get
+    get: Generate SLO report - params: slo_id (required), var_from, to, exclude_correction_id, include_correction_id
+        Returns: SLI value, SLO target, error budget (remaining/spent/total), burn rate, time range, charts
+        Time params: var_from/to can be provided as:
+            - Unix timestamp in milliseconds (e.g., 1741604400000)
+            - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
+            - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
+            - If no timezone specified, UTC is assumed
+        Supported datetime formats: "10 March 2026, 2:00 PM", "2026-03-10 14:00:00", "March 10, 2026 2 PM", etc.
+
+ALERT (resource_type="alert") - Operations: find_active, find, find_versions, create, update, delete, disable, enable, restore
+    find_active: Find active alerts - params: slo_id, alert_ids
+    find: Get alert by ID - params: id (required), valid_on
+    find_versions: Get alert versions - params: id (required)
+    create: Create alert - params: payload (required) with name, description, sloIds, rule, severity, alertChannelIds, timeThreshold, customPayloadFields
+        REQUIRED FIELDS: name, description, sloIds (list), rule, severity (5 or 10 ONLY), alertChannelIds (list), timeThreshold, customPayloadFields (list, can be empty)
+        rule: {alertType: "ERROR_BUDGET", metric: "BURN_RATE"/"BURNED_PERCENTAGE"/"BURN_RATE_V2"} OR {alertType: "SERVICE_LEVELS_OBJECTIVE"}
+        timeThreshold: {expiry: 604800000, timeWindow: 604800000} (values in milliseconds - NOT type/value format)
+        customPayloadFields: [{type: "staticString", key: "foo", value: "bar"}] (use proper discriminated union types)
+        threshold (optional): {type: "staticThreshold", operator: ">=", value: 20.0} (required for some alert types)
+        burnRateTimeWindows (REQUIRED for BURN_RATE metric): {longTimeWindow: {duration: 1, durationType: "hour"}, shortTimeWindow: {duration: 5, durationType: "minute"}}
+    update: Update alert (requires ALL fields) - params: id (required), payload (required, same as create)
+        CRITICAL: MUST use ID (not name). Fetch via find first, merge changes, then update with complete payload
+    delete: Delete alert - params: id (required)
+    disable: Disable alert - params: id (required)
+    enable: Enable alert - params: id (required)
+    restore: Restore alert to version - params: id (required), created (required - timestamp from version)
+
+CORRECTION (resource_type="correction") - Operations: get_all, get_by_id, create, update, delete
+    get_all: List correction windows - params: page_size (default: 10), page, order_by, order_direction, query, tag, id, slo_id, refresh
+        page_size: Number of items per page (default: 10)
+        query: Filter by name or matching names (e.g., query="maintenance" to find corrections with "maintenance" in name)
+    get_by_id: Get correction by ID - params: id (required)
+    create: Create correction window - params: payload (required) with name, scheduling, sloIds, description, tags, active
+        REQUIRED FIELDS: name, scheduling (with duration, durationUnit, startTime optional, recurrent optional, recurrentRule optional)
+        scheduling: {duration: 1, durationUnit: "hour"/"day"/"week"/"month", startTime: <timestamp_or_datetime>, recurrent: true/false, recurrentRule: "..."}
+        durationUnit: Must be one of: millisecond, second, minute, hour, day, week, month
+        startTime: Can be provided as:
+            - Unix timestamp in milliseconds (e.g., 1741604400000)
+            - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
+            - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
+            - If no timezone specified, UTC is assumed
+            - CRITICAL: Always include timezone for correction windows to ensure accurate time context
+    update: Update correction window - params: id (required), payload (required, same as create)
+        CRITICAL: MUST use ID (not name). Always update by ID only
+    delete: Delete correction window - params: id (required)
+
+Examples:
+    # Config: List all
+    resource_type="configuration", operation="get_all"
+
+    # Config: Get by ID
+    resource_type="configuration", operation="get_by_id", params={"id": "slo-123"}
+
+    # Config: Create
+    resource_type="configuration", operation="create", params={"payload": {"name": "API SLO", "entity": {"type": "application", "applicationId": "app-123", "boundaryScope": "ALL"}, "indicator": {"type": "timeBased", "blueprint": "latency", "threshold": 100, "aggregation": "P90"}, "target": 0.95, "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}, "tags": ["api"]}}
+
+    # Report: Get with datetime
+    resource_type="report", operation="get", params={"slo_id": "slo-123", "var_from": "10 March 2026, 2:00 PM|IST", "to": "17 March 2026, 2:00 PM|IST"}
+
+    # Alert: Find active
+    resource_type="alert", operation="find_active", params={"slo_id": "slo-123"}
+
+    # Alert: Create (all required fields)
+    resource_type="alert", operation="create", params={"payload": {"name": "Burn Rate Alert", "description": "High burn rate", "sloIds": ["slo-123"], "rule": {"alertType": "ERROR_BUDGET", "metric": "BURN_RATE"}, "severity": 10, "alertChannelIds": ["ch-123"], "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}, "customPayloadFields": [{"type": "staticString", "key": "env", "value": "prod"}], "threshold": {"type": "staticThreshold", "operator": ">=", "value": 2.0}, "burnRateTimeWindows": {"longTimeWindow": {"duration": 1, "durationType": "hour"}, "shortTimeWindow": {"duration": 5, "durationType": "minute"}}}}
+
+    # Correction: List all
+    resource_type="correction", operation="get_all"
+
+    # Correction: Create with datetime
+    resource_type="correction", operation="create", params={"payload": {"name": "Maintenance", "scheduling": {"duration": 2, "durationUnit": "hour", "startTime": "12 March 2026, 1:47 AM|IST"}, "sloIds": ["slo-123"], "description": "Planned maintenance", "tags": ["maint"], "active": True}}
+
+    # Elicitation: Missing timezone
+    # Input: resource_type="report", operation="get", params={"slo_id": "abc", "var_from": "10 March 2026, 2:00 PM"}
+    # Response: {"elicitation_needed": True, "message": "I need timezone...", "missing_parameters": ["timezone"]}
+
+    # Elicitation: Missing alert fields
+    # Input: resource_type="alert", operation="create", params={"payload": {"name": "Alert"}}
+    # Response: {"elicitation_needed": True, "message": "I need...", "missing_parameters": [...]}"""
     )
     async def manage_slo(
         self,
@@ -148,103 +243,7 @@ class SLOSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None,
     ) -> Dict[str, Any]:
-        """
-        Unified SLO manager for configurations, reports, alerts, and corrections.
-
-        CONFIGURATION (resource_type="configuration") - Operations: get_all, get_by_id, create, update, delete, get_tags
-            get_all: List/filter configs - params: page_size (default: 10), page, order_by, order_direction, query, tag, entity_type, infra_entity_types, kubernetes_cluster_uuid, blueprint, slo_ids, slo_status, entity_ids, grouped, refresh, rbac_tags
-                page_size: Number of items per page (default: 10)
-                query: Filter by name or matching names (e.g., query="my-slo" to find SLOs with "my-slo" in name)
-            get_by_id: Get config by ID - params: id (required), refresh
-            create: Create config - params: payload (required) with name, entity, indicator, target (0.0-0.9999), timeWindow, tags
-                entity: {type: "application", applicationId: "...", boundaryScope: "ALL"/"INBOUND"/"DEFAULT"} (boundaryScope REQUIRED)
-                indicator: {type: "timeBased"/"eventBased", blueprint: "latency"/"availability", threshold: 100, aggregation: "P90"/"P95"}
-                timeWindow: {type: "rolling"/"fixed", duration: 1, durationUnit: "week"/"day"/"hour"/"minute"}
-            update: Update config (requires ALL fields) - params: id (required), payload (required, same as create)
-                CRITICAL: MUST use ID (not name). Fetch via get_by_id first, merge changes, then update with complete payload
-            delete: Delete config - params: id (required)
-            get_tags: List tags - params: query, tag, entity_type
-
-        REPORT (resource_type="report") - Operations: get
-            get: Generate SLO report - params: slo_id (required), var_from, to, exclude_correction_id, include_correction_id
-                Returns: SLI value, SLO target, error budget (remaining/spent/total), burn rate, time range, charts
-                Time params: var_from/to can be provided as:
-                    - Unix timestamp in milliseconds (e.g., 1741604400000)
-                    - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-                    - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-                    - If no timezone specified, UTC is assumed
-                Supported datetime formats: "10 March 2026, 2:00 PM", "2026-03-10 14:00:00", "March 10, 2026 2 PM", etc.
-
-        ALERT (resource_type="alert") - Operations: find_active, find, find_versions, create, update, delete, disable, enable, restore
-            find_active: Find active alerts - params: slo_id, alert_ids
-            find: Get alert by ID - params: id (required), valid_on
-            find_versions: Get alert versions - params: id (required)
-            create: Create alert - params: payload (required) with name, description, sloIds, rule, severity, alertChannelIds, timeThreshold, customPayloadFields
-                REQUIRED FIELDS: name, description, sloIds (list), rule, severity (5 or 10 ONLY), alertChannelIds (list), timeThreshold, customPayloadFields (list, can be empty)
-                rule: {alertType: "ERROR_BUDGET", metric: "BURN_RATE"/"BURNED_PERCENTAGE"/"BURN_RATE_V2"} OR {alertType: "SERVICE_LEVELS_OBJECTIVE"}
-                timeThreshold: {expiry: 604800000, timeWindow: 604800000} (values in milliseconds - NOT type/value format)
-                customPayloadFields: [{type: "staticString", key: "foo", value: "bar"}] (use proper discriminated union types)
-                threshold (optional): {type: "staticThreshold", operator: ">=", value: 20.0} (required for some alert types)
-                burnRateTimeWindows (REQUIRED for BURN_RATE metric): {longTimeWindow: {duration: 1, durationType: "hour"}, shortTimeWindow: {duration: 5, durationType: "minute"}}
-            update: Update alert (requires ALL fields) - params: id (required), payload (required, same as create)
-                CRITICAL: MUST use ID (not name). Fetch via find first, merge changes, then update with complete payload
-            delete: Delete alert - params: id (required)
-            disable: Disable alert - params: id (required)
-            enable: Enable alert - params: id (required)
-            restore: Restore alert to version - params: id (required), created (required - timestamp from version)
-
-        CORRECTION (resource_type="correction") - Operations: get_all, get_by_id, create, update, delete
-            get_all: List correction windows - params: page_size (default: 10), page, order_by, order_direction, query, tag, id, slo_id, refresh
-                page_size: Number of items per page (default: 10)
-                query: Filter by name or matching names (e.g., query="maintenance" to find corrections with "maintenance" in name)
-            get_by_id: Get correction by ID - params: id (required)
-            create: Create correction window - params: payload (required) with name, scheduling, sloIds, description, tags, active
-                REQUIRED FIELDS: name, scheduling (with duration, durationUnit, startTime optional, recurrent optional, recurrentRule optional)
-                scheduling: {duration: 1, durationUnit: "hour"/"day"/"week"/"month", startTime: <timestamp_or_datetime>, recurrent: true/false, recurrentRule: "..."}
-                durationUnit: Must be one of: millisecond, second, minute, hour, day, week, month
-                startTime: Can be provided as:
-                    - Unix timestamp in milliseconds (e.g., 1741604400000)
-                    - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-                    - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-                    - If no timezone specified, UTC is assumed
-                    - CRITICAL: Always include timezone for correction windows to ensure accurate time context
-            update: Update correction window - params: id (required), payload (required, same as create)
-                CRITICAL: MUST use ID (not name). Always update by ID only
-            delete: Delete correction window - params: id (required)
-
-        Examples:
-            # Config: List all
-            resource_type="configuration", operation="get_all"
-
-            # Config: Get by ID
-            resource_type="configuration", operation="get_by_id", params={"id": "slo-123"}
-
-            # Config: Create
-            resource_type="configuration", operation="create", params={"payload": {"name": "API SLO", "entity": {"type": "application", "applicationId": "app-123", "boundaryScope": "ALL"}, "indicator": {"type": "timeBased", "blueprint": "latency", "threshold": 100, "aggregation": "P90"}, "target": 0.95, "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}, "tags": ["api"]}}
-
-            # Report: Get with datetime
-            resource_type="report", operation="get", params={"slo_id": "slo-123", "var_from": "10 March 2026, 2:00 PM|IST", "to": "17 March 2026, 2:00 PM|IST"}
-
-            # Alert: Find active
-            resource_type="alert", operation="find_active", params={"slo_id": "slo-123"}
-
-            # Alert: Create (all required fields)
-            resource_type="alert", operation="create", params={"payload": {"name": "Burn Rate Alert", "description": "High burn rate", "sloIds": ["slo-123"], "rule": {"alertType": "ERROR_BUDGET", "metric": "BURN_RATE"}, "severity": 10, "alertChannelIds": ["ch-123"], "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}, "customPayloadFields": [{"type": "staticString", "key": "env", "value": "prod"}], "threshold": {"type": "staticThreshold", "operator": ">=", "value": 2.0}, "burnRateTimeWindows": {"longTimeWindow": {"duration": 1, "durationType": "hour"}, "shortTimeWindow": {"duration": 5, "durationType": "minute"}}}}
-
-            # Correction: List all
-            resource_type="correction", operation="get_all"
-
-            # Correction: Create with datetime
-            resource_type="correction", operation="create", params={"payload": {"name": "Maintenance", "scheduling": {"duration": 2, "durationUnit": "hour", "startTime": "12 March 2026, 1:47 AM|IST"}, "sloIds": ["slo-123"], "description": "Planned maintenance", "tags": ["maint"], "active": True}}
-
-            # Elicitation: Missing timezone
-            # Input: resource_type="report", operation="get", params={"slo_id": "abc", "var_from": "10 March 2026, 2:00 PM"}
-            # Response: {"elicitation_needed": True, "message": "I need timezone...", "missing_parameters": ["timezone"]}
-
-            # Elicitation: Missing alert fields
-            # Input: resource_type="alert", operation="create", params={"payload": {"name": "Alert"}}
-            # Response: {"elicitation_needed": True, "message": "I need...", "missing_parameters": [...]}
-        """
+        """Unified SLO manager for configurations, reports, alerts, and corrections."""
         try:
             logger.debug(f"[manage_slo] Received: resource_type={resource_type}, operation={operation}")
 

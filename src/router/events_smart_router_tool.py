@@ -79,7 +79,55 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Events Resources",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified Instana events resource manager for events monitoring operations.
+
+Operations:
+- "get_events": Get all events
+- "get_event": Get a specific event by ID
+- "get_kubernetes_info_events": Get Kubernetes info events with detailed analysis
+- "get_agent_monitoring_events": Get agent monitoring events with detailed analysis
+- "get_events_by_ids": Get multiple events by their IDs
+
+Parameters (params dict):
+- event_id: Event ID (required for get_event)
+- event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
+- from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
+    If timezone not specified in datetime string, defaults to UTC
+- to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
+    If timezone not specified in datetime string, defaults to UTC
+- time_range: Natural language time range like "last 24 hours", "last 2 days"
+- max_events: Maximum number of events to process for analysis (optional, default 50)
+    NOTE: This is a post-processing limit, not an API parameter
+- filter_event_updates: Boolean flag to filter results to only show events with state changes within timeframe (optional)
+- exclude_triggered_before: Boolean flag to exclude events triggered before the timeframe (optional)
+    NOTE: This is a boolean flag, not a timestamp
+- event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE", "CHANGE"]).
+    NOTE: Allowed values: INCIDENT, ISSUE, CHANGE. Invalid values will result in an error.
+- entity_type: Affected entity type to filter by (optional)
+    * For infrastructure incidents: Use entity types like "host", "docker", "kubernetes"
+    * For application incidents: Use "application" - this filters events with applicationId
+    * For service incidents: Use "service" - this filters events with serviceId
+- entity_name: Affected entity name to filter by (e.g., "Kubernetes Pod", "Process", "CRI-O Container") (optional, supports partial matches)
+- state: Event state to filter by (e.g., "open", "closed") (optional)
+- problem: Problem description to filter events by (e.g., "CPU usage high", "High error rate", "online") (optional)
+- severity: Event severity to filter by (exact match only). (optional)
+    NOTE: Allowed values (strict): -1 → change (informational events), 5  → warning, 10 → critical. Natural language mappings: "change events" → severity = -1, "warning events" → severity = 5,"critical events" → severity = 10. Only the above severity values are supported.
+
+Args:
+    operation: Operation to perform
+    params: Operation-specific parameters (optional)
+    ctx: MCP context (internal)
+
+Returns:
+    Dictionary with results from the appropriate tool
+
+Examples:
+    operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
+    operation="get_kubernetes_info_events", params={"time_range": "last 24 hours"}
+    operation="get_agent_monitoring_events", params={"from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
+    operation="get_events", params={"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True,  "exclude_triggered_before": False}
+    operation="get_events_by_ids", params={"event_ids": ["1a2b3c4d5e6f", "7g8h9i0j1k2l"]}"""
     )
     async def manage_events(
         self,
@@ -87,56 +135,7 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None,
     ) -> Dict[str, Any]:
-        """
-        Unified Instana events resource manager for events monitoring operations.
-
-        Operations:
-        - "get_events": Get all events
-        - "get_event": Get a specific event by ID
-        - "get_kubernetes_info_events": Get Kubernetes info events with detailed analysis
-        - "get_agent_monitoring_events": Get agent monitoring events with detailed analysis
-        - "get_events_by_ids": Get multiple events by their IDs
-
-        Parameters (params dict):
-        - event_id: Event ID (required for get_event)
-        - event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
-        - from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
-            If timezone not specified in datetime string, defaults to UTC
-        - to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
-            If timezone not specified in datetime string, defaults to UTC
-        - time_range: Natural language time range like "last 24 hours", "last 2 days"
-        - max_events: Maximum number of events to process for analysis (optional, default 50)
-            NOTE: This is a post-processing limit, not an API parameter
-        - filter_event_updates: Boolean flag to filter results to only show events with state changes within timeframe (optional)
-        - exclude_triggered_before: Boolean flag to exclude events triggered before the timeframe (optional)
-            NOTE: This is a boolean flag, not a timestamp
-        - event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE", "CHANGE"]).
-            NOTE: Allowed values: INCIDENT, ISSUE, CHANGE. Invalid values will result in an error.
-        - entity_type: Affected entity type to filter by (optional)
-            * For infrastructure incidents: Use entity types like "host", "docker", "kubernetes"
-            * For application incidents: Use "application" - this filters events with applicationId
-            * For service incidents: Use "service" - this filters events with serviceId
-        - entity_name: Affected entity name to filter by (e.g., "Kubernetes Pod", "Process", "CRI-O Container") (optional, supports partial matches)
-        - state: Event state to filter by (e.g., "open", "closed") (optional)
-        - problem: Problem description to filter events by (e.g., "CPU usage high", "High error rate", "online") (optional)
-        - severity: Event severity to filter by (exact match only). (optional)
-            NOTE: Allowed values (strict): -1 → change (informational events), 5  → warning, 10 → critical. Natural language mappings: "change events" → severity = -1, "warning events" → severity = 5,"critical events" → severity = 10. Only the above severity values are supported.
-
-        Args:
-            operation: Operation to perform
-            params: Operation-specific parameters (optional)
-            ctx: MCP context (internal)
-
-        Returns:
-            Dictionary with results from the appropriate tool
-
-        Examples:
-            operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
-            operation="get_kubernetes_info_events", params={"time_range": "last 24 hours"}
-            operation="get_agent_monitoring_events", params={"from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
-            operation="get_events", params={"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True,  "exclude_triggered_before": False}
-            operation="get_events_by_ids", params={"event_ids": ["1a2b3c4d5e6f", "7g8h9i0j1k2l"]}
-        """
+        """Unified Instana events resource manager for events monitoring operations."""
         try:
             logger.debug(f"[manage_events] Received operation: {operation}")
 

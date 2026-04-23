@@ -62,7 +62,88 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Website Resources",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        description="""Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations.
+
+Resource Types:
+    - "analyze": Query website beacon data with grouping or filtering
+    - "catalog": Get available metrics and tags for website monitoring
+    - "configuration": Get website configurations
+    - "advanced_config": Retrieve advanced configurations (geo-location, IP masking, geo rules) - READ ONLY
+
+CRITICAL WORKFLOW:
+    BEFORE calling analyze operations, you MUST call get_tag_catalog to get valid tag names.
+    Default beacon_type: "PAGELOAD" | Default use_case: get_beacon_groups="GROUPING", get_beacons="FILTERING"
+
+ANALYZE (resource_type="analyze"):
+    operations: get_beacon_groups, get_beacons
+    params: {metrics, group, tag_filter_expression, time_frame, beacon_type, fill_time_series, order, pagination}
+
+    Aggregations: SUM, MEAN, MAX, MIN, P25, P50, P75, P90, P95, P98, P99, P99_9, P99_99, DISTINCT_COUNT, SUM_POSITIVE, PER_SECOND, INCREASE
+    Operators: EQUALS, NOT_EQUAL, CONTAINS, NOT_CONTAIN, STARTS_WITH, ENDS_WITH, NOT_STARTS_WITH, NOT_ENDS_WITH, GREATER_THAN, GREATER_OR_EQUAL_THAN, LESS_THAN, LESS_OR_EQUAL_THAN, NOT_EMPTY, IS_EMPTY, NOT_BLANK, IS_BLANK, REGEX_MATCH
+
+    tag_filter_expression: CRITICAL - Entity field REQUIRED for ALL tag filters. ALWAYS set "entity": "NOT_APPLICABLE" for website beacon tags.
+    time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>} - Default: 3600000 (1 hour)
+        to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+
+    Examples:
+        metrics: [{"metric": "beaconCount", "aggregation": "SUM"}, {"metric": "pageLoadTime", "aggregation": "P95"}]
+        tag_filter_expression: {"type": "TAG_FILTER", "name": "beacon.page.name", "operator": "CONTAINS", "entity": "NOT_APPLICABLE", "value": "checkout"}
+
+    get_beacon_groups - Use for grouped/aggregated data (e.g., "beacon count per page")
+    get_beacons - Use for individual beacon data (e.g., "list all page load beacons")
+
+CATALOG (resource_type="catalog"):
+    operations: get_metrics, get_tag_catalog
+    params: {beacon_type, use_case}
+
+    get_metrics - Get website metrics catalog with full metadata (metricId, label, description, formatter, aggregations, beaconTypes)
+    get_tag_catalog - Get valid tag names for beacon_type and use_case
+        Valid beacon_type: "PAGELOAD", "PAGECHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"
+        Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
+
+CONFIGURATION (resource_type="configuration"):
+    operations: get_all, get
+    params: {website_id, website_name}
+
+    get_all - List all websites
+    get - Get website by ID or name (supports name resolution)
+
+    NOTE: Create, Update, Delete operations are not available.
+          Use the Instana UI for website configuration modifications.
+
+ADVANCED_CONFIG (resource_type="advanced_config"):
+    operations: get_geo_config, get_ip_masking, get_geo_rules
+    params: {website_id, website_name}
+
+    NOTE: These are READ-ONLY operations for retrieving advanced configurations.
+          Use the Instana UI for modifications.
+          Source map operations are not currently available due to authentication limitations.
+
+    get_geo_config - Get geo-location configuration
+        Returns: geoDetailRemoval setting and geoMappingRules array
+    get_ip_masking - Get IP masking configuration
+        Returns: ipMasking setting (DEFAULT, ANONYMIZE_IP, etc.)
+    get_geo_rules - Get custom geo mapping rules
+        Returns: Array of geo mapping rules with CIDR ranges and location data
+
+Args:
+    resource_type: "analyze", "catalog", "configuration", or "advanced_config"
+    operation: Specific operation for the resource type
+    params: Operation-specific parameters (optional)
+    ctx: MCP context (internal)
+
+Returns:
+    Dictionary with results from the appropriate tool
+
+Examples:
+    resource_type="catalog", operation="get_tag_catalog", params={"beacon_type": "PAGELOAD", "use_case": "GROUPING"}
+    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
+    resource_type="analyze", operation="get_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
+    resource_type="catalog", operation="get_metrics"
+    resource_type="configuration", operation="get_all"
+    resource_type="configuration", operation="get", params={"website_name": "robot-shop"}
+    resource_type="advanced_config", operation="get_geo_config", params={"website_name": "robot-shop"}"""
     )
     async def manage_websites(
         self,
@@ -71,89 +152,7 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """
-        Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations.
-
-        Resource Types:
-            - "analyze": Query website beacon data with grouping or filtering
-            - "catalog": Get available metrics and tags for website monitoring
-            - "configuration": Get website configurations
-            - "advanced_config": Retrieve advanced configurations (geo-location, IP masking, geo rules) - READ ONLY
-
-        CRITICAL WORKFLOW:
-            BEFORE calling analyze operations, you MUST call get_tag_catalog to get valid tag names.
-            Default beacon_type: "PAGELOAD" | Default use_case: get_beacon_groups="GROUPING", get_beacons="FILTERING"
-
-        ANALYZE (resource_type="analyze"):
-            operations: get_beacon_groups, get_beacons
-            params: {metrics, group, tag_filter_expression, time_frame, beacon_type, fill_time_series, order, pagination}
-
-            Aggregations: SUM, MEAN, MAX, MIN, P25, P50, P75, P90, P95, P98, P99, P99_9, P99_99, DISTINCT_COUNT, SUM_POSITIVE, PER_SECOND, INCREASE
-            Operators: EQUALS, NOT_EQUAL, CONTAINS, NOT_CONTAIN, STARTS_WITH, ENDS_WITH, NOT_STARTS_WITH, NOT_ENDS_WITH, GREATER_THAN, GREATER_OR_EQUAL_THAN, LESS_THAN, LESS_OR_EQUAL_THAN, NOT_EMPTY, IS_EMPTY, NOT_BLANK, IS_BLANK, REGEX_MATCH
-
-            tag_filter_expression: CRITICAL - Entity field REQUIRED for ALL tag filters. ALWAYS set "entity": "NOT_APPLICABLE" for website beacon tags.
-            time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>} - Default: 3600000 (1 hour)
-                to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-
-            Examples:
-                metrics: [{"metric": "beaconCount", "aggregation": "SUM"}, {"metric": "pageLoadTime", "aggregation": "P95"}]
-                tag_filter_expression: {"type": "TAG_FILTER", "name": "beacon.page.name", "operator": "CONTAINS", "entity": "NOT_APPLICABLE", "value": "checkout"}
-
-            get_beacon_groups - Use for grouped/aggregated data (e.g., "beacon count per page")
-            get_beacons - Use for individual beacon data (e.g., "list all page load beacons")
-
-        CATALOG (resource_type="catalog"):
-            operations: get_metrics, get_tag_catalog
-            params: {beacon_type, use_case}
-
-            get_metrics - Get website metrics catalog with full metadata (metricId, label, description, formatter, aggregations, beaconTypes)
-            get_tag_catalog - Get valid tag names for beacon_type and use_case
-                Valid beacon_type: "PAGELOAD", "PAGECHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"
-                Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
-
-        CONFIGURATION (resource_type="configuration"):
-            operations: get_all, get
-            params: {website_id, website_name}
-
-            get_all - List all websites
-            get - Get website by ID or name (supports name resolution)
-
-            NOTE: Create, Update, Delete operations are not available.
-                  Use the Instana UI for website configuration modifications.
-
-        ADVANCED_CONFIG (resource_type="advanced_config"):
-            operations: get_geo_config, get_ip_masking, get_geo_rules
-            params: {website_id, website_name}
-
-            NOTE: These are READ-ONLY operations for retrieving advanced configurations.
-                  Use the Instana UI for modifications.
-                  Source map operations are not currently available due to authentication limitations.
-
-            get_geo_config - Get geo-location configuration
-                Returns: geoDetailRemoval setting and geoMappingRules array
-            get_ip_masking - Get IP masking configuration
-                Returns: ipMasking setting (DEFAULT, ANONYMIZE_IP, etc.)
-            get_geo_rules - Get custom geo mapping rules
-                Returns: Array of geo mapping rules with CIDR ranges and location data
-
-        Args:
-            resource_type: "analyze", "catalog", "configuration", or "advanced_config"
-            operation: Specific operation for the resource type
-            params: Operation-specific parameters (optional)
-            ctx: MCP context (internal)
-
-        Returns:
-            Dictionary with results from the appropriate tool
-
-        Examples:
-            resource_type="catalog", operation="get_tag_catalog", params={"beacon_type": "PAGELOAD", "use_case": "GROUPING"}
-            resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
-            resource_type="analyze", operation="get_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
-            resource_type="catalog", operation="get_metrics"
-            resource_type="configuration", operation="get_all"
-            resource_type="configuration", operation="get", params={"website_name": "robot-shop"}
-            resource_type="advanced_config", operation="get_geo_config", params={"website_name": "robot-shop"}
-        """
+        """Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations."""
 
         try:
             logger.debug(f"Website Router: resource_type={resource_type}, operation={operation}")

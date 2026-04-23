@@ -35,7 +35,35 @@ class CustomDashboardSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Custom Dashboards",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified Instana custom dashboard manager for CRUD operations.
+
+Operations: get_all, get, create, update, delete, get_shareable_users, get_shareable_api_tokens
+
+Parameters (params dict):
+- dashboard_id: Dashboard ID (for get, update, delete only)
+- custom_dashboard: Dashboard config (for create, update) - see model below
+- query: Search filter (for get_all)
+- page_size: Items per page (for get_all)
+- page: Page number, 0-indexed (for get_all)
+- with_total_hits: Include total count (for get_all)
+
+Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
+
+CustomDashboard Model:
+- title: string (min 1 char) - REQUIRED
+- accessRules: array[1-64] of {accessType: "READ"|"READ_WRITE", relationType: "USER"|"API_TOKEN"|"ROLE"|"TEAM"|"GLOBAL", relatedId: string|null} - defaults to global READ_WRITE if omitted
+- widgets: array[0-128] of {id: string(max 64), type: string(min 1), config: object} - defaults to [] if omitted
+
+Widget Fields (all optional except id, type, config): title (string), x (int 0-11), y (int >=0), width (int 1-12), height (int >=1)
+
+Examples:
+    get_all: operation="get_all", params={"page_size": 20, "query": "prod"}
+    get: operation="get", params={"dashboard_id": "abc123"}
+    create: operation="create", params={"custom_dashboard": {"title": "My Dashboard", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": []}}
+    create with widget: operation="create", params={"custom_dashboard": {"title": "Metrics", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": [{"id": "w1", "type": "chart", "config": {"metric": "latency"}, "x": 0, "y": 0, "width": 6, "height": 4}]}}
+    update: operation="update", params={"dashboard_id": "abc123", "custom_dashboard": {"title": "Updated", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": []}}
+    delete: operation="delete", params={"dashboard_id": "abc123"}"""
     )
     async def manage_custom_dashboards(
         self,
@@ -43,36 +71,7 @@ class CustomDashboardSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """
-        Unified Instana custom dashboard manager for CRUD operations.
-
-        Operations: get_all, get, create, update, delete, get_shareable_users, get_shareable_api_tokens
-
-        Parameters (params dict):
-        - dashboard_id: Dashboard ID (for get, update, delete only)
-        - custom_dashboard: Dashboard config (for create, update) - see model below
-        - query: Search filter (for get_all)
-        - page_size: Items per page (for get_all)
-        - page: Page number, 0-indexed (for get_all)
-        - with_total_hits: Include total count (for get_all)
-
-        Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
-
-        CustomDashboard Model:
-        - title: string (min 1 char) - REQUIRED
-        - accessRules: array[1-64] of {accessType: "READ"|"READ_WRITE", relationType: "USER"|"API_TOKEN"|"ROLE"|"TEAM"|"GLOBAL", relatedId: string|null} - defaults to global READ_WRITE if omitted
-        - widgets: array[0-128] of {id: string(max 64), type: string(min 1), config: object} - defaults to [] if omitted
-
-        Widget Fields (all optional except id, type, config): title (string), x (int 0-11), y (int >=0), width (int 1-12), height (int >=1)
-
-        Examples:
-        get_all: operation="get_all", params={"page_size": 20, "query": "prod"}
-        get: operation="get", params={"dashboard_id": "abc123"}
-        create: operation="create", params={"custom_dashboard": {"title": "My Dashboard", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": []}}
-        create with widget: operation="create", params={"custom_dashboard": {"title": "Metrics", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": [{"id": "w1", "type": "chart", "config": {"metric": "latency"}, "x": 0, "y": 0, "width": 6, "height": 4}]}}
-        update: operation="update", params={"dashboard_id": "abc123", "custom_dashboard": {"title": "Updated", "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}], "widgets": []}}
-        delete: operation="delete", params={"dashboard_id": "abc123"}
-        """
+        """Unified Instana custom dashboard manager for CRUD operations."""
         try:
             logger.info(f"Custom Dashboard Smart Router received: operation={operation}")
 

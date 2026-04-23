@@ -53,7 +53,153 @@ class ApplicationSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Application Resources",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified Instana application resource manager for metrics, alerts, configurations, and catalog.
+
+Resource Types:
+- "metrics": Query application metrics, services, and endpoints
+- "alert_config": Manage application-specific alert configurations
+- "global_alert_config": Manage global application alert configurations
+- "settings": Manage application perspectives, endpoints, services, manual services
+- "catalog": Access application tag and metric catalog information
+- "analyze": Analyze application traces and calls
+
+METRICS (resource_type="metrics"):
+    operation: "application"
+    params: {query, time_frame, metrics, tag_filter_expression, group, order, pagination, include_internal, include_synthetic}
+
+    List services: group={"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
+    List endpoints: group={"groupbyTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"}
+
+ALERT_CONFIG (resource_type="alert_config"):
+    operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
+    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
+    Note: Provide application_name (auto-resolved to ID) or application_id
+
+GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
+    operations: find_active, find_versions, find, create, update, delete, enable, disable, restore
+    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
+    Note: Provide application_name (auto-resolved to ID) or application_id
+
+SETTINGS (resource_type="settings"):
+    operations: get_all, get, create, update, delete, order, replace_all
+    params: {resource_subtype, id, application_name, payload, request_body}
+
+    resource_subtypes: "application", "endpoint", "service", "manual_service"
+
+    Creating application perspectives (resource_subtype="application", operation="create"):
+    - REQUIRED: label (application name)
+    - OPTIONAL: scope (default: INCLUDE_ALL_DOWNSTREAM), boundaryScope (default: ALL),
+               accessRules (default: READ_WRITE_GLOBAL), tagFilterExpression
+
+    Minimal example:
+    params={"resource_subtype": "application", "payload": {"label": "My App"}}
+
+    Full example:
+    params={
+        "resource_subtype": "application",
+        "payload": {
+            "label": "My App",
+            "scope": "INCLUDE_ALL_DOWNSTREAM",
+            "boundaryScope": "ALL",
+            "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
+            "tagFilterExpression": {"type": "TAG_FILTER", "name": "service.name", "operator": "CONTAINS", "entity": "DESTINATION", "value": "my-service"}
+        }
+    }
+
+CATALOG (resource_type="catalog"):
+    operations: get_tag_catalog, get_metric_catalog
+    params: {use_case, data_source, var_from}
+
+    Get tag catalog: operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
+    Get metric catalog: operation="get_metric_catalog"
+
+ANALYZE (resource_type="analyze"):
+    operations: get_all_traces, get_trace_details
+
+    get_all_traces:
+    params: {payload}
+
+    Payload parameters:
+    - timeFrame: Time range (windowSize, to)
+        windowSize: Time window in milliseconds
+        to: End time - can be provided as:
+            - Unix timestamp in milliseconds (e.g., 1710658800000)
+            - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
+            - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
+            - If no timezone specified, UTC is assumed
+        Supported datetime formats: "10 March 2026, 2:00 PM", "2026-03-10 14:00:00", "March 10, 2026 2 PM", etc.
+    - includeInternal, includeSynthetic: Include internal/synthetic traces
+    - tagFilterExpression: Filter by tags
+    - pagination: {retrievalSize, ingestionTime, offset}
+    - order: {by, direction}
+
+    Minimal example:
+    params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "pagination": {"retrievalSize": 200}}}
+
+    Example with datetime:
+    params={"payload": {"timeFrame": {"windowSize": 3600000, "to": "10 March 2026, 2:00 PM|UTC"}, "pagination": {"retrievalSize": 200}}}
+
+    Full example:
+    params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "includeInternal": false, "includeSynthetic": false, "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": [{"type": "TAG_FILTER", "name": "service.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "groundskeeper"}]}, "pagination": {"retrievalSize": 200}, "order": {"by": "traceLabel", "direction": "DESC"}}}
+
+    Pagination example (for next page):
+    params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "pagination": {"retrievalSize": 200, "ingestionTime": 1725519793, "offset": 199}}}
+
+    Note: Trace data saved to /tmp/instana_traces_{timestamp}.jsonl. Returns filePath, itemCount, fileSizeBytes, canLoadMore, totalHits, and cursor (ingestionTime, offset) if more data available. Use cursor values in pagination for next page.
+
+    get_trace_details:
+    params: {id, retrievalSize, offset, ingestionTime}
+
+    Parameters:
+    - id (required): Trace ID
+    - retrievalSize (optional): Number of records (1-10000)
+    - offset (optional): Records to skip from ingestionTime
+    - ingestionTime (optional): Starting point timestamp - can be provided as:
+        - Unix timestamp in seconds (e.g., 1725519793)
+        - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
+        - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
+        - If no timezone specified, UTC is assumed
+        Required if offset provided
+
+    Example:
+    params={"id": "trace-id-123", "retrievalSize": 100}
+
+    Pagination example:
+    params={"id": "trace-id-123", "retrievalSize": 100, "ingestionTime": 1725519793, "offset": 99}
+
+    Note: Trace details saved to /tmp/instana_trace_details_{id}_{timestamp}.jsonl. Returns filePath, itemCount, fileSizeBytes, canLoadMore, and cursor (ingestionTime, offset) if more data available.
+
+Args:
+    resource_type: "metrics", "alert_config", "global_alert_config", "settings", "catalog", or "analyze"
+    operation: Specific operation for the resource type
+    params: Operation-specific parameters (optional)
+    ctx: MCP context (internal)
+
+Returns:
+    Dictionary with results from the appropriate tool
+
+Examples:
+    # List services
+    resource_type="metrics", operation="application", params={
+        "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"},
+        "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
+    }
+
+    # Find active alerts by name
+    resource_type="alert_config", operation="find_active", params={"application_name": "All Services"}
+
+    # Get application config by name
+    resource_type="settings", operation="get", params={"resource_subtype": "application", "application_name": "MCP_TEST_DEMO"}
+
+    # Create application perspective
+    resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App"}}
+
+    # Get application tag catalog
+    resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
+
+    # Get application metric catalog
+    resource_type="catalog", operation="get_metric_catalog"""
     )
     async def manage_applications(
         self,
@@ -62,154 +208,7 @@ class ApplicationSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """
-        Unified Instana application resource manager for metrics, alerts, configurations, and catalog.
-
-        Resource Types:
-        - "metrics": Query application metrics, services, and endpoints
-        - "alert_config": Manage application-specific alert configurations
-        - "global_alert_config": Manage global application alert configurations
-        - "settings": Manage application perspectives, endpoints, services, manual services
-        - "catalog": Access application tag and metric catalog information
-        - "analyze": Analyze application traces and calls
-
-        METRICS (resource_type="metrics"):
-            operation: "application"
-            params: {query, time_frame, metrics, tag_filter_expression, group, order, pagination, include_internal, include_synthetic}
-
-            List services: group={"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
-            List endpoints: group={"groupbyTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"}
-
-        ALERT_CONFIG (resource_type="alert_config"):
-            operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
-            params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
-            Note: Provide application_name (auto-resolved to ID) or application_id
-
-        GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
-            operations: find_active, find_versions, find, create, update, delete, enable, disable, restore
-            params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
-            Note: Provide application_name (auto-resolved to ID) or application_id
-
-        SETTINGS (resource_type="settings"):
-            operations: get_all, get, create, update, delete, order, replace_all
-            params: {resource_subtype, id, application_name, payload, request_body}
-
-            resource_subtypes: "application", "endpoint", "service", "manual_service"
-
-            Creating application perspectives (resource_subtype="application", operation="create"):
-            - REQUIRED: label (application name)
-            - OPTIONAL: scope (default: INCLUDE_ALL_DOWNSTREAM), boundaryScope (default: ALL),
-                       accessRules (default: READ_WRITE_GLOBAL), tagFilterExpression
-
-            Minimal example:
-            params={"resource_subtype": "application", "payload": {"label": "My App"}}
-
-            Full example:
-            params={
-                "resource_subtype": "application",
-                "payload": {
-                    "label": "My App",
-                    "scope": "INCLUDE_ALL_DOWNSTREAM",
-                    "boundaryScope": "ALL",
-                    "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
-                    "tagFilterExpression": {"type": "TAG_FILTER", "name": "service.name", "operator": "CONTAINS", "entity": "DESTINATION", "value": "my-service"}
-                }
-            }
-
-        CATALOG (resource_type="catalog"):
-            operations: get_tag_catalog, get_metric_catalog
-            params: {use_case, data_source, var_from}
-
-            Get tag catalog: operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
-            Get metric catalog: operation="get_metric_catalog"
-
-        ANALYZE (resource_type="analyze"):
-            operations: get_all_traces, get_trace_details
-
-            get_all_traces:
-            params: {payload}
-
-            Payload parameters:
-            - timeFrame: Time range (windowSize, to)
-                windowSize: Time window in milliseconds
-                to: End time - can be provided as:
-                    - Unix timestamp in milliseconds (e.g., 1710658800000)
-                    - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-                    - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-                    - If no timezone specified, UTC is assumed
-                Supported datetime formats: "10 March 2026, 2:00 PM", "2026-03-10 14:00:00", "March 10, 2026 2 PM", etc.
-            - includeInternal, includeSynthetic: Include internal/synthetic traces
-            - tagFilterExpression: Filter by tags
-            - pagination: {retrievalSize, ingestionTime, offset}
-            - order: {by, direction}
-
-            Minimal example:
-            params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "pagination": {"retrievalSize": 200}}}
-
-            Example with datetime:
-            params={"payload": {"timeFrame": {"windowSize": 3600000, "to": "10 March 2026, 2:00 PM|UTC"}, "pagination": {"retrievalSize": 200}}}
-
-            Full example:
-            params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "includeInternal": false, "includeSynthetic": false, "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": [{"type": "TAG_FILTER", "name": "service.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "groundskeeper"}]}, "pagination": {"retrievalSize": 200}, "order": {"by": "traceLabel", "direction": "DESC"}}}
-
-            Pagination example (for next page):
-            params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "pagination": {"retrievalSize": 200, "ingestionTime": 1725519793, "offset": 199}}}
-
-            Note: Trace data saved to /tmp/instana_traces_{timestamp}.jsonl. Returns filePath, itemCount, fileSizeBytes, canLoadMore, totalHits, and cursor (ingestionTime, offset) if more data available. Use cursor values in pagination for next page.
-
-            get_trace_details:
-            params: {id, retrievalSize, offset, ingestionTime}
-
-            Parameters:
-            - id (required): Trace ID
-            - retrievalSize (optional): Number of records (1-10000)
-            - offset (optional): Records to skip from ingestionTime
-            - ingestionTime (optional): Starting point timestamp - can be provided as:
-                - Unix timestamp in seconds (e.g., 1725519793)
-                - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-                - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-                - If no timezone specified, UTC is assumed
-                Required if offset provided
-
-            Example:
-            params={"id": "trace-id-123", "retrievalSize": 100}
-
-            Pagination example:
-            params={"id": "trace-id-123", "retrievalSize": 100, "ingestionTime": 1725519793, "offset": 99}
-
-            Note: Trace details saved to /tmp/instana_trace_details_{id}_{timestamp}.jsonl. Returns filePath, itemCount, fileSizeBytes, canLoadMore, and cursor (ingestionTime, offset) if more data available.
-
-        Args:
-            resource_type: "metrics", "alert_config", "global_alert_config", "settings", "catalog", or "analyze"
-            operation: Specific operation for the resource type
-            params: Operation-specific parameters (optional)
-            ctx: MCP context (internal)
-
-        Returns:
-            Dictionary with results from the appropriate tool
-
-        Examples:
-            # List services
-            resource_type="metrics", operation="application", params={
-                "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"},
-                "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
-            }
-
-            # Find active alerts by name
-            resource_type="alert_config", operation="find_active", params={"application_name": "All Services"}
-
-            # Get application config by name
-            resource_type="settings", operation="get", params={"resource_subtype": "application", "application_name": "MCP_TEST_DEMO"}
-
-            # Create application perspective
-            resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App"}}
-
-            # Get application tag catalog
-            resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
-
-            # Get application metric catalog
-            resource_type="catalog", operation="get_metric_catalog"
-        """
+        """Unified Instana application resource manager for metrics, alerts, configurations, and catalog."""
         try:
             logger.info(f"Smart Router received: resource_type={resource_type}, operation={operation}")
 

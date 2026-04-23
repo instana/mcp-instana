@@ -268,6 +268,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         """Parse payload string to dictionary."""
         if not isinstance(payload, str):
             return payload if payload is not None else {}
+
         logger.debug("Payload is a string, attempting to parse")
         try:
             return json.loads(payload)
@@ -312,6 +313,26 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             if "offset" in cursor:
                 response["offset"] = cursor["offset"]
         return response
+
+    def _sanitize_service_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively sanitize trace data to handle None values in Service.technologies field.
+        The Instana API sometimes returns None for technologies, but the SDK model requires a list.
+        """
+        if isinstance(data, dict):
+            # Check if this is a service object with None technologies
+            if "technologies" in data and data["technologies"] is None:
+                data["technologies"] = []
+                logger.debug("Sanitized None technologies field to empty list")
+
+            # Recursively process nested dictionaries
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    data[key] = self._sanitize_service_data(value)
+                elif isinstance(value, list):
+                    data[key] = [self._sanitize_service_data(item) if isinstance(item, dict) else item for item in value]
+
+        return data
 
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_all_traces(
@@ -383,10 +404,16 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             output_dir = os.getenv("INSTANA_API_TEMPORARY_DIR", tempfile.gettempdir())
             output_path = f"{output_dir}/instana_traces_{timestamp}.jsonl"
 
-            # Call API
+            # Call API using _without_preload_content to get raw response
             config = GetTraces.from_dict(request_body)
-            result = api_client.get_traces(get_traces=config)
-            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+            result = api_client.get_traces_without_preload_content(get_traces=config)
+
+            # Parse raw JSON response
+            response_text = result.data.decode('utf-8')
+            result_dict = json.loads(response_text)
+
+            # Sanitize the data to handle None values in Service.technologies
+            result_dict = self._sanitize_service_data(result_dict)
 
             # Write items to JSONL file
             items = result_dict.get("items", [])

@@ -71,6 +71,7 @@ class MCPState:
     smart_router_custom_dashboard_client: Any = None
     smart_router_events_client: Any = None
     smart_router_website_client: Any = None
+    smart_router_mobile_client: Any = None
     smart_router_automation_client: Any = None
     smart_router_slo_client: Any = None
     smart_router_releases_client: Any = None
@@ -148,10 +149,16 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                         bound_method = getattr(client, tool_name)
 
                         # Use the stored metadata (all tools now have metadata)
-                        server.tool(
-                            title=bound_method._mcp_title,
-                            annotations=bound_method._mcp_annotations
-                        )(bound_method)
+                        tool_kwargs = {
+                            'title': bound_method._mcp_title,
+                            'annotations': bound_method._mcp_annotations
+                        }
+
+                        # Add description if available
+                        if hasattr(bound_method, '_mcp_description') and bound_method._mcp_description:
+                            tool_kwargs['description'] = bound_method._mcp_description
+
+                        server.tool(**tool_kwargs)(bound_method)
 
                         tools_registered += 1
                         break

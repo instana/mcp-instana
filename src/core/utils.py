@@ -32,18 +32,19 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "0.9.6"
+    __version__ = "0.9.7"
 
 # Registry to store all tools
 MCP_TOOLS = {}
 
-def register_as_tool(title=None, annotations=None):
+def register_as_tool(title=None, annotations=None, description=None):
     """
     Enhanced decorator that registers both in MCP_TOOLS and with @mcp.tool
 
     Args:
         title: Title for the MCP tool (optional, defaults to function name)
         annotations: ToolAnnotations for the MCP tool (optional)
+        description: Explicit description for the tool (optional, uses docstring if not provided)
     """
     def decorator(func):
         # Get function metadata
@@ -58,9 +59,16 @@ def register_as_tool(title=None, annotations=None):
             destructiveHint=False
         )
 
+        # Use provided description or extract from docstring
+        tool_description = description
+        if not tool_description and func.__doc__:
+            # Extract first paragraph from docstring as description
+            tool_description = func.__doc__.strip().split('\n\n')[0].strip()
+
         # Store the metadata for later use by the server
         func._mcp_title = tool_title
         func._mcp_annotations = tool_annotations
+        func._mcp_description = tool_description
 
         # Register in MCP_TOOLS (existing functionality)
         MCP_TOOLS[func_name] = func

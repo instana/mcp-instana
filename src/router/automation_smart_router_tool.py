@@ -96,7 +96,90 @@ class AutomationSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Automation Actions",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        description="""Unified Instana automation action manager for catalog and execution history.
+
+Resource Types:
+- "catalog": Browse and search automation actions
+- "history": View action execution history
+
+CATALOG (resource_type="catalog"):
+    operations: get_actions, get_action_details, get_action_matches, get_action_matches_by_id_and_time_window, get_action_types, get_action_tags
+
+    List all actions:
+    operation="get_actions"
+
+    Get action details:
+    operation="get_action_details", params={"action_id": "action-uuid"}
+
+    Search for matching actions:
+    operation="get_action_matches"
+    params:
+        - payload (required): dict with "name" and/or "description" fields
+        - target_snapshot_id (optional): snapshot ID to filter results
+    Example: params={"payload": {"name": "CPU spends significant time waiting for input/output", "description": "Checks whether the system spends significant time waiting for input/output."}, "target_snapshot_id": "snapshot-id"}
+
+    Get action matches by ID and time window:
+    operation="get_action_matches_by_id_and_time_window"
+    params:
+        - application_id (optional): application ID (either this or snapshot_id required)
+        - snapshot_id (optional): snapshot ID (either this or application_id required)
+        - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+            If timezone not specified, defaults to UTC
+        - window_size (optional): time window in milliseconds
+    Example: params={"application_id": "app-123", "snapshot_id": "snap-456", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
+
+    Get action types:
+    operation="get_action_types"
+
+    Get action tags:
+    operation="get_action_tags"
+
+HISTORY (resource_type="history")
+    operations: list, get_details
+
+    List action instances:
+    operation="list"
+    params (all optional):
+        - window_size: time window in milliseconds
+        - to: timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+            If timezone not specified, defaults to UTC
+        - page: page number
+        - page_size: items per page
+        - target_snapshot_id: filter by snapshot ID
+        - event_id: filter by event ID
+        - event_specification_id: filter by event specification ID
+        - search: search text
+        - types: list of action types
+        - action_statuses: list of statuses (e.g., ["SUCCESS", "FAILED"])
+        - order_by: column name for sorting
+        - order_direction: "ASC" or "DESC"
+    Example: params={"window_size": 3600000, "to": 1234567890000, "page": 1, "page_size": 50, "target_snapshot_id": "snapshot-id", "event_id": "event-id", "event_specification_id": "spec-id", "search": "search text", "types": ["type1", "type2"], "action_statuses": ["SUCCESS", "FAILED"], "order_by": "column_name", "order_direction": "ASC"}
+
+    Get action instance details:
+    operation="get_details"
+    params:
+        - action_instance_id (required): instance UUID
+        - window_size (optional): time window in milliseconds (default: 10 minutes)
+        - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+            If timezone not specified, defaults to UTC
+    Example: params={"action_instance_id": "instance-uuid", "window_size": 600000, "to": "19 March 2026, 2:47 PM|IST"}
+
+Args:
+    resource_type: "catalog" or "history"
+    operation: Specific operation for the resource type
+    params: Operation-specific parameters (optional)
+    ctx: MCP context (internal)
+
+Returns:
+    Dictionary with results from the appropriate tool
+
+Examples:
+    resource_type="catalog", operation="get_actions"
+    resource_type="catalog", operation="get_action_matches", params={"payload": {"name": "CPU", "description": "monitoring"}}
+    resource_type="catalog", operation="get_action_matches_by_id_and_time_window", params={"application_id": "app-123", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
+    resource_type="history", operation="list", params={"window_size": 3600000, "to": 1234567890000, "page_size": 20}
+    resource_type="history", operation="get_details", params={"action_instance_id": "instance-uuid", "to": "19 March 2026, 2:47 PM|IST"}"""
     )
     async def manage_automation(
         self,
@@ -105,91 +188,7 @@ class AutomationSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """
-        Unified Instana automation action manager for catalog and execution history.
-
-        Resource Types:
-        - "catalog": Browse and search automation actions
-        - "history": View action execution history
-
-        CATALOG (resource_type="catalog"):
-            operations: get_actions, get_action_details, get_action_matches, get_action_matches_by_id_and_time_window, get_action_types, get_action_tags
-
-            List all actions:
-            operation="get_actions"
-
-            Get action details:
-            operation="get_action_details", params={"action_id": "action-uuid"}
-
-            Search for matching actions:
-            operation="get_action_matches"
-            params:
-                - payload (required): dict with "name" and/or "description" fields
-                - target_snapshot_id (optional): snapshot ID to filter results
-            Example: params={"payload": {"name": "CPU spends significant time waiting for input/output", "description": "Checks whether the system spends significant time waiting for input/output."}, "target_snapshot_id": "snapshot-id"}
-
-            Get action matches by ID and time window:
-            operation="get_action_matches_by_id_and_time_window"
-            params:
-                - application_id (optional): application ID (either this or snapshot_id required)
-                - snapshot_id (optional): snapshot ID (either this or application_id required)
-                - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-                    If timezone not specified, defaults to UTC
-                - window_size (optional): time window in milliseconds
-            Example: params={"application_id": "app-123", "snapshot_id": "snap-456", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
-
-            Get action types:
-            operation="get_action_types"
-
-            Get action tags:
-            operation="get_action_tags"
-
-        HISTORY (resource_type="history")
-            operations: list, get_details
-
-            List action instances:
-            operation="list"
-            params (all optional):
-                - window_size: time window in milliseconds
-                - to: timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-                    If timezone not specified, defaults to UTC
-                - page: page number
-                - page_size: items per page
-                - target_snapshot_id: filter by snapshot ID
-                - event_id: filter by event ID
-                - event_specification_id: filter by event specification ID
-                - search: search text
-                - types: list of action types
-                - action_statuses: list of statuses (e.g., ["SUCCESS", "FAILED"])
-                - order_by: column name for sorting
-                - order_direction: "ASC" or "DESC"
-            Example: params={"window_size": 3600000, "to": 1234567890000, "page": 1, "page_size": 50, "target_snapshot_id": "snapshot-id", "event_id": "event-id", "event_specification_id": "spec-id", "search": "search text", "types": ["type1", "type2"], "action_statuses": ["SUCCESS", "FAILED"], "order_by": "column_name", "order_direction": "ASC"}
-
-            Get action instance details:
-            operation="get_details"
-            params:
-                - action_instance_id (required): instance UUID
-                - window_size (optional): time window in milliseconds (default: 10 minutes)
-                - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-                    If timezone not specified, defaults to UTC
-            Example: params={"action_instance_id": "instance-uuid", "window_size": 600000, "to": "19 March 2026, 2:47 PM|IST"}
-
-        Args:
-            resource_type: "catalog" or "history"
-            operation: Specific operation for the resource type
-            params: Operation-specific parameters (optional)
-            ctx: MCP context (internal)
-
-        Returns:
-            Dictionary with results from the appropriate tool
-
-        Examples:
-            resource_type="catalog", operation="get_actions"
-            resource_type="catalog", operation="get_action_matches", params={"payload": {"name": "CPU", "description": "monitoring"}}
-            resource_type="catalog", operation="get_action_matches_by_id_and_time_window", params={"application_id": "app-123", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
-            resource_type="history", operation="list", params={"window_size": 3600000, "to": 1234567890000, "page_size": 20}
-            resource_type="history", operation="get_details", params={"action_instance_id": "instance-uuid", "to": "19 March 2026, 2:47 PM|IST"}
-        """
+        """Unified Instana automation action manager for catalog and execution history."""
         try:
             logger.info(f"Received: resource_type={resource_type}, operation={operation}")
 

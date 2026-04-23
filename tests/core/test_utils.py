@@ -82,6 +82,68 @@ class TestRegisterAsTool(unittest.TestCase):
         result = MCP_TOOLS["test_function_with_params"]("value1", "value2")
         self.assertEqual(result, "value1_value2")
 
+    def test_register_as_tool_with_explicit_description(self):
+        """Test that the register_as_tool decorator stores explicit description"""
+
+        # Define a test function with explicit description
+        @register_as_tool(description="This is an explicit description")
+        def test_function_with_description():
+            """This is the docstring"""
+            return "test"
+
+        # Check that the function was added to the registry
+        self.assertIn("test_function_with_description", MCP_TOOLS)
+
+        # Check that the explicit description was stored
+        self.assertTrue(hasattr(test_function_with_description, '_mcp_description'))
+        self.assertEqual(test_function_with_description._mcp_description, "This is an explicit description")
+
+    def test_register_as_tool_with_docstring_description(self):
+        """Test that the register_as_tool decorator extracts description from docstring"""
+
+        # Define a test function with only docstring (using proper formatting)
+        @register_as_tool()
+        def test_function_with_docstring():
+            """This is the first paragraph.
+
+This is the second paragraph."""
+            return "test"
+
+        # Check that the function was added to the registry
+        self.assertIn("test_function_with_docstring", MCP_TOOLS)
+
+        # Check that the description was extracted from first paragraph
+        self.assertTrue(hasattr(test_function_with_docstring, '_mcp_description'))
+        self.assertEqual(test_function_with_docstring._mcp_description, "This is the first paragraph.")
+
+    def test_register_as_tool_description_priority(self):
+        """Test that explicit description takes priority over docstring"""
+
+        # Define a test function with both explicit description and docstring
+        @register_as_tool(description="Explicit description wins")
+        def test_function_priority():
+            """Docstring description"""
+            return "test"
+
+        # Check that explicit description takes priority
+        self.assertTrue(hasattr(test_function_priority, '_mcp_description'))
+        self.assertEqual(test_function_priority._mcp_description, "Explicit description wins")
+
+    def test_register_as_tool_no_description(self):
+        """Test that the register_as_tool decorator handles functions without description"""
+
+        # Define a test function without docstring or explicit description
+        @register_as_tool()
+        def test_function_no_description():
+            return "test"
+
+        # Check that the function was added to the registry
+        self.assertIn("test_function_no_description", MCP_TOOLS)
+
+        # Check that _mcp_description is None
+        self.assertTrue(hasattr(test_function_no_description, '_mcp_description'))
+        self.assertIsNone(test_function_no_description._mcp_description)
+
 
 class TestWithHeaderAuth(unittest.TestCase):
     """Test the with_header_auth decorator"""
@@ -1010,7 +1072,7 @@ class TestVersionImport(unittest.TestCase):
         importlib.reload(src.core.utils)
 
         # Check that the fallback version was used (updated to 0.9.6)
-        self.assertEqual(src.core.utils.__version__, "0.9.6")
+        self.assertEqual(src.core.utils.__version__, "0.9.7")
 
     def test_version_used_in_headers(self):
         """Test that __version__ is used in User-Agent headers"""
@@ -1029,4 +1091,353 @@ class TestVersionImport(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestDecodeResponse(unittest.TestCase):
+    """Test the decode_response function"""
+
+    def test_decode_response_with_utf8(self):
+        """Test decode_response with UTF-8 charset"""
+        from src.core.utils import decode_response
+
+        # Create a mock response with UTF-8 charset
+        mock_response = MagicMock()
+        mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
+        mock_response.data = b'{"test": "data"}'
+
+        result = decode_response(mock_response)
+        self.assertEqual(result, '{"test": "data"}')
+
+    def test_decode_response_with_latin1(self):
+        """Test decode_response with latin-1 charset"""
+        from src.core.utils import decode_response
+
+        # Create a mock response with latin-1 charset
+        mock_response = MagicMock()
+        mock_response.headers = {'Content-Type': 'text/html; charset=iso-8859-1'}
+        mock_response.data = b'test data'
+
+        result = decode_response(mock_response)
+        self.assertEqual(result, 'test data')
+
+    def test_decode_response_without_charset(self):
+        """Test decode_response without charset (should use default UTF-8)"""
+        from src.core.utils import decode_response
+
+        # Create a mock response without charset
+        mock_response = MagicMock()
+        mock_response.headers = {'Content-Type': 'application/json'}
+        mock_response.data = b'{"test": "data"}'
+
+        result = decode_response(mock_response)
+        self.assertEqual(result, '{"test": "data"}')
+
+    def test_decode_response_with_invalid_charset(self):
+        """Test decode_response with invalid charset (should fallback to UTF-8)"""
+        from src.core.utils import decode_response
+
+        # Create a mock response with invalid charset
+        mock_response = MagicMock()
+        mock_response.headers = {'Content-Type': 'application/json; charset=invalid-charset'}
+        mock_response.data = b'{"test": "data"}'
+
+        result = decode_response(mock_response)
+        self.assertEqual(result, '{"test": "data"}')
+
+    def test_decode_response_with_unicode_decode_error(self):
+        """Test decode_response with data that causes UnicodeDecodeError"""
+        from src.core.utils import decode_response
+
+        # Create a mock response with invalid UTF-8 bytes
+        mock_response = MagicMock()
+        mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
+        # Invalid UTF-8 sequence
+        mock_response.data = b'\xff\xfe'
+
+        # Should fallback to UTF-8 with error replacement
+        result = decode_response(mock_response)
+        self.assertIsInstance(result, str)
+
+
+class TestExtractTagNamesFromTree(unittest.TestCase):
+    """Test the extract_tag_names_from_tree function"""
+
+    def test_extract_from_dict_with_tag_name(self):
+        """Test extracting tag names from a dict node with tagName"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        node = {"tagName": "test.tag"}
+        result = extract_tag_names_from_tree(node)
+        self.assertEqual(result, ["test.tag"])
+
+    def test_extract_from_dict_with_children(self):
+        """Test extracting tag names from a dict node with children"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        node = {
+            "tagName": "parent.tag",
+            "children": [
+                {"tagName": "child1.tag"},
+                {"tagName": "child2.tag"}
+            ]
+        }
+        result = extract_tag_names_from_tree(node)
+        self.assertEqual(sorted(result), ["child1.tag", "child2.tag", "parent.tag"])
+
+    def test_extract_from_nested_structure(self):
+        """Test extracting tag names from deeply nested structure"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        node = {
+            "tagName": "root",
+            "children": [
+                {
+                    "tagName": "level1",
+                    "children": [
+                        {"tagName": "level2"}
+                    ]
+                }
+            ]
+        }
+        result = extract_tag_names_from_tree(node)
+        self.assertEqual(sorted(result), ["level1", "level2", "root"])
+
+    def test_extract_from_list(self):
+        """Test extracting tag names from a list of nodes"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        nodes = [
+            {"tagName": "tag1"},
+            {"tagName": "tag2"},
+            {"tagName": "tag3"}
+        ]
+        result = extract_tag_names_from_tree(nodes)
+        self.assertEqual(sorted(result), ["tag1", "tag2", "tag3"])
+
+    def test_extract_from_dict_without_tag_name(self):
+        """Test extracting from dict without tagName"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        node = {"otherField": "value"}
+        result = extract_tag_names_from_tree(node)
+        self.assertEqual(result, [])
+
+    def test_extract_with_existing_tag_names_list(self):
+        """Test extracting with pre-existing tag_names list"""
+        from src.core.utils import extract_tag_names_from_tree
+
+        existing_tags = ["existing.tag"]
+        node = {"tagName": "new.tag"}
+        result = extract_tag_names_from_tree(node, existing_tags)
+        self.assertEqual(sorted(result), ["existing.tag", "new.tag"])
+
+
+
+
+class TestHandleApiErrorResponse(unittest.TestCase):
+    """Test the handle_api_error_response method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.read_token = "test_token"
+        self.base_url = "https://test.instana.io"
+        self.client = BaseInstanaClient(read_token=self.read_token, base_url=self.base_url)
+
+    def test_handle_api_error_with_decodable_response(self):
+        """Test handling API error with decodable response body"""
+        # Create mock response
+        mock_response = MagicMock()
+        mock_response.status = 404
+        mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
+        mock_response.data = b'{"error": "Not found"}'
+
+        # Create mock logger (without spec to avoid InvalidSpecError)
+        mock_logger = MagicMock()
+
+        result = self.client.handle_api_error_response(mock_response, "test_operation", mock_logger)
+
+        self.assertEqual(result["error"], "Failed to test_operation: HTTP 404")
+        self.assertEqual(result["details"], '{"error": "Not found"}')
+        self.assertEqual(result["status_code"], 404)
+
+        # Verify logger was called
+        self.assertEqual(mock_logger.error.call_count, 2)
+
+    def test_handle_api_error_with_decode_exception(self):
+        """Test handling API error when decode_response raises exception"""
+        # Create mock response that will cause decode to fail
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.headers = {}
+        mock_response.data = MagicMock()
+        mock_response.data.decode = MagicMock(side_effect=Exception("Decode failed"))
+
+        # Create mock logger (without spec to avoid InvalidSpecError)
+        mock_logger = MagicMock()
+
+        result = self.client.handle_api_error_response(mock_response, "test_operation", mock_logger)
+
+        self.assertEqual(result["error"], "Failed to test_operation: HTTP 500")
+        self.assertNotIn("details", result)
+        self.assertEqual(result["status_code"], 500)
+
+        # Verify logger was called once (before the exception)
+        mock_logger.error.assert_called_once()
+
+
+
+class TestProcessTagCatalogResponse(unittest.TestCase):
+    """Test the process_tag_catalog_response function"""
+
+    def test_process_from_tag_tree(self):
+        """Test processing tag names from tagTree"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {
+            "tagTree": {
+                "tagName": "root",
+                "children": [
+                    {"tagName": "child1"},
+                    {"tagName": "child2"}
+                ]
+            }
+        }
+        result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
+
+        self.assertEqual(sorted(result["tag_names"]), ["child1", "child2", "root"])
+        self.assertEqual(result["count"], 3)
+        self.assertEqual(result["beacon_type"], "pageLoad")
+        self.assertEqual(result["use_case"], "GROUPING")
+
+    def test_process_from_flat_tags_list(self):
+        """Test processing tag names from flat tags list"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {
+            "tags": [
+                {"name": "tag1"},
+                {"name": "tag2"},
+                {"name": "tag3"}
+            ]
+        }
+        result = process_tag_catalog_response(response, "pageLoad", "FILTERING")
+
+        self.assertEqual(sorted(result["tag_names"]), ["tag1", "tag2", "tag3"])
+        self.assertEqual(result["count"], 3)
+
+    def test_process_from_both_sources(self):
+        """Test processing from both tagTree and tags list"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {
+            "tagTree": {"tagName": "tree.tag"},
+            "tags": [
+                {"name": "flat.tag1"},
+                {"name": "flat.tag2"}
+            ]
+        }
+        result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
+
+        self.assertEqual(sorted(result["tag_names"]), ["flat.tag1", "flat.tag2", "tree.tag"])
+        self.assertEqual(result["count"], 3)
+
+    def test_process_removes_duplicates(self):
+        """Test that duplicate tag names are removed"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {
+            "tagTree": {"tagName": "duplicate.tag"},
+            "tags": [
+                {"name": "duplicate.tag"},
+                {"name": "unique.tag"}
+            ]
+        }
+        result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
+
+        self.assertEqual(sorted(result["tag_names"]), ["duplicate.tag", "unique.tag"])
+        self.assertEqual(result["count"], 2)
+
+    def test_process_from_empty_response(self):
+        """Test processing from empty response"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {}
+        result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
+
+        self.assertEqual(result["tag_names"], [])
+        self.assertEqual(result["count"], 0)
+
+    def test_process_ignores_tags_without_name(self):
+        """Test that tags without 'name' field are ignored"""
+        from src.core.utils import process_tag_catalog_response
+
+        response = {
+            "tags": [
+                {"name": "valid.tag"},
+                {"other_field": "value"},  # No 'name' field
+                {"name": None},  # name is None
+                {"name": ""}  # name is empty string
+            ]
+        }
+        result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
+
+        # Only valid.tag should be included (empty string and None are filtered out)
+        self.assertEqual(result["tag_names"], ["valid.tag"])
+        self.assertEqual(result["count"], 1)
+
+class TestNormalizeBeaconType(unittest.TestCase):
+    """Test the normalize_beacon_type function"""
+
+    def test_normalize_uppercase_to_camelcase(self):
+        """Test normalizing uppercase beacon type to camelCase"""
+        from src.core.utils import normalize_beacon_type
+
+        beacon_type_map = {
+            "SESSION_START": "sessionStart",
+            "PAGE_LOAD": "pageLoad",
+            "HTTP_REQUEST": "httpRequest"
+        }
+
+        result = normalize_beacon_type("SESSION_START", beacon_type_map)
+        self.assertEqual(result, "sessionStart")
+
+        result = normalize_beacon_type("PAGE_LOAD", beacon_type_map)
+        self.assertEqual(result, "pageLoad")
+
+    def test_normalize_lowercase_to_camelcase(self):
+        """Test normalizing lowercase beacon type to camelCase"""
+        from src.core.utils import normalize_beacon_type
+
+        beacon_type_map = {
+            "SESSION_START": "sessionStart",
+            "PAGE_LOAD": "pageLoad"
+        }
+
+        # Should work with lowercase input (converted to uppercase internally)
+        result = normalize_beacon_type("session_start", beacon_type_map)
+        self.assertEqual(result, "sessionStart")
+
+    def test_normalize_already_camelcase(self):
+        """Test that already camelCase beacon type is returned as-is"""
+        from src.core.utils import normalize_beacon_type
+
+        beacon_type_map = {
+            "SESSION_START": "sessionStart"
+        }
+
+        # If input is already camelCase and not in map, return as-is
+        result = normalize_beacon_type("sessionStart", beacon_type_map)
+        self.assertEqual(result, "sessionStart")
+
+    def test_normalize_unknown_beacon_type(self):
+        """Test normalizing unknown beacon type returns input unchanged"""
+        from src.core.utils import normalize_beacon_type
+
+        beacon_type_map = {
+            "SESSION_START": "sessionStart"
+        }
+
+        result = normalize_beacon_type("UNKNOWN_TYPE", beacon_type_map)
+        self.assertEqual(result, "UNKNOWN_TYPE")
+
 

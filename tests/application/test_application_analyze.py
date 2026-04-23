@@ -165,11 +165,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         mock_api_client.side_effect = Exception("boom")
 
         with patch('src.application.application_analyze.logger.error') as mock_logger_error:
-            with self.assertRaises(Exception):  # noqa: B017
+            with self.assertRaises(Exception) as context:
                 ApplicationAnalyzeMCPTools(
                     read_token=self.read_token,
                     base_url=self.base_url
                 )
+            self.assertEqual(str(context.exception), "boom")
 
         mock_logger_error.assert_called_once()
         self.assertIn("Error initializing ApplicationAnalyzeApi", mock_logger_error.call_args[0][0])
@@ -466,20 +467,21 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock API response
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [
                 {"traceId": "trace1", "cursor": {"ingestionTime": 123, "offset": 0}},
                 {"traceId": "trace2", "cursor": {"ingestionTime": 123, "offset": 1}}
             ],
             "canLoadMore": False,
             "totalHits": 2
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 2048
 
@@ -514,17 +516,18 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock API response
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
             "totalHits": 0
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 0
 
@@ -556,7 +559,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
             base_url=self.base_url
         )
 
-        analyze_api_instance.get_traces = MagicMock(side_effect=Exception("API error"))
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(side_effect=Exception("API error"))
 
         result = asyncio.run(client.get_all_traces(
             payload={"timeFrame": {"windowSize": 3600000}},
@@ -660,17 +663,18 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [{"traceId": "trace1"}],
             "canLoadMore": False,
             "totalHits": 1
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 100
 
@@ -700,17 +704,18 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
             "totalHits": 0
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 0
 
@@ -740,18 +745,19 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
             "totalHits": 0
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         # Payload that will fail json.loads but work with ast.literal_eval
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 0
 
@@ -807,19 +813,20 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_result.data = json.dumps({
             "items": [
                 {"traceId": "trace1", "cursor": {"ingestionTime": 1234567890, "offset": 99}}
             ],
             "canLoadMore": True,
             "totalHits": 200
-        }
+        }).encode('utf-8')
 
-        analyze_api_instance.get_traces = MagicMock(return_value=mock_result)
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         with patch('builtins.open', mock_open()), \
              patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.unlink'):
 
             mock_stat.return_value.st_size = 100
 

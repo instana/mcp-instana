@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "0.9.6"
+version = "0.9.7"
 description = "MCP server for Instana"
 authors = [
     {name = "Elina Priyadarshinee", email = "Elina.priyadarshinee1@ibm.com"},
@@ -21,8 +21,8 @@ license = {text = "Apache-2.0"}
 # ONLY dependencies that are actually imported/used in the code
 dependencies = [
     # Core MCP framework - imported in src/prompts/__init__.py and src/core/server.py
-    "fastmcp>=2.4.5,<=3.1.1",    # MCP SDK for types and annotations
-    "mcp>=1.26.0,<1.27.0",    # Instana API client - imported in src/event/events_tools.py
+    "fastmcp>=3.2.4",    # MCP SDK for types and annotations
+    "mcp",    # Instana API client - imported in src/event/events_tools.py
     "instana-client==1.0.7",
     # Lazy imports for Instana SDK - required by instana-client
     "lazy_imports",
@@ -50,7 +50,7 @@ dev = [
     "coverage>=7.10.1",
     
     # Dependency management
-    "uv==0.8.6",
+    "uv>=0.11.6",
 ]
 
 

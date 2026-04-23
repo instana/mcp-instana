@@ -52,7 +52,64 @@ class ReleasesSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Releases",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified releases manager for tracking deployments and analyzing release impact.
+
+Operations: get_all_releases, get_release, create_release, update_release, delete_release
+
+GET_ALL_RELEASES - List releases in time range with pagination and filtering
+    params: from_time, to_time, name_filter, page_number, page_size
+    Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
+    name_filter: Filter releases by name (case-insensitive substring match)
+    page_number: Page number (1-based, use with page_size)
+    page_size: Results per page (default: 50)
+
+GET_RELEASE - Get release by ID
+    params: release_id (required)
+    Returns: id, name, start, applications, services, scopes
+    Use release.start with manage_applications/manage_events to analyze post-release performance/incidents
+
+CREATE_RELEASE - Create new release
+    params: name (required), start (required), applications, services
+    name: Release identifier (e.g., "frontend/release-2000")
+    start: Deployment timestamp - milliseconds OR "datetime|timezone"
+    applications: [{"name": "app_name"}]
+    services: [{"name": "service_name", "scopedTo": {...}}]
+
+UPDATE_RELEASE - Update existing release
+    params: release_id (required), name (required), start (required), applications, services
+    Same format as create_release
+
+DELETE_RELEASE - Delete release
+    params: release_id (required)
+
+Examples:
+    # List all
+    operation="get_all_releases"
+
+    # List with time range
+    operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST"}
+
+    # List with name filter
+    operation="get_all_releases", params={"name_filter": "frontend"}
+
+    # List with pagination
+    operation="get_all_releases", params={"page_number": 1, "page_size": 50}
+
+    # List with all filters
+    operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST", "name_filter": "release", "page_number": 1, "page_size": 20}
+
+    # Get by ID
+    operation="get_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}
+
+    # Create
+    operation="create_release", params={"name": "frontend/release-2000", "start": "19 March 2026, 2:47 PM|IST", "applications": [{"name": "My App"}]}
+
+    # Update
+    operation="update_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg", "name": "frontend/release-2001", "start": 1742349976000}
+
+    # Delete
+    operation="delete_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}"""
     )
     async def manage_releases(
         self,
@@ -60,65 +117,7 @@ class ReleasesSmartRouterMCPTool(BaseInstanaClient):
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None,
     ) -> Dict[str, Any]:
-        """
-        Unified releases manager for tracking deployments and analyzing release impact.
-
-        Operations: get_all_releases, get_release, create_release, update_release, delete_release
-
-        GET_ALL_RELEASES - List releases in time range with pagination and filtering
-            params: from_time, to_time, name_filter, page_number, page_size
-            Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
-            name_filter: Filter releases by name (case-insensitive substring match)
-            page_number: Page number (1-based, use with page_size)
-            page_size: Results per page (default: 50)
-
-        GET_RELEASE - Get release by ID
-            params: release_id (required)
-            Returns: id, name, start, applications, services, scopes
-            Use release.start with manage_applications/manage_events to analyze post-release performance/incidents
-
-        CREATE_RELEASE - Create new release
-            params: name (required), start (required), applications, services
-            name: Release identifier (e.g., "frontend/release-2000")
-            start: Deployment timestamp - milliseconds OR "datetime|timezone"
-            applications: [{"name": "app_name"}]
-            services: [{"name": "service_name", "scopedTo": {...}}]
-
-        UPDATE_RELEASE - Update existing release
-            params: release_id (required), name (required), start (required), applications, services
-            Same format as create_release
-
-        DELETE_RELEASE - Delete release
-            params: release_id (required)
-
-        Examples:
-            # List all
-            operation="get_all_releases"
-
-            # List with time range
-            operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST"}
-
-            # List with name filter
-            operation="get_all_releases", params={"name_filter": "frontend"}
-
-            # List with pagination
-            operation="get_all_releases", params={"page_number": 1, "page_size": 50}
-
-            # List with all filters
-            operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST", "name_filter": "release", "page_number": 1, "page_size": 20}
-
-            # Get by ID
-            operation="get_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}
-
-            # Create
-            operation="create_release", params={"name": "frontend/release-2000", "start": "19 March 2026, 2:47 PM|IST", "applications": [{"name": "My App"}]}
-
-            # Update
-            operation="update_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg", "name": "frontend/release-2001", "start": 1742349976000}
-
-            # Delete
-            operation="delete_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}
-        """
+        """Unified releases manager for tracking deployments and analyzing release impact."""
         try:
             logger.debug(f"[manage_releases] Received operation: {operation}")
 
