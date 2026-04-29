@@ -419,7 +419,7 @@ class TestAPIEntityTypeMapping:
         assert registry._extract_normalized_mappings("docker") == [("docker", "container")]
         assert registry._extract_normalized_mappings("jvmRuntimePlatform") == [("jvm", "runtime")]
         assert registry._extract_normalized_mappings("db2Database") == [("db2", "database")]
-        assert registry._extract_normalized_mappings("ibmMqQueue") == [("ibmmq", "queue")]
+        assert registry._extract_normalized_mappings("ibmMqQueue") == [("ibmmq", "queue"), ("mq", "queue"), ("ibm mq", "queue")]
         assert registry._extract_normalized_mappings("customPlugin") == [("customplugin", "customplugin")]
 
     def test_load_schemas_continues_when_json_load_fails(self, tmp_path):

@@ -1,0 +1,94 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Documentation
+docs/_build/
+site/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development files
+*.md
+!README.md
+LICENSE
+CONTRIBUTING.md
+CHANGELOG.md
+DOCKER.md
+OBSERVABILITY.md
+
+# Development scripts
+build_multiplatform.sh
+run_ruff_check.sh
+
+# Test files
+tests/
+pytest.ini
+.pytest.ini
+
+# Development dependencies
+pyproject.toml
+!pyproject-runtime.toml
+pyrightconfig.json
+
+# Images and assets (if not needed at runtime)
+images/
+docs/assets/
+
+# MCP build artifacts
+mcpb/
+
+# Temporary files
+*.log
+*.tmp
+.env
+.env.*

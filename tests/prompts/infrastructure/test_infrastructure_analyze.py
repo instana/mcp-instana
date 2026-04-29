@@ -41,10 +41,17 @@ class TestInfrastructureAnalyzePrompts(unittest.TestCase):
     def test_get_prompts_returns_all_prompts(self):
         """Test that get_prompts returns all prompts defined in the class."""
         prompts = InfrastructureAnalyzePrompts.get_prompts()
-        self.assertEqual(len(prompts), 3)
+        # Updated to 12 prompts: 3 original + 9 IBM MQ debugging workflows
+        self.assertEqual(len(prompts), 12)
         self.assertEqual(prompts[0][0], 'infra_available_metrics')
         self.assertEqual(prompts[1][0], 'infra_get_entities')
         self.assertEqual(prompts[2][0], 'infra_available_plugins')
+        # Verify IBM MQ debugging prompts are included
+        prompt_names = [p[0] for p in prompts]
+        self.assertIn('debug_ibmmq_queue_full', prompt_names)
+        self.assertIn('debug_ibmmq_invalid_queue', prompt_names)
+        self.assertIn('debug_ibmmq_channel_issues', prompt_names)
+        self.assertIn('monitor_ibmmq_health', prompt_names)
 
 
 if __name__ == '__main__':

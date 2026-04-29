@@ -13,6 +13,7 @@ WORKDIR /app
 # Copy only the runtime dependency file and source code needed for the build
 COPY pyproject-runtime.toml pyproject.toml
 COPY src ./src
+COPY schema ./schema
 COPY README.md ./
 
 # Install uv for dependency management
@@ -34,8 +35,9 @@ RUN groupadd -r mcpuser && useradd -r -g mcpuser mcpuser
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy only the source code needed for runtime
+# Copy only the source code and schema files needed for runtime
 COPY src ./src
+COPY schema ./schema
 
 # Set ownership to non-root user
 RUN chown -R mcpuser:mcpuser /app

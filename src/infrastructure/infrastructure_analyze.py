@@ -249,6 +249,10 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
             entity_type = "db2Database"
         elif "otelllm" in entity_hint or "genai" in entity_hint or "llm" in entity_hint or "ai" in entity_hint:
             entity_type = "oTelLLM"
+        elif "ibmmq" in entity_hint or "ibm mq" in entity_hint or entity_hint == "mq":
+            # Generic IBM MQ reference - default to Queue (most common)
+            entity_type = "ibmMqQueue"
+            logger.info("Resolved generic 'ibmmq' to 'ibmMqQueue' (default)")
         elif "host" in entity_hint or "server" in entity_hint or "machine" in entity_hint:
             entity_type = "host"
         # Priority 3: Generic kubernetes - use intent context to disambiguate
@@ -563,17 +567,11 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
 
             logger.info(f"Pagination: pageSize={page_size}, offset={offset}")
 
-        # Build pagination object - different types for grouped vs non-grouped queries
-        if group_by and len(group_by) > 0:
-            # For grouped queries, use CursorPaginationWithUiCursorInfraExploreCursor
-            if offset is not None and offset > 0:
-                cursor_pagination = CursorPaginationWithUiCursorInfraExploreCursor(retrievalSize=page_size, offset=offset)
-            else:
-                cursor_pagination = CursorPaginationWithUiCursorInfraExploreCursor(retrievalSize=page_size)
-        elif offset is not None and offset > 0:
-            cursor_pagination = CursorPagination(retrievalSize=page_size, offset=offset)
+        # Build pagination object - use CursorPaginationWithUiCursorInfraExploreCursor for both grouped and non-grouped queries
+        if offset is not None and offset > 0:
+            cursor_pagination = CursorPaginationWithUiCursorInfraExploreCursor(retrievalSize=page_size, offset=offset)
         else:
-            cursor_pagination = CursorPagination(retrievalSize=page_size)
+            cursor_pagination = CursorPaginationWithUiCursorInfraExploreCursor(retrievalSize=page_size)
 
         # Build TimeFrame object - supports both relative and absolute time ranges
         if to_timestamp is not None:
