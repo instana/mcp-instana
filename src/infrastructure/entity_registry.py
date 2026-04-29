@@ -282,11 +282,48 @@ class EntityCapabilityRegistry(BaseInstanaClient):
             # db2Database -> ("db2", "database")
             mappings.append(("db2", "database"))
         elif plugin_lower.startswith("ibmmq"):
+            # Handle all IBM MQ entity types
             # ibmMqQueue -> ("ibmmq", "queue")
+            # ibmMqQueueManager -> ("ibmmq", "queuemanager")
+            # ibmMqChannel -> ("ibmmq", "channel")
+            # ibmMqTopic -> ("ibmmq", "topic")
+            # ibmMqSubscription -> ("ibmmq", "subscription")
+            # ibmMqQueueUsage -> ("ibmmq", "queueusage")
+            # ibmMqListener -> ("ibmmq", "listener")
+            # ibmMqMftZone -> ("ibmmq", "mftzone")
+            # ibmMqMftCoordiQmgr -> ("ibmmq", "mftcoordiqmgr")
+            # ibmMqMftAgent -> ("ibmmq", "mftagent")
             kind = plugin_id[5:]  # Remove "ibmMq" prefix
             if kind:
                 kind_lower = kind[0].lower() + kind[1:] if len(kind) > 1 else kind.lower()
                 mappings.append(("ibmmq", kind_lower))
+                
+                # Add common variations for IBM MQ entity types
+                if kind_lower == "queue":
+                    mappings.extend([("mq", "queue"), ("ibm mq", "queue")])
+                elif kind_lower == "queuemanager":
+                    mappings.extend([("mq", "queuemanager"), ("ibm mq", "queuemanager"),
+                                   ("ibm mq", "queue manager"), ("mq", "queue manager")])
+                elif kind_lower == "channel":
+                    mappings.extend([("mq", "channel"), ("ibm mq", "channel")])
+                elif kind_lower == "topic":
+                    mappings.extend([("mq", "topic"), ("ibm mq", "topic")])
+                elif kind_lower == "subscription":
+                    mappings.extend([("mq", "subscription"), ("ibm mq", "subscription")])
+                elif kind_lower == "queueusage":
+                    mappings.extend([("mq", "queueusage"), ("ibm mq", "queueusage"),
+                                   ("ibm mq", "queue usage"), ("mq", "queue usage")])
+                elif kind_lower == "listener":
+                    mappings.extend([("mq", "listener"), ("ibm mq", "listener")])
+                elif kind_lower == "mftzone":
+                    mappings.extend([("mq", "mftzone"), ("ibm mq", "mftzone"),
+                                   ("ibm mq", "mft zone"), ("mq", "mft zone")])
+                elif kind_lower == "mftcoordiqmgr":
+                    mappings.extend([("mq", "mftcoordiqmgr"), ("ibm mq", "mftcoordiqmgr"),
+                                   ("ibm mq", "mft coordinator"), ("mq", "mft coordinator")])
+                elif kind_lower == "mftagent":
+                    mappings.extend([("mq", "mftagent"), ("ibm mq", "mftagent"),
+                                   ("ibm mq", "mft agent"), ("mq", "mft agent")])
         else:
             # Generic fallback: use plugin_id as both class and kind
             mappings.append((plugin_lower, plugin_lower))

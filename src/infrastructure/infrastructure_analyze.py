@@ -98,21 +98,49 @@ ensuring support for all monitored technologies in your environment.
 
 Parameters:
 - intent: Natural language query (e.g., "maximum heap size of JVM on host galactica1")
-- entity: Entity hint (e.g., "jvm", "kubernetes", "docker", "genai", "host", "db2", "ibmmq")
-  The system supports all entity types available in your Instana installation, including
-  Kubernetes pods/deployments, JVM runtimes, hosts, databases, message queues, containers,
-  and any custom or newly added entity types.
+- entity: Entity hint specifying the infrastructure component type.
+
+**Supported Entity Types:**
+
+*Kubernetes:*
+- "kubernetes pod" or "k8s pod" → kubernetesPod
+- "kubernetes deployment" or "k8s deployment" → kubernetesDeployment
+
+*JVM & Containers:*
+- "jvm" or "java" → jvmRuntimePlatform
+- "docker" or "container" → dockerContainer
+
+*IBM MQ (Message Queue):*
+- "ibm mq queue manager" → ibmMqQueueManager (core MQ management, 14 metrics)
+- "ibm mq queue" → ibmMqQueue (individual queues, 11 metrics)
+- "ibm mq channel" → ibmMqChannel (communication channels, 15 metrics)
+- "ibm mq topic" → ibmMqTopic (pub/sub topics, 5 metrics)
+- "ibm mq subscription" → ibmMqSubscription (topic subscriptions, 1 metric)
+- "ibm mq queue usage" → ibmMqQueueUsage (queue usage stats, 2 metrics)
+- "ibm mq listener" → ibmMqListener (network listeners, 1 metric)
+- "ibm mq mft zone" → ibmMqMftZone (MFT coordination zones, metadata only)
+- "ibm mq mft coordinator" → ibmMqMftCoordiQmgr (MFT coordination, 5 metrics)
+- "ibm mq mft agent" → ibmMqMftAgent (MFT transfer agents, 8 metrics)
+
+*Databases:*
+- "db2" or "database" → db2Database
+
+*AI/GenAI:*
+- "genai", "llm", "otel llm" → oTelLLM
+
+*Infrastructure:*
+- "host", "server", "machine" → host
 
 **Pass 2 - Selections to Results:**
 Provide exact selections from schema. Server builds payload and calls API.
 
 Parameters:
 - selections: Dict with:
-  - entity_type: Exact entity type from schema (e.g., "jvmRuntimePlatform", "kubernetesPod")
-  - metrics: Array of exact metric names from schema (e.g., ["jvm.heap.maxSize", "jvm.heap.used"])
+  - entity_type: Exact entity type from schema (e.g., "jvmRuntimePlatform", "ibmMqQueueManager")
+  - metrics: Array of exact metric names from schema (e.g., ["jvm.heap.maxSize", "activeChannels"])
   - aggregation: Aggregation type (e.g., "max", "mean", "sum")
   - filters: List of dicts with name/value pairs (e.g., [{"name": "host.name", "value": "galactica1"}])
-  - groupBy: (optional) Array of tag names to group entities by (e.g., ["host.name"], ["kubernetes.namespace.name"])
+  - groupBy: (optional) Array of tag names to group entities by (e.g., ["host.name"], ["ibmmq.queuemanager.name"])
   - timeRange: (optional) Time range string (e.g., "1h", "30m", "2h", "1d"). Default: "1h"
   - order: (optional) Dict with "by" (metric name) and "direction" ("ASC" or "DESC")
 
@@ -179,10 +207,29 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
             entity_type = "kubernetesPod"
         elif "docker container" in entity_hint:
             entity_type = "dockerContainer"
-        elif "ibm mq" in entity_hint or "ibmmq" in entity_hint:
-            entity_type = "ibmMqQueue"
         elif "db2 database" in entity_hint:
             entity_type = "db2Database"
+        # IBM MQ specific entity types
+        elif "ibm mq queue manager" in entity_hint or "ibmmq queue manager" in entity_hint or "mq queue manager" in entity_hint:
+            entity_type = "ibmMqQueueManager"
+        elif "ibm mq mft coordinator" in entity_hint or "ibmmq mft coordinator" in entity_hint or "mq mft coordinator" in entity_hint:
+            entity_type = "ibmMqMftCoordiQmgr"
+        elif "ibm mq mft agent" in entity_hint or "ibmmq mft agent" in entity_hint or "mq mft agent" in entity_hint:
+            entity_type = "ibmMqMftAgent"
+        elif "ibm mq mft zone" in entity_hint or "ibmmq mft zone" in entity_hint or "mq mft zone" in entity_hint:
+            entity_type = "ibmMqMftZone"
+        elif "ibm mq queue usage" in entity_hint or "ibmmq queue usage" in entity_hint or "mq queue usage" in entity_hint:
+            entity_type = "ibmMqQueueUsage"
+        elif "ibm mq subscription" in entity_hint or "ibmmq subscription" in entity_hint or "mq subscription" in entity_hint:
+            entity_type = "ibmMqSubscription"
+        elif "ibm mq listener" in entity_hint or "ibmmq listener" in entity_hint or "mq listener" in entity_hint:
+            entity_type = "ibmMqListener"
+        elif "ibm mq channel" in entity_hint or "ibmmq channel" in entity_hint or "mq channel" in entity_hint:
+            entity_type = "ibmMqChannel"
+        elif "ibm mq topic" in entity_hint or "ibmmq topic" in entity_hint or "mq topic" in entity_hint:
+            entity_type = "ibmMqTopic"
+        elif "ibm mq queue" in entity_hint or "ibmmq queue" in entity_hint or "mq queue" in entity_hint:
+            entity_type = "ibmMqQueue"
         elif ("otel llm" in entity_hint or "large language model" in entity_hint or
               "llm model" in entity_hint or "llm service" in entity_hint or "llm application" in entity_hint or
               "genai service" in entity_hint or "genai application" in entity_hint or "genai model" in entity_hint or
@@ -198,8 +245,6 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
             entity_type = "jvmRuntimePlatform"
         elif "docker" in entity_hint or "container" in entity_hint:
             entity_type = "dockerContainer"
-        elif "mq" in entity_hint or "queue" in entity_hint:
-            entity_type = "ibmMqQueue"
         elif "db2" in entity_hint or "database" in entity_hint:
             entity_type = "db2Database"
         elif "otelllm" in entity_hint or "genai" in entity_hint or "llm" in entity_hint or "ai" in entity_hint:
@@ -230,7 +275,7 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
         if not entity_type:
             return [TextContent(
                 type="text",
-                text=f"Error: Unknown entity type '{entity_hint}'. Supported: jvm, kubernetes pod, kubernetes deployment, docker, ibmmq, db2, genai"
+                text=f"Error: Unknown entity type '{entity_hint}'. Supported entity types include: jvm, kubernetes pod, kubernetes deployment, docker, host, db2, genai, and all IBM MQ types (see tool description for full list)"
             )]
 
         logger.info(f"Resolved entity type: {entity_type}")
