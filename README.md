@@ -238,6 +238,8 @@ When using **Streamable HTTP mode**, you must pass Instana credentials via HTTP 
 
 This design ensures secure credential transmission and supports multiple authentication flows including UI-initiated calls via WebSocket → Coordinator → MCP Server.
 
+Ensure that the token used has the necessary permissions to invoke MCP tools. Check [here](docs/PERMISSIONS.md) for more information.
+
 ## Starting the Local MCP Server
 
 Before configuring any MCP client (Claude Desktop, GitHub Copilot, or custom MCP clients), you need to start the local MCP server. The server supports two transport modes: **Streamable HTTP** and **Stdio**.
