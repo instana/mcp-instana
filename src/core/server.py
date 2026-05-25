@@ -75,6 +75,7 @@ class MCPState:
     smart_router_automation_client: Any = None
     smart_router_slo_client: Any = None
     smart_router_releases_client: Any = None
+    smart_router_maintenance_window_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     infra_analyze_new_client: Any = None
@@ -250,6 +251,7 @@ def get_client_categories():
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
+        from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -278,6 +280,9 @@ def get_client_categories():
         ],
         "releases": [
             ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
+        ],
+        "maintenance": [
+            ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
         ]
     }
 
@@ -306,6 +311,7 @@ def get_prompt_categories():
             WebsiteConfigurationPrompts,
         )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
+        from src.prompts.maintenance_window.maintenance_window_prompts import MaintenanceWindowPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
@@ -322,6 +328,7 @@ def get_prompt_categories():
     website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
+    maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
 
     return {
         "app": [
@@ -342,6 +349,9 @@ def get_prompt_categories():
         ],
         "settings": [
             ("Custom Dashboard", custom_dashboard_prompts),
+        ],
+        "maintenance": [
+            ("Maintenance Window", maintenance_window_prompts),
         ]
     }
 
@@ -456,7 +466,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "settings", "slo", "releases"}
+        all_categories = {"app", "infra", "events", "automation", "website", "settings", "slo", "releases", "maintenance"}
 
         # Handle --list-tools option
         if args.list_tools:
