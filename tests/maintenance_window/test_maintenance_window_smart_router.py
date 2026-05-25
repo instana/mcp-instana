@@ -35,7 +35,9 @@ class TestMaintenanceWindowSmartRouter(unittest.TestCase):
         """Set up test fixtures with a mocked maintenance window client."""
         # Patch the underlying tool so we don't need real Instana credentials
         with patch('src.maintenance_window.maintenance_window_tool.MaintenanceWindowMCPTools'):
-            from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
+            from src.router.maintenance_window_smart_router import (
+                MaintenanceWindowSmartRouterMCPTool,
+            )
             self.router = MaintenanceWindowSmartRouterMCPTool(
                 read_token="test_token",
                 base_url="https://test.instana.com"

@@ -248,10 +248,12 @@ def get_client_categories():
             CustomDashboardSmartRouterMCPTool,
         )
         from src.router.events_smart_router_tool import EventsSmartRouterMCPTool
+        from src.router.maintenance_window_smart_router import (
+            MaintenanceWindowSmartRouterMCPTool,
+        )
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
-        from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -304,6 +306,9 @@ def get_prompt_categories():
             ApplicationTopologyPrompts,
         )
         from src.prompts.events.events_tools import EventsPrompts
+        from src.prompts.maintenance_window.maintenance_window_prompts import (
+            MaintenanceWindowPrompts,
+        )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
@@ -311,7 +316,6 @@ def get_prompt_categories():
             WebsiteConfigurationPrompts,
         )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
-        from src.prompts.maintenance_window.maintenance_window_prompts import MaintenanceWindowPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
