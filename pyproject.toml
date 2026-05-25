@@ -124,6 +124,7 @@ ignore = [
     "SIM108",  # Use ternary operator instead of if-else-block
     "PLR0913", # Too many arguments in function definition
     "ERA001",  # Found commented-out code
+    "PLC0415", # Import should be at top-level (lazy imports are intentional)
 ]
 
 # Allow autofix for all enabled rules (when `--fix` is provided)

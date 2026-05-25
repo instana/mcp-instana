@@ -85,7 +85,9 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
-        from src.maintenance_window.maintenance_window_tool import MaintenanceWindowMCPTools
+        from src.maintenance_window.maintenance_window_tool import (
+            MaintenanceWindowMCPTools,
+        )
 
         # Initialize the maintenance window client
         self.maintenance_window_client = MaintenanceWindowMCPTools(read_token, base_url)
