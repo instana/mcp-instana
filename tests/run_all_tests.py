@@ -334,6 +334,9 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.prompts.website.test_website_catalog',
             'tests.prompts.website.test_website_configuration',
             'tests.prompts.website.test_website_metrics',
+            'tests.prompts.mobile_app.test_mobile_app_analyze',
+            'tests.prompts.mobile_app.test_mobile_app_catalog',
+            'tests.prompts.mobile_app.test_mobile_app_configuration',
             'tests.releases.test_releases_tools',
             'tests.router.test_application_smart_router_tool',
             'tests.router.test_automation_smart_router_tool',
@@ -349,6 +352,13 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.website.test_website_analyze',
             'tests.website.test_website_catalog',
             'tests.website.test_website_configuration',
+            'tests.mobile_app.test_mobile_app_analyze',
+            'tests.mobile_app.test_mobile_app_catalog',
+            'tests.mobile_app.test_mobile_app_configuration',
+            'tests.mobile_app.test_mobile_app_alert',
+            'tests.website.test_website_alert',
+            'tests.prompts.website.test_website_alert',
+            'tests.prompts.mobile_app.test_mobile_app_alert',
         ]
 
         all_tests = unittest.TestSuite()

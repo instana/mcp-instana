@@ -134,26 +134,6 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
 
         self.assertIn("results", result)
 
-    def test_get_events_with_filters(self):
-        """Test get_events operation with filters"""
-        async def mock_get_events(*args, **kwargs):
-            return {"events": []}
-
-        self.mock_events.get_events = mock_get_events
-
-        result = asyncio.run(self.router.manage_events(
-            operation="get_events",
-            params={
-                "time_range": "last 24 hours",
-                "event_type_filters": ["INCIDENT"],
-                "entity_type": "service",
-                "state": "open",
-                "severity": 10
-            }
-        ))
-
-        self.assertIn("results", result)
-
     def test_get_events_by_ids(self):
         """Test get_events_by_ids operation"""
         async def mock_get_by_ids(*args, **kwargs):

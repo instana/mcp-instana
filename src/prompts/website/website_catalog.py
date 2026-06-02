@@ -11,7 +11,7 @@ class WebsiteCatalogPrompts:
     def get_website_catalog_metrics() -> str:
         """Retrieve metric definitions with metadata: metricId, label, description, unit/formatter, aggregations, beaconTypes, and more"""
         return """
-        Get website catalog metrics with full metadata including descriptions, supported aggregations, and beacon types.
+        Get website catalog metrics with necessary metadata for query planning, including descriptions, supported aggregations, and beacon types.
         """
 
     @auto_register_prompt

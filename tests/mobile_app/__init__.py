@@ -1,0 +1,1 @@
+"""Mobile app tests package"""

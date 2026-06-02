@@ -121,13 +121,13 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         # Set up the mock response
         mock_response = MagicMock()
         mock_response.data = b'[{"id": "alert1", "name": "Test Alert"}]'
-        self.alert_config_api.find_active_application_alert_configs_without_preload_content.return_value = mock_response
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
         result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))
 
         # Check that the mock was called with the correct arguments
-        self.alert_config_api.find_active_application_alert_configs_without_preload_content.assert_called_once_with(
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.assert_called_once_with(
             application_id="app1",
             alert_ids=None
         )
@@ -1002,7 +1002,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         # Set up the mock response with empty list
         mock_response = MagicMock()
         mock_response.data = b'[]'
-        self.alert_config_api.find_active_application_alert_configs_without_preload_content.return_value = mock_response
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
         result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))
@@ -1020,7 +1020,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         # Set up the mock response with invalid JSON
         mock_response = MagicMock()
         mock_response.data = b'invalid json {'
-        self.alert_config_api.find_active_application_alert_configs_without_preload_content.return_value = mock_response
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
         result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))
@@ -1032,7 +1032,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
     def test_find_active_application_alert_configs_general_exception(self):
         """Test find_active_application_alert_configs with general exception"""
         # Set up the mock to raise an exception
-        self.alert_config_api.find_active_application_alert_configs_without_preload_content.side_effect = Exception("Test error")
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.side_effect = Exception("Test error")
 
         # Call the method
         result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))

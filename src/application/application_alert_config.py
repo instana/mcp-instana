@@ -302,9 +302,9 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             if not application_id:
                 return {"error": "application_id is required"}
 
-            # Call the find_active_application_alert_configs method from the SDK
-            logger.debug(f"Calling find_active_application_alert_configs with application_id={application_id}, alert_ids={alert_ids}")
-            response = api_client.find_active_application_alert_configs_without_preload_content(
+            # Call the find_all_active_application_alert_configs method from the SDK
+            logger.debug(f"Calling find_all_active_application_alert_configs with application_id={application_id}, alert_ids={alert_ids}")
+            response = api_client.find_all_active_application_alert_configs_without_preload_content(
                 application_id=application_id,
                 alert_ids=alert_ids
             )
@@ -766,6 +766,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             if not request_body:
                 return {"error": "Payload is required"}
 
+            # Ensure request_body is a dictionary
+            if not isinstance(request_body, dict):
+                return {"error": f"Failed to create config object: Payload must be a dictionary, got {type(request_body).__name__}"}
+
             # Import the ApplicationAlertConfig class
             try:
                 from instana_client.models.application_alert_config import (
@@ -776,10 +780,23 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ApplicationAlertConfig: {e}")
                 return {"error": f"Failed to import ApplicationAlertConfig: {e!s}"}
 
+            # Add default values for required fields if missing
+            # These fields are required by the SDK but may not always be provided
+            if 'alertChannelIds' not in request_body:
+                request_body['alertChannelIds'] = []
+            if 'customPayloadFields' not in request_body:
+                request_body['customPayloadFields'] = []
+
+            # Ensure nested 'applications' dict has required 'services' field
+            if 'applications' in request_body and isinstance(request_body['applications'], dict):
+                for _app_id, app_config in request_body['applications'].items():
+                    if isinstance(app_config, dict) and 'services' not in app_config:
+                        app_config['services'] = {}
+
             # Create an ApplicationAlertConfig object from the request body
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig(**request_body)
+                config_object = ApplicationAlertConfig.model_validate(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")
@@ -904,6 +921,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 logger.debug("Using provided payload dictionary")
                 request_body = payload
 
+            # Ensure request_body is a dictionary
+            if not isinstance(request_body, dict):
+                return {"error": f"Failed to create config object: Payload must be a dictionary, got {type(request_body).__name__}"}
+
             # Import the ApplicationAlertConfig class
             try:
                 from instana_client.models.application_alert_config import (
@@ -914,10 +935,23 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing ApplicationAlertConfig: {e}")
                 return {"error": f"Failed to import ApplicationAlertConfig: {e!s}"}
 
+            # Add default values for required fields if missing
+            # These fields are required by the SDK but may not always be provided
+            if 'alertChannelIds' not in request_body:
+                request_body['alertChannelIds'] = []
+            if 'customPayloadFields' not in request_body:
+                request_body['customPayloadFields'] = []
+
+            # Ensure nested 'applications' dict has required 'services' field
+            if 'applications' in request_body and isinstance(request_body['applications'], dict):
+                for _app_id, app_config in request_body['applications'].items():
+                    if isinstance(app_config, dict) and 'services' not in app_config:
+                        app_config['services'] = {}
+
             # Create an ApplicationAlertConfig object from the request body
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig(**request_body)
+                config_object = ApplicationAlertConfig.model_validate(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")

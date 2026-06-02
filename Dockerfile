@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy only the runtime dependency file and source code needed for the build
-COPY pyproject-runtime.toml pyproject.toml
+# Copy project files and source code needed for the build
+COPY pyproject.toml pyproject.toml
 COPY src ./src
 COPY schema ./schema
 COPY README.md ./

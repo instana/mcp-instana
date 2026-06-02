@@ -9,7 +9,7 @@ class ApplicationSettingsPrompts:
     @auto_register_prompt
     @staticmethod
     def get_all_applications_configs() -> str:
-        """Get a list of all Application Perspectives with their configuration settings"""
+        """What applications are being monitored right now"""
         return "Retrieve all application configurations"
 
     @auto_register_prompt

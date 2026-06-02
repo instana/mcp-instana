@@ -220,7 +220,7 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
         """Test that initialization handles exceptions properly"""
         with patch('src.application.application_topology.Configuration', side_effect=Exception("Config error")), \
              patch('src.application.application_topology.logger') as mock_logger:
-            with self.assertRaises(Exception):  # noqa: B017
+            with self.assertRaises(Exception):
                 ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)
 
             # Verify the exception was logged
@@ -234,7 +234,7 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
         with patch('src.application.application_topology.Configuration', return_value=mock_config), \
              patch('src.application.application_topology.ApiClient', side_effect=Exception("API client error")), \
              patch('src.application.application_topology.logger') as mock_logger:
-            with self.assertRaises(Exception):  # noqa: B017
+            with self.assertRaises(Exception):
                 ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)
 
             # Verify the exception was logged
@@ -249,7 +249,7 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
              patch('src.application.application_topology.ApiClient', return_value=mock_api_client), \
              patch('src.application.application_topology.ApplicationTopologyApi', side_effect=Exception("Topology API error")), \
              patch('src.application.application_topology.logger') as mock_logger:
-            with self.assertRaises(Exception):  # noqa: B017
+            with self.assertRaises(Exception):
                 ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)
 
             # Verify the exception was logged

@@ -728,10 +728,23 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing GlobalApplicationsAlertConfig: {e}")
                 return {"error": f"Failed to import GlobalApplicationsAlertConfig: {e!s}"}
 
+            # Add default values for required fields if missing
+            # These fields are required by the SDK but may not always be provided
+            if 'alertChannelIds' not in request_body:
+                request_body['alertChannelIds'] = []
+            if 'customPayloadFields' not in request_body:
+                request_body['customPayloadFields'] = []
+
+            # Ensure nested 'applications' dict has required 'services' field
+            if 'applications' in request_body and isinstance(request_body['applications'], dict):
+                for _app_id, app_config in request_body['applications'].items():
+                    if isinstance(app_config, dict) and 'services' not in app_config:
+                        app_config['services'] = {}
+
             # Create an GlobalApplicationsAlertConfig object from the request body
             try:
                 logger.debug(f"Creating GlobalApplicationsAlertConfig with params: {request_body}")
-                config_object = GlobalApplicationsAlertConfig(**request_body)
+                config_object = GlobalApplicationsAlertConfig.model_validate(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating GlobalApplicationsAlertConfig: {e}")
@@ -875,10 +888,23 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing GlobalApplicationsAlertConfig: {e}")
                 return {"error": f"Failed to import GlobalApplicationsAlertConfig: {e!s}"}
 
+            # Add default values for required fields if missing
+            # These fields are required by the SDK but may not always be provided
+            if 'alertChannelIds' not in request_body:
+                request_body['alertChannelIds'] = []
+            if 'customPayloadFields' not in request_body:
+                request_body['customPayloadFields'] = []
+
+            # Ensure nested 'applications' dict has required 'services' field
+            if 'applications' in request_body and isinstance(request_body['applications'], dict):
+                for _app_id, app_config in request_body['applications'].items():
+                    if isinstance(app_config, dict) and 'services' not in app_config:
+                        app_config['services'] = {}
+
             # Create an GlobalApplicationsAlertConfig object from the request body
             try:
                 logger.debug(f"Creating GlobalApplicationsAlertConfig with params: {request_body}")
-                config_object = GlobalApplicationsAlertConfig(**request_body)
+                config_object = GlobalApplicationsAlertConfig.model_validate(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")

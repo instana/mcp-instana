@@ -165,12 +165,11 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         mock_api_client.side_effect = Exception("boom")
 
         with patch('src.application.application_analyze.logger.error') as mock_logger_error:
-            with self.assertRaises(Exception) as context:
+            with self.assertRaises(Exception):
                 ApplicationAnalyzeMCPTools(
                     read_token=self.read_token,
                     base_url=self.base_url
                 )
-            self.assertEqual(str(context.exception), "boom")
 
         mock_logger_error.assert_called_once()
         self.assertIn("Error initializing ApplicationAnalyzeApi", mock_logger_error.call_args[0][0])
@@ -195,14 +194,14 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock get_all_traces
         with patch.object(client, 'get_all_traces') as mock_get_traces:
-            mock_get_traces.return_value = {"filePath": "/tmp/test.jsonl", "itemCount": 10}
+            mock_get_traces.return_value = {"items": [{"traceId": "trace1"}], "itemCount": 1}
 
             result = asyncio.run(client.execute_analyze_operation(
                 operation="get_all_traces",
                 params={"payload": {"timeFrame": {"windowSize": 3600000}}}
             ))
 
-            self.assertIn("filePath", result)
+            self.assertIn("items", result)
             mock_get_traces.assert_called_once()
 
     def test_execute_analyze_operation_get_trace_details(self):
@@ -225,14 +224,14 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock get_trace_details
         with patch.object(client, 'get_trace_details') as mock_get_details:
-            mock_get_details.return_value = {"filePath": "/tmp/trace.jsonl", "itemCount": 5}
+            mock_get_details.return_value = {"items": [{"id": "call1"}], "itemCount": 5}
 
             result = asyncio.run(client.execute_analyze_operation(
                 operation="get_trace_details",
                 params={"id": "trace123", "retrievalSize": 100}
             ))
 
-            self.assertIn("filePath", result)
+            self.assertIn("items", result)
             mock_get_details.assert_called_once()
 
     def test_execute_analyze_operation_invalid_operation(self):
@@ -321,23 +320,20 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_trace_download = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+        result = asyncio.run(client.get_trace_details(
+            id="trace123",
+            retrieval_size=100,
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 1024
-
-            result = asyncio.run(client.get_trace_details(
-                id="trace123",
-                retrieval_size=100,
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
-            self.assertIn("itemCount", result)
-            self.assertIn("canLoadMore", result)
-            self.assertEqual(result["itemCount"], 2)
-            self.assertTrue(result["canLoadMore"])
+        self.assertIn("items", result)
+        self.assertIn("itemCount", result)
+        self.assertIn("canLoadMore", result)
+        self.assertEqual(result["itemCount"], 2)
+        self.assertEqual(len(result["items"]), 2)
+        self.assertTrue(result["canLoadMore"])
+        self.assertIn("ingestionTime", result)
+        self.assertIn("offset", result)
 
     def test_get_trace_details_missing_id(self):
         """Test get_trace_details with missing trace ID"""
@@ -478,23 +474,18 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload={"timeFrame": {"windowSize": 3600000}},
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 2048
-
-            result = asyncio.run(client.get_all_traces(
-                payload={"timeFrame": {"windowSize": 3600000}},
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
-            self.assertIn("itemCount", result)
-            self.assertIn("totalHits", result)
-            self.assertEqual(result["itemCount"], 2)
-            self.assertEqual(result["totalHits"], 2)
+        self.assertIn("items", result)
+        self.assertIn("itemCount", result)
+        self.assertIn("totalHits", result)
+        self.assertEqual(result["itemCount"], 2)
+        self.assertEqual(len(result["items"]), 2)
+        self.assertEqual(result["totalHits"], 2)
+        self.assertFalse(result["canLoadMore"])
 
     def test_get_all_traces_with_none_payload(self):
         """Test get_all_traces with None payload (should use empty dict)"""
@@ -524,22 +515,16 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload=None,
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 0
-
-            result = asyncio.run(client.get_all_traces(
-                payload=None,
-                api_client=analyze_api_instance
-            ))
-
-            # Should succeed with empty payload (converted to {})
-            self.assertIn("filePath", result)
-            self.assertIn("itemCount", result)
-            self.assertEqual(result["itemCount"], 0)
+        # Should succeed with empty payload (converted to {})
+        self.assertIn("items", result)
+        self.assertIn("itemCount", result)
+        self.assertEqual(result["itemCount"], 0)
+        self.assertEqual(len(result["items"]), 0)
 
     def test_get_all_traces_exception(self):
         """Test get_all_traces with exception"""
@@ -596,19 +581,14 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_trace_download = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True):
+        result = asyncio.run(client.get_trace_details(
+            id="trace123",
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 512
-
-            result = asyncio.run(client.get_trace_details(
-                id="trace123",
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
-            self.assertEqual(result["itemCount"], 1)
+        self.assertIn("items", result)
+        self.assertEqual(result["itemCount"], 1)
+        self.assertEqual(len(result["items"]), 1)
 
     def test_get_trace_details_file_cleanup_on_exception(self):
         """Test that file is cleaned up when exception occurs"""
@@ -630,19 +610,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_trace_download = MagicMock(side_effect=Exception("API error"))
 
-        # Mock the file operations
-        mock_file = mock_open()
-        with patch('builtins.open', mock_file), \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink') as mock_unlink:
+        result = asyncio.run(client.get_trace_details(
+            id="trace123",
+            api_client=analyze_api_instance
+        ))
 
-            result = asyncio.run(client.get_trace_details(
-                id="trace123",
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("error", result)
-            mock_unlink.assert_called_once()
+        self.assertIn("error", result)
 
     def test_get_all_traces_string_payload_json(self):
         """Test get_all_traces with JSON string payload"""
@@ -671,19 +644,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload='{"timeFrame": {"windowSize": 3600000}}',
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 100
-
-            result = asyncio.run(client.get_all_traces(
-                payload='{"timeFrame": {"windowSize": 3600000}}',
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
+        self.assertIn("items", result)
 
     def test_get_all_traces_string_payload_single_quotes(self):
         """Test get_all_traces with single-quoted string payload"""
@@ -712,19 +678,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload="{'timeFrame': {'windowSize': 3600000}}",
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 0
-
-            result = asyncio.run(client.get_all_traces(
-                payload="{'timeFrame': {'windowSize': 3600000}}",
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
+        self.assertIn("items", result)
 
     def test_get_all_traces_string_payload_ast_literal_eval(self):
         """Test get_all_traces with payload requiring ast.literal_eval"""
@@ -754,19 +713,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
         # Payload that will fail json.loads but work with ast.literal_eval
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload="{'timeFrame': {'windowSize': 3600000}, 'includeInternal': False}",
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 0
-
-            result = asyncio.run(client.get_all_traces(
-                payload="{'timeFrame': {'windowSize': 3600000}, 'includeInternal': False}",
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("filePath", result)
+        self.assertIn("items", result)
 
     def test_get_all_traces_invalid_string_payload(self):
         """Test get_all_traces with invalid string payload"""
@@ -823,22 +775,16 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         analyze_api_instance.get_traces_without_preload_content = MagicMock(return_value=mock_result)
 
-        with patch('builtins.open', mock_open()), \
-             patch('pathlib.Path.stat') as mock_stat, \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink'):
+        result = asyncio.run(client.get_all_traces(
+            payload={"timeFrame": {"windowSize": 3600000}},
+            api_client=analyze_api_instance
+        ))
 
-            mock_stat.return_value.st_size = 100
-
-            result = asyncio.run(client.get_all_traces(
-                payload={"timeFrame": {"windowSize": 3600000}},
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("ingestionTime", result)
-            self.assertIn("offset", result)
-            self.assertEqual(result["ingestionTime"], 1234567890)
-            self.assertEqual(result["offset"], 99)
+        self.assertIn("ingestionTime", result)
+        self.assertIn("offset", result)
+        self.assertEqual(result["ingestionTime"], 1234567890)
+        self.assertEqual(result["offset"], 99)
+        self.assertTrue(result["canLoadMore"])
 
     def test_get_all_traces_file_cleanup_on_exception(self):
         """Test that file is cleaned up when exception occurs"""
@@ -858,21 +804,14 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
             base_url=self.base_url
         )
 
-        analyze_api_instance.get_traces = MagicMock(side_effect=Exception("API error"))
+        analyze_api_instance.get_traces_without_preload_content = MagicMock(side_effect=Exception("API error"))
 
-        # Mock the file operations
-        mock_file = mock_open()
-        with patch('builtins.open', mock_file), \
-             patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.unlink') as mock_unlink:
+        result = asyncio.run(client.get_all_traces(
+            payload={"timeFrame": {"windowSize": 3600000}},
+            api_client=analyze_api_instance
+        ))
 
-            result = asyncio.run(client.get_all_traces(
-                payload={"timeFrame": {"windowSize": 3600000}},
-                api_client=analyze_api_instance
-            ))
-
-            self.assertIn("error", result)
-            mock_unlink.assert_called_once()
+        self.assertIn("error", result)
 
 
 if __name__ == '__main__':

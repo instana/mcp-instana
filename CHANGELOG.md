@@ -1,6 +1,10 @@
 # Changelog
+### 0.9.8
+-  **New Feature:** JWT authentication is now enforced for all routes to enhance security.
+-  **New Feature:** Introduced separate unified smart router to handle all mobile app operations, improving routing consistency and maintainability.
+-  **Enhancement:** Introduced alert configurations support for websites tool.
+-  **Enhancement:** Introduced better workflow for application analyze queries to reduce tool calls and improve response accuracy.
 
-### 0.9.7
 -  **Maintenance:** CSRF Token authentication is now enforced for all routes to enhance security.
 
 ### 0.9.6

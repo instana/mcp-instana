@@ -749,6 +749,183 @@ class TestBaseInstanaClient(unittest.TestCase):
             # Call the method - should return error
             result = asyncio.run(test_method(self.client))
 
+            # Check that an error was returned
+            self.assertIn("error", result)
+
+    def test_with_header_auth_jwt_token_authentication(self):
+        """Test with_header_auth with JWT token authentication (requires CSRF)"""
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "instana-jwt-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+                "instana-csrf-token": "csrf_token_123",
+                "instana-base-url": "https://jwt.instana.io"
+            }
+
+            # Mock the SDK imports
+            with patch('instana_client.configuration.Configuration') as mock_config, \
+                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+
+                mock_config_instance = MagicMock()
+                mock_config_instance.api_key = {}
+                mock_config_instance.api_key_prefix = {}
+                mock_config.return_value = mock_config_instance
+                mock_api_client_instance = MagicMock()
+                mock_api_client.return_value = mock_api_client_instance
+
+                # Create a test API class
+                class TestApiClass:
+                    def __init__(self, api_client):
+                        self.api_client = api_client
+
+                # Create a test method
+                @with_header_auth(TestApiClass)
+                async def test_method(self, ctx=None, api_client=None):
+                    return {"success": True, "api_client": api_client}
+
+                # Call the method
+                result = asyncio.run(test_method(self.client))
+
+                # Check that the result is correct
+                self.assertIn("success", result)
+                self.assertTrue(result["success"])
+
+                # Verify Authorization header was set with Bearer prefix
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "Authorization",
+                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+                )
+                # Verify CSRF header was set
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "X-CSRF-TOKEN",
+                    "csrf_token_123"
+                )
+
+    def test_with_header_auth_jwt_token_priority_over_api_token(self):
+        """Test that JWT token with CSRF takes priority over API token"""
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "instana-jwt-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+                "instana-csrf-token": "csrf_token_456",
+                "instana-api-token": "api_token_123",
+                "instana-base-url": "https://test.instana.io"
+            }
+
+            # Mock the SDK imports
+            with patch('instana_client.configuration.Configuration') as mock_config, \
+                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+
+                mock_config_instance = MagicMock()
+                mock_config_instance.api_key = {}
+                mock_config_instance.api_key_prefix = {}
+                mock_config.return_value = mock_config_instance
+                mock_api_client_instance = MagicMock()
+                mock_api_client.return_value = mock_api_client_instance
+
+                # Create a test API class
+                class TestApiClass:
+                    def __init__(self, api_client):
+                        self.api_client = api_client
+
+                # Create a test method
+                @with_header_auth(TestApiClass)
+                async def test_method(self, ctx=None, api_client=None):
+                    return {"success": True}
+
+                # Call the method
+                result = asyncio.run(test_method(self.client))
+
+                # Check that the result is correct
+                self.assertIn("success", result)
+                self.assertTrue(result["success"])
+
+                # Verify JWT token was used (Bearer prefix), not API token
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "Authorization",
+                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+                )
+                # Verify CSRF header was set
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "X-CSRF-TOKEN",
+                    "csrf_token_456"
+                )
+                # Verify API token configuration was NOT set
+                self.assertNotIn('ApiKeyAuth', mock_config_instance.api_key)
+
+    def test_with_header_auth_session_token_priority_over_jwt(self):
+        """Test that session token takes priority over JWT token"""
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "instana-auth-token": "session_token_123",
+                "instana-csrf-token": "csrf_token_456",
+                "instana-jwt-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+                "instana-base-url": "https://test.instana.io",
+                "instana-cookie-name": "instanaAuthToken"
+            }
+
+            # Mock the SDK imports
+            with patch('instana_client.configuration.Configuration') as mock_config, \
+                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+
+                mock_config_instance = MagicMock()
+                mock_config_instance.api_key = {}
+                mock_config_instance.api_key_prefix = {}
+                mock_config.return_value = mock_config_instance
+                mock_api_client_instance = MagicMock()
+                mock_api_client.return_value = mock_api_client_instance
+
+                # Create a test API class
+                class TestApiClass:
+                    def __init__(self, api_client):
+                        self.api_client = api_client
+
+                # Create a test method
+                @with_header_auth(TestApiClass)
+                async def test_method(self, ctx=None, api_client=None):
+                    return {"success": True}
+
+                # Call the method
+                result = asyncio.run(test_method(self.client))
+
+                # Check that the result is correct
+                self.assertIn("success", result)
+                self.assertTrue(result["success"])
+
+                # Verify session token headers were set (CSRF and Cookie)
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "X-CSRF-TOKEN",
+                    "csrf_token_456"
+                )
+                mock_api_client_instance.set_default_header.assert_any_call(
+                    "Cookie",
+                    "instanaAuthToken=session_token_123"
+                )
+
+    def test_with_header_auth_jwt_token_exceeds_max_length(self):
+        """Test that JWT token exceeding maximum length is rejected"""
+        long_jwt_token = "a" * 2049  # Exceeds MAX_TOKEN_LENGTH of 2048
+
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "instana-jwt-token": long_jwt_token,
+                "instana-csrf-token": "valid_csrf",
+                "instana-base-url": "https://test.instana.io"
+            }
+
+            # Create a test API class
+            class TestApiClass:
+                def __init__(self, api_client):
+                    self.api_client = api_client
+
+            # Create a test method
+            @with_header_auth(TestApiClass)
+            async def test_method(self, ctx=None, api_client=None):
+                return {"success": True}
+
+            # Call the method - should return error
+            result = asyncio.run(test_method(self.client))
+
+            self.assertIn("JWT token exceeds maximum length", str(result["error"]))
+
             # Should return an error for incomplete session auth
             self.assertIn("error", result)
 
@@ -1071,8 +1248,8 @@ class TestVersionImport(unittest.TestCase):
         # Re-import to trigger the version logic
         importlib.reload(src.core.utils)
 
-        # Check that the fallback version was used (updated to 0.9.6)
-        self.assertEqual(src.core.utils.__version__, "0.9.7")
+        # Check that the fallback version was used (updated to 0.9.8)
+        self.assertEqual(src.core.utils.__version__, "0.9.8")
 
     def test_version_used_in_headers(self):
         """Test that __version__ is used in User-Agent headers"""

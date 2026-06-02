@@ -58,39 +58,9 @@ class MockTagFilterExpressionElement:
     def to_dict(self):
         return self.kwargs
 
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler):
-        """Make this mock compatible with Pydantic to avoid schema generation errors"""
-        from pydantic_core import core_schema
-        return core_schema.any_schema()
-
-# Store original modules for restoration
-_original_modules = {}
-_original_utils_attrs = {}
-
-# Set up mocks immediately at module level (before any imports)
-# Save original modules that we're about to mock
-modules_to_mock = [
-    'mcp', 'mcp.types', 'mcp.server', 'mcp.server.lowlevel', 'mcp.server.lowlevel.server',
-    'instana_client', 'instana_client.api', 'instana_client.api.website_analyze_api',
-    'instana_client.models', 'instana_client.models.get_website_beacon_groups',
-    'instana_client.models.tag_filter_expression_element',
-    'instana_client.models.cursor_pagination', 'instana_client.models.get_website_beacons',
-    'instana_client.models.deprecated_tag_filter'
-]
-
-for module_name in modules_to_mock:
-    if module_name in sys.modules:
-        _original_modules[module_name] = sys.modules[module_name]
-
-# Set up mocks - Create a more complete mock structure for mcp
+# Set up mocks
 mock_mcp = MagicMock()
-mock_mcp.server = MagicMock()
-mock_mcp.server.lowlevel = MagicMock()
-mock_mcp.server.lowlevel.server = MagicMock()
-mock_mcp.server.lowlevel.server.request_ctx = MagicMock()
 mock_mcp_types = MagicMock()
-
 mock_instana_client = MagicMock()
 mock_instana_api = MagicMock()
 mock_website_analyze_api = MagicMock()
@@ -114,9 +84,6 @@ mock_deprecated_tag_filter.DeprecatedTagFilter = MagicMock
 # Create mock modules (but NOT src.core or src.core.utils - use real ones)
 sys.modules['mcp'] = mock_mcp
 sys.modules['mcp.types'] = mock_mcp_types
-sys.modules['mcp.server'] = mock_mcp.server
-sys.modules['mcp.server.lowlevel'] = mock_mcp.server.lowlevel
-sys.modules['mcp.server.lowlevel.server'] = mock_mcp.server.lowlevel.server
 sys.modules['instana_client'] = mock_instana_client
 sys.modules['instana_client.api'] = mock_instana_api
 sys.modules['instana_client.api.website_analyze_api'] = mock_website_analyze_api
@@ -130,40 +97,18 @@ sys.modules['instana_client.models.deprecated_tag_filter'] = mock_deprecated_tag
 # Patch the decorator and base class in the real src.core.utils module
 from src.core import utils as real_utils
 
-_original_utils_attrs['with_header_auth'] = getattr(real_utils, 'with_header_auth', None)
-_original_utils_attrs['BaseInstanaClient'] = getattr(real_utils, 'BaseInstanaClient', None)
-
 real_utils.with_header_auth = mock_with_header_auth
 real_utils.BaseInstanaClient = MockBaseInstanaClient
 
 # Now import the module to test
+from src.core.utils import DEFAULT_CHARSET
+from src.core.utils import decode_response as _decode_response
 from src.website.website_analyze import (
-    DEFAULT_CHARSET,
     DEFAULT_GROUP_BY_TAG,
     DEFAULT_GROUP_BY_TAG_ENTITY,
     WebsiteAnalyzeMCPTools,
-    _decode_response,
     clean_nan_values,
 )
-
-
-def teardown_module():
-    """Tear down mocks at module level - called once after all tests"""
-    # Restore original modules
-    for module_name, original_module in _original_modules.items():
-        sys.modules[module_name] = original_module
-
-    # Remove mocked modules that weren't there originally
-    for module_name in modules_to_mock:
-        if module_name in sys.modules and module_name not in _original_modules:
-            del sys.modules[module_name]
-
-    # Restore original utils attributes
-    for attr_name, original_value in _original_utils_attrs.items():
-        if original_value is not None:
-            setattr(real_utils, attr_name, original_value)
-        elif hasattr(real_utils, attr_name):
-            delattr(real_utils, attr_name)
 
 
 class TestCleanNanValues(unittest.TestCase):
@@ -493,6 +438,15 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(result["elicitation_required"])
         self.assertEqual(len(result["missing_parameters"]), 3)
+
+    def test_check_elicitation_metrics_example_uses_current_page_load_metric(self):
+        """Missing-parameter guidance should advertise the catalog-backed page load metric."""
+        result = self.tools_instance._check_elicitation_for_beacon_groups(None, {"groupByTag": "beacon.page.name"}, "PAGELOAD")
+        metrics_param = next(param for param in result["missing_parameters"] if param["name"] == "metrics")
+        stale_metric = "page" + "LoadTime"
+
+        self.assertIn({"metric": "onLoadTime", "aggregation": "MEAN"}, metrics_param["examples"])
+        self.assertNotIn({"metric": stale_metric, "aggregation": "MEAN"}, metrics_param["examples"])
 
     def test_validate_valid_tags(self):
         """Test validation with valid beacon.* tags"""
