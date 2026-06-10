@@ -92,164 +92,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
+from src.core.timestamp_utils import get_current_timestamp
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 logger = logging.getLogger(__name__)
-
-
-def parse_human_time_to_epoch(time_input: Union[str, int, None]) -> Optional[int]:
-    """
-    Parse human-readable time formats to Unix epoch milliseconds.
-
-    Supports:
-    - Unix timestamps (milliseconds): 1745020800000
-    - ISO 8601 strings: "2025-02-27T14:00:00Z"
-    - Relative times: "in 2 hours", "in 30 minutes", "tomorrow at 10am"
-    - Natural dates: "February 27, 2025 at 2:00 PM UTC"
-
-    Args:
-        time_input: Time in various formats (string, int, or None)
-
-    Returns:
-        Unix timestamp in milliseconds, or None if parsing fails
-    """
-    if time_input is None:
-        return None
-
-    # If already an integer (epoch timestamp), return it
-    if isinstance(time_input, int):
-        # If it looks like seconds (< year 3000 in seconds), convert to ms
-        if time_input < 32503680000:  # Jan 1, 3000 in seconds
-            return time_input * 1000
-        return time_input
-
-    # Convert to string for parsing
-    time_str = str(time_input).strip()
-
-    # Try to parse as integer first
-    try:
-        timestamp = int(time_str)
-        if timestamp < 32503680000:  # Seconds
-            return timestamp * 1000
-        return timestamp
-    except ValueError:
-        pass
-
-    current_time = datetime.now()
-
-    # Handle relative times like "in 2 hours", "in 30 minutes"
-    relative_pattern = r'in\s+(\d+)\s+(hour|hours|minute|minutes|day|days)'
-    match = re.search(relative_pattern, time_str.lower())
-    if match:
-        amount = int(match.group(1))
-        unit = match.group(2)
-
-        if 'hour' in unit:
-            target_time = current_time + timedelta(hours=amount)
-        elif 'minute' in unit:
-            target_time = current_time + timedelta(minutes=amount)
-        elif 'day' in unit:
-            target_time = current_time + timedelta(days=amount)
-        else:
-            return None
-
-        return int(target_time.timestamp() * 1000)
-
-    # Handle "tomorrow", "today"
-    if 'tomorrow' in time_str.lower():
-        target_time = current_time + timedelta(days=1)
-        # Try to extract time if specified
-        time_match = re.search(r'(\d{1,2})\s*(am|pm)', time_str.lower())
-        if time_match:
-            hour = int(time_match.group(1))
-            if time_match.group(2) == 'pm' and hour != 12:
-                hour += 12
-            elif time_match.group(2) == 'am' and hour == 12:
-                hour = 0
-            target_time = target_time.replace(hour=hour, minute=0, second=0, microsecond=0)
-        else:
-            target_time = target_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        return int(target_time.timestamp() * 1000)
-
-    if 'today' in time_str.lower():
-        target_time = current_time
-        time_match = re.search(r'(\d{1,2})\s*(am|pm)', time_str.lower())
-        if time_match:
-            hour = int(time_match.group(1))
-            if time_match.group(2) == 'pm' and hour != 12:
-                hour += 12
-            elif time_match.group(2) == 'am' and hour == 12:
-                hour = 0
-            target_time = target_time.replace(hour=hour, minute=0, second=0, microsecond=0)
-        return int(target_time.timestamp() * 1000)
-
-    # Try ISO 8601 format
-    try:
-        # Handle various ISO formats
-        for fmt in [
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d",
-        ]:
-            try:
-                dt = datetime.strptime(time_str, fmt)
-                return int(dt.timestamp() * 1000)
-            except ValueError:
-                continue
-    except Exception:
-        pass
-
-    # If all parsing fails, return None
-    logger.warning(f"Could not parse time input: {time_str}")
-    return None
-
-
-def parse_duration_to_minutes(duration_input: Union[str, int, None]) -> Optional[int]:
-    """
-    Parse human-readable duration to minutes.
-
-    Supports:
-    - Integer minutes: 120
-    - String with units: "2 hours", "30 minutes", "1 day"
-
-    Args:
-        duration_input: Duration in various formats
-
-    Returns:
-        Duration in minutes, or None if parsing fails
-    """
-    if duration_input is None:
-        return None
-
-    # If already an integer, return it
-    if isinstance(duration_input, int):
-        return duration_input
-
-    duration_str = str(duration_input).strip().lower()
-
-    # Try to parse as integer
-    try:
-        return int(duration_str)
-    except ValueError:
-        pass
-
-    # Parse "X hours", "X minutes", "X days"
-    pattern = r'(\d+)\s*(hour|hours|minute|minutes|day|days)'
-    match = re.search(pattern, duration_str)
-    if match:
-        amount = int(match.group(1))
-        unit = match.group(2)
-
-        if 'hour' in unit:
-            return amount * 60
-        elif 'minute' in unit:
-            return amount
-        elif 'day' in unit:
-            return amount * 24 * 60
-
-    logger.warning(f"Could not parse duration input: {duration_str}")
-    return None
 
 
 class MaintenanceWindowMCPTools(BaseInstanaClient):
@@ -439,62 +285,51 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 logger.info(f"RRULE parameter: {rrule}")
                 logger.info(f"Until Date parameter: {until_date}")
 
-            # Parse human-readable time formats to epoch timestamps
-            if start_time is not None:
-                parsed_start = parse_human_time_to_epoch(start_time)
-                if parsed_start is None:
-                    return {
-                        "error": f"Could not parse start_time: {start_time}",
-                        "suggestion": "Use formats like: 'in 2 hours', 'tomorrow at 10am', '2025-02-27T14:00:00Z', or Unix timestamp in milliseconds"
-                    }
-                start_time = parsed_start
-                logger.info(f"Parsed start_time to: {start_time} ({datetime.fromtimestamp(start_time/1000).strftime('%Y-%m-%d %H:%M:%S UTC')})")
-
-            if end_time is not None:
-                parsed_end = parse_human_time_to_epoch(end_time)
-                if parsed_end is None:
-                    return {
-                        "error": f"Could not parse end_time: {end_time}",
-                        "suggestion": "Use formats like: 'in 4 hours', '2025-02-27T18:00:00Z', or Unix timestamp in milliseconds"
-                    }
-                end_time = parsed_end
-                logger.info(f"Parsed end_time to: {end_time}")
-
-            # Parse duration formats
-            if duration_minutes is not None and not isinstance(duration_minutes, int):
-                parsed_duration = parse_duration_to_minutes(duration_minutes)
-                if parsed_duration is None:
-                    return {
-                        "error": f"Could not parse duration_minutes: {duration_minutes}",
-                        "suggestion": "Use formats like: '120', '2 hours', '30 minutes'"
-                    }
-                duration_minutes = parsed_duration
-                logger.info(f"Parsed duration_minutes to: {duration_minutes}")
-
-            if duration_hours is not None and not isinstance(duration_hours, int):
+            # Convert string parameters to appropriate types
+            # LLM should provide values in correct format as per docString
+            if start_time is not None and isinstance(start_time, str):
                 try:
-                    # Handle decimal hours (e.g., 0.5 hours = 30 minutes)
-                    hours_float = float(duration_hours)
-                    if hours_float < 1:
-                        # Convert fractional hours to minutes
-                        duration_minutes = int(hours_float * 60)
-                        duration_hours = None
-                        logger.info(f"Converted {hours_float} hours to {duration_minutes} minutes")
-                    else:
-                        duration_hours = int(hours_float)
-                except (ValueError, TypeError):
+                    start_time = int(start_time)
+                except ValueError:
                     return {
-                        "error": f"Could not parse duration_hours: {duration_hours}",
-                        "suggestion": "Use an integer value like: 2, 4, 24 or use duration_minutes for values less than 1 hour"
+                        "error": f"start_time must be a Unix timestamp in milliseconds (integer): {start_time}",
+                        "suggestion": "Provide start_time as integer milliseconds (e.g., 1745020800000)"
                     }
 
-            if duration_days is not None and not isinstance(duration_days, int):
+            if end_time is not None and isinstance(end_time, str):
                 try:
-                    duration_days = int(float(duration_days))
-                except (ValueError, TypeError):
+                    end_time = int(end_time)
+                except ValueError:
                     return {
-                        "error": f"Could not parse duration_days: {duration_days}",
-                        "suggestion": "Use an integer value like: 1, 2, 7"
+                        "error": f"end_time must be a Unix timestamp in milliseconds (integer): {end_time}",
+                        "suggestion": "Provide end_time as integer milliseconds"
+                    }
+
+            if duration_minutes is not None and isinstance(duration_minutes, str):
+                try:
+                    duration_minutes = int(duration_minutes)
+                except ValueError:
+                    return {
+                        "error": f"duration_minutes must be an integer: {duration_minutes}",
+                        "suggestion": "Provide duration_minutes as integer (e.g., 120 for 2 hours)"
+                    }
+
+            if duration_hours is not None and isinstance(duration_hours, str):
+                try:
+                    duration_hours = int(duration_hours)
+                except ValueError:
+                    return {
+                        "error": f"duration_hours must be an integer: {duration_hours}",
+                        "suggestion": "Provide duration_hours as integer (e.g., 2)"
+                    }
+
+            if duration_days is not None and isinstance(duration_days, str):
+                try:
+                    duration_days = int(duration_days)
+                except ValueError:
+                    return {
+                        "error": f"duration_days must be an integer: {duration_days}",
+                        "suggestion": "Provide duration_days as integer (e.g., 1)"
                     }
 
             # Validate operation
@@ -714,7 +549,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     duration_unit = "HOURS"
 
             # Validate time range
-            current_time = int(datetime.now().timestamp() * 1000)
+            current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
+            current_time = current_time_result["timestamp"]
             if start_time < current_time:
                 start_dt = datetime.fromtimestamp(start_time / 1000)
                 current_dt = datetime.fromtimestamp(current_time / 1000)
@@ -1173,7 +1009,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             closure_payload = {
                 "status": "completed",
                 "completionNotes": completion_notes or "Maintenance completed",
-                "closedAt": int(datetime.now().timestamp() * 1000)
+                "closedAt": get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]
             }
 
             # Close maintenance window
@@ -1241,7 +1077,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.info(f"Raw result for debugging: {str(result)[:500]}")  # First 500 chars
 
             # Filter for active windows using the 'state' field or occurrence times
-            current_time = int(datetime.now().timestamp() * 1000)
+            current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
+            current_time = current_time_result["timestamp"]
             active_windows = []
 
             for window in all_windows:
@@ -1625,7 +1462,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
         if not start_time:
             validation_errors.append("start_time is required")
-        elif start_time < int(datetime.now().timestamp() * 1000):
+        elif start_time < get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]:
             validation_errors.append("start_time cannot be in the past")
 
         if template and template not in self.TEMPLATES:

@@ -96,7 +96,92 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Maintenance Windows",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        description="""Unified Instana maintenance window manager for lifecycle management.
+
+IMPORTANT FOR WATSONX ORCHESTRATE ROUTING:
+- Use this tool for maintenance window questions such as:
+  * "Show me scheduled maintenance windows"
+  * "List active maintenance windows"
+  * "What maintenance windows are planned?"
+  * "Create a maintenance window for EAL-012471"
+  * "Close maintenance window mw-789"
+  * "Show all maintenance windows"
+  * "Are there any upcoming maintenance windows?"
+  * "Can you give me scheduled maintenance windows applications?"
+- For listing scheduled windows: resource_type="window", operation="list_scheduled"
+- For listing active windows: resource_type="window", operation="list_active"
+- For listing all windows: resource_type="window", operation="list_all"
+- For creating windows: resource_type="window", operation="create"
+
+ALL PARAMETERS ARE FLAT STRINGS - No nested objects required!
+
+TIME FORMAT INSTRUCTIONS FOR LLM:
+- start_time, end_time, until_date: Must be Unix timestamp in milliseconds (integer)
+- When user provides natural language time (e.g., "in 2 hours", "tomorrow at 10am"):
+  * Calculate the Unix timestamp in milliseconds
+  * Convert relative times to absolute timestamps
+  * Example: "in 2 hours" from now = current_time_ms + (2 * 60 * 60 * 1000)
+- ISO format times should be converted to Unix milliseconds
+- Example: "2026-06-01T14:00:00Z" = 1748786400000
+
+DURATION FORMAT INSTRUCTIONS FOR LLM:
+- duration_minutes: Integer representing minutes (e.g., 120 for 2 hours)
+- duration_hours: Integer representing hours (e.g., 2 for 2 hours)
+- duration_days: Integer representing days (e.g., 1 for 1 day)
+- When user says "2 hours", provide duration_hours="2" OR duration_minutes="120"
+- When user says "30 minutes", provide duration_minutes="30"
+- When user says "1 day", provide duration_days="1" OR duration_hours="24"
+- Do NOT pass string values like "2 hours" - convert to integer
+
+Resource Types:
+- "window": Create, modify, close, and list maintenance windows
+- "templates": Retrieve available maintenance window templates
+
+WINDOW (resource_type="window"):
+    operations: create, modify, close, list_active, list_scheduled, list_all, list_expired, bulk_create, validate
+
+    create - Create a new maintenance window
+        Required: imap_code OR application_id, start_time
+        Optional: end_time, duration_minutes, duration_hours, duration_days,
+                  reason, template, change_request_id, affected_services,
+                  notification_channels, use_tag_filter_expression, tag_name,
+                  rrule, until_date
+
+    modify - Modify an existing maintenance window
+        Required: window_id
+        Optional: end_time, duration_minutes, reason, rrule, until_date
+
+    close - Close and document a maintenance window
+        Required: window_id
+        Optional: completion_notes
+
+    list_active - List all currently active maintenance windows
+        Optional: imap_code, application_id (filter by application)
+
+    list_scheduled - List all upcoming scheduled maintenance windows
+        Optional: imap_code, application_id
+
+    list_all - List all maintenance windows (active, scheduled, and expired)
+        Optional: imap_code, application_id
+
+    list_expired - List all expired/completed maintenance windows
+        Optional: imap_code, application_id
+
+    bulk_create - Create maintenance windows for multiple applications at once
+        Required: application_ids (JSON array string) OR imap_codes (JSON array string), start_time
+        Optional: duration_minutes, duration_hours, duration_days, reason, template,
+                  change_request_id, use_tag_filter_expression, tag_name
+
+    validate - Validate maintenance window parameters without creating
+        Required: imap_code OR application_id, start_time
+        Optional: duration_minutes, template
+
+TEMPLATES (resource_type="templates"):
+    operations: get
+
+    get - Retrieve all available maintenance window templates
+        No parameters required"""
     )
     async def manage_maintenance_windows(
         self,
