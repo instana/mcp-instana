@@ -312,6 +312,7 @@ def get_prompt_categories():
         from src.prompts.events.events_tools import EventsPrompts
         from src.prompts.maintenance_window.maintenance_window_prompts import (
             MaintenanceWindowPrompts,
+        )
         from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
         from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
         from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
@@ -372,6 +373,7 @@ def get_prompt_categories():
         ],
         "maintenance": [
             ("Maintenance Window", maintenance_window_prompts),
+        ],
         "mobile_app": [
             ("Mobile App Analyze", mobile_app_analyze_prompts),
             ("Mobile App Catalog", mobile_app_catalog_prompts),
