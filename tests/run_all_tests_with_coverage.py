@@ -45,6 +45,7 @@ def run_all_tests_with_coverage(
         "tests/event",
         "tests/infrastructure",
         "tests/log",
+        "tests/mobile_app",
         "tests/prompts",
         "tests/releases",
         "tests/router",

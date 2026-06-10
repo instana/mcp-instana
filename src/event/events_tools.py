@@ -356,6 +356,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         # Base optimized structure with age
         optimized = {
             "eventId": event.get("eventId"),
+            "eventSpecificationId": event.get("eventSpecificationId"),
             "start": start,
             "type": event_type,
             "state": state,
@@ -893,19 +894,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
     @with_header_auth(EventsApi)
     async def get_events(
         self,
-        query: Optional[str] = None,
-        from_time: Optional[int] = None,
-        to_time: Optional[int] = None,
-        filter_event_updates: Optional[bool] = None,
-        exclude_triggered_before: Optional[bool] = None,
-        max_events: Optional[int] = 50,
-        event_type_filters: Optional[List[str]] = None,
-        time_range: Optional[str] = None,
-        entity_type: Optional[str] = None,
-        entity_name: Optional[str] = None,
-        state: Optional[str] = None,
-        problem: Optional[str] = None,
-        severity: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
         ctx=None,
         api_client=None
     ) -> Dict[str, Any]:
@@ -917,19 +906,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         a time range using timestamps or natural language like "last 24 hours" or "last 2 days".
 
         Args:
-            query: Query string to filter events (optional)
-            from_time: Start timestamp in milliseconds since epoch (optional, defaults to 1 hour ago)
-            to_time: End timestamp in milliseconds since epoch (optional, defaults to now)
-            filter_event_updates: Filter out event updates (optional)
-            exclude_triggered_before: Exclude events triggered before the time range (optional)
-            max_events: Maximum number of events to return (optional, default 50)
-            event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE"])
-            time_range: Natural language time range like "last 24 hours", "last 2 days", "last week" (optional)
-            entity_type: Entity type filter - "application", "service", "endpoint", "infrastructure" (optional)
-            entity_name: Filter by entity name (partial match, optional)
-            state: Event state filter - "open" or "closed" (optional)
-            problem: Filter by problem description (partial match, optional)
-            severity: Severity filter - -1 (change), 5 (warning), 10 (critical) (optional)
+            filters: Dictionary containing all event filters
             ctx: The MCP context (optional)
             api_client: API client for testing (optional)
 
@@ -952,112 +929,33 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 problem="memory", time_range="last 2 days"
         """
         try:
-            logger.debug(
-                f"[get_events] Called with entity_type={entity_type}, state={state}, "
-                f"time_range={time_range}, event_type_filters={event_type_filters}, entity_name={entity_name}, "
-                f"problem={problem}, severity={severity}"
+            logger.debug(f"[get_events] Called with filters={filters}")
+
+            filters = filters or {}
+
+            extracted = self._extract_event_filters(filters)
+
+            self._validate_event_type_filters(extracted["event_type_filters"])
+
+            time_params = self._build_time_params(
+                extracted["time_range"],
+                extracted["from_time"],
+                extracted["to_time"]
             )
 
-            # Validate event_type_filters if provided
-            if event_type_filters:
-                if not isinstance(event_type_filters, list):
-                    raise TypeError('event_type_filters must be a list')
-
-                for event_type in event_type_filters:
-                    if not isinstance(event_type, str):
-                        raise TypeError('Each event type in event_type_filters must be a string')
-
-                    event_type_upper = event_type.upper()
-                    if event_type_upper not in VALID_EVENT_TYPES:
-                        raise ValueError(
-                            f"Invalid event_type '{event_type}'. Must be one of: {', '.join(sorted(VALID_EVENT_TYPES))} (case-insensitive)"
-                        )
-
-                # Normalize to uppercase
-                event_type_filters = [et.upper() for et in event_type_filters]
-
-            # Build time parameters
-            time_params = self._build_time_params(time_range, from_time, to_time)
-            api_params = time_params["api_params"]
-
-            response_data = api_client.get_events_without_preload_content(
-                **api_params,
-                filter_event_updates=filter_event_updates,
-                exclude_triggered_before=exclude_triggered_before,
-                event_type_filters=event_type_filters or None,
+            response_data = await self._fetch_events_api(
+                api_client,
+                time_params["api_params"],
+                extracted["filter_event_updates"],
+                extracted["exclude_triggered_before"],
+                extracted["event_type_filters"]
             )
 
-            if response_data.status != 200:
-                logger.error(f"API returned status {response_data.status}")
-                return {"error": f"HTTP {response_data.status}"}
+            result = self._parse_events_response(response_data)
 
-            result = json.loads(response_data.data.decode('utf-8'))
+            filtered_events = self._apply_event_filters(result, extracted)
 
-            if not isinstance(result, list):
-                logger.warning("Unexpected response format - not a list")
-                return {"events": [], "error": "Unexpected response format from Instana"}
-
-            filtered_events = result
-
-            if entity_type or state or entity_name or problem or severity or query:
-                logger.debug(
-                    f"[get_events] Applying client-side filters - "
-                    f"entity_type={entity_type}, state={state}, entity_name={entity_name}, "
-                    f"problem={problem}, severity={severity}"
-                )
-
-                def matches_event(event: dict) -> bool:
-                    if not isinstance(event, dict):
-                        return False
-
-                    if entity_type:
-                        requested_entity_type = entity_type.lower()
-                        actual_entity_type = event.get("entityType", "").lower()
-
-                        if actual_entity_type != requested_entity_type:
-                            return False
-
-                    if state:
-                        if event.get("state", "").lower() != state.lower():
-                            return False
-
-                    if problem:
-                        if problem.lower() not in event.get("problem", "").lower() and \
-                           problem.lower() not in event.get("detail", "").lower():
-                            return False
-
-                    if severity is not None:
-                        if severity not in (SEVERITY_CHANGE, SEVERITY_WARNING, SEVERITY_CRITICAL):
-                            raise ValueError(
-                                f"Invalid severity value. Allowed: {SEVERITY_CHANGE} (change), "
-                                f"{SEVERITY_WARNING} (warning), {SEVERITY_CRITICAL} (critical)"
-                            )
-                        if event.get("severity") != severity:
-                            return False
-
-                    if entity_name:
-                        entity_name_lower = entity_name.lower()
-                        if entity_name_lower not in event.get("entityName", "").lower() and \
-                           entity_name_lower not in event.get("entityLabel", "").lower():
-                            return False
-
-                    if query:
-                        query_lower = query.lower()
-                        if query_lower not in str(event).lower():
-                            return False
-
-                    return True
-
-                filtered_events = [e for e in result if matches_event(e)]
-
-                logger.debug(
-                    f"[get_events] After client-side filtering: {len(filtered_events)} events remain "
-                    f"(entity_type={entity_type}, state={state}, entity_name={entity_name}, "
-                    f"problem={problem}, severity={severity})"
-                )
-
-            limited = filtered_events[:max_events]
-            optimized = [self._optimize_event_data(e) for e in limited]
+            optimized = self._optimize_and_limit(filtered_events, extracted["max_events"])
 
             return {
                 "events": optimized,
@@ -1069,6 +967,149 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"[get_events] Error: {e}", exc_info=True)
             return {"error": f"Failed to get events: {e!s}"}
+
+    def _extract_event_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        ALLOWED_FILTERS = {
+            "query": None,
+            "from_time": None,
+            "to_time": None,
+            "filter_event_updates": None,
+            "exclude_triggered_before": None,
+            "max_events": 50,
+            "event_type_filters": None,
+            "time_range": None,
+            "entity_type": None,
+            "entity_name": None,
+            "state": None,
+            "problem": None,
+            "severity": None,
+            "event_specification_id": None,
+        }
+
+        return {k: filters.get(k, v) for k, v in ALLOWED_FILTERS.items()}
+
+    def _validate_event_type_filters(self, event_type_filters):
+        if not event_type_filters:
+            return
+
+        if not isinstance(event_type_filters, list):
+            raise TypeError("event_type_filters must be a list")
+
+        for event_type in event_type_filters:
+            if not isinstance(event_type, str):
+                raise TypeError("Each event type must be a string")
+
+            if event_type.upper() not in VALID_EVENT_TYPES:
+                raise ValueError(
+                    f"Invalid event_type '{event_type}'. Must be one of: "
+                    f"{', '.join(sorted(VALID_EVENT_TYPES))}"
+                )
+
+    async def _fetch_events_api(
+        self,
+        api_client,
+        api_params,
+        filter_event_updates,
+        exclude_triggered_before,
+        event_type_filters
+    ):
+        result = api_client.get_events_without_preload_content(
+            **api_params,
+            filter_event_updates=filter_event_updates,
+            exclude_triggered_before=exclude_triggered_before,
+            event_type_filters=event_type_filters or None,
+        )
+        # Handle both sync and async (for testing with AsyncMock)
+        import inspect
+        if inspect.iscoroutine(result):
+            return await result
+        return result
+
+    def _parse_events_response(self, response_data):
+        if response_data.status != 200:
+            raise ValueError(f"HTTP {response_data.status}")
+
+        result = json.loads(response_data.data.decode("utf-8"))
+
+        if not isinstance(result, list):
+            return []
+
+        return result
+
+    def _apply_event_filters(self, events, f):
+        """Apply filters to events with reduced cognitive complexity."""
+        # Early return if no filters are specified
+        if not any([
+            f["entity_type"], f["state"], f["entity_name"],
+            f["problem"], f["severity"], f["query"]
+        ]):
+            return events
+
+        return [e for e in events if self._event_matches_filters(e, f)]
+
+    def _event_matches_filters(self, event, f):
+        """Check if an event matches all provided filters using early returns."""
+        if not isinstance(event, dict):
+            return False
+
+        # Check each filter condition - early return on first mismatch
+        if f["entity_type"] and not self._matches_entity_type(event, f["entity_type"]):
+            return False
+
+        if f["state"] and not self._matches_state(event, f["state"]):
+            return False
+
+        if f["problem"] and not self._matches_problem(event, f["problem"]):
+            return False
+
+        if f["severity"] is not None and not self._matches_severity(event, f["severity"]):
+            return False
+
+        if f["entity_name"] and not self._matches_entity_name(event, f["entity_name"]):
+            return False
+
+        if f["event_specification_id"] and not self._matches_event_specification_id(event, f["event_specification_id"]):
+            return False
+
+        return not (f["query"] and not self._matches_query(event, f["query"]))
+
+    def _matches_entity_type(self, event, entity_type):
+        """Check if event matches entity type filter."""
+        return event.get("entityType", "").lower() == entity_type.lower()
+
+    def _matches_state(self, event, state):
+        """Check if event matches state filter."""
+        return event.get("state", "").lower() == state.lower()
+
+    def _matches_problem(self, event, problem):
+        """Check if event matches problem filter."""
+        p = problem.lower()
+        return (p in event.get("problem", "").lower() or
+                p in event.get("detail", "").lower())
+
+    def _matches_severity(self, event, severity):
+        """Check if event matches severity filter."""
+        if severity not in (SEVERITY_CHANGE, SEVERITY_WARNING, SEVERITY_CRITICAL):
+            raise ValueError("Invalid severity value")
+        return event.get("severity") == severity
+
+    def _matches_entity_name(self, event, entity_name):
+        """Check if event matches entity name filter."""
+        n = entity_name.lower()
+        return (n in event.get("entityName", "").lower() or
+                n in event.get("entityLabel", "").lower())
+
+    def _matches_event_specification_id(self, event, event_specification_id):
+        """Check if event matches event specification ID filter."""
+        return event.get("eventSpecificationId") == event_specification_id
+
+    def _matches_query(self, event, query):
+        """Check if event matches query filter."""
+        return query.lower() in str(event).lower()
+
+    def _optimize_and_limit(self, events, max_events):
+        limited = events[:max_events]
+        return [self._optimize_event_data(e) for e in limited]
 
     @with_header_auth(EventsApi)
     async def get_events_by_ids(

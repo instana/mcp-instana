@@ -251,6 +251,7 @@ def get_client_categories():
         from src.router.maintenance_window_smart_router import (
             MaintenanceWindowSmartRouterMCPTool,
         )
+        from src.router.mobile_app_smart_router import MobileAppSmartRouterMCPTool
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
@@ -270,6 +271,9 @@ def get_client_categories():
         ],
         "website": [
             ('smart_router_website_client', WebsiteSmartRouterMCPTool),
+        ],
+        "mobile_app": [
+            ('smart_router_mobile_client', MobileAppSmartRouterMCPTool),
         ],
         "events": [
             ('smart_router_events_client', EventsSmartRouterMCPTool),
@@ -308,8 +312,14 @@ def get_prompt_categories():
         from src.prompts.events.events_tools import EventsPrompts
         from src.prompts.maintenance_window.maintenance_window_prompts import (
             MaintenanceWindowPrompts,
+        from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
+        from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
+        from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
+        from src.prompts.mobile_app.mobile_app_configuration import (
+            MobileAppConfigurationPrompts,
         )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
+        from src.prompts.website.website_alert import WebsiteAlertPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
         from src.prompts.website.website_configuration import (
@@ -333,6 +343,11 @@ def get_prompt_categories():
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
     maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
+    mobile_app_analyze_prompts = MobileAppAnalyzePrompts.get_prompts()
+    mobile_app_catalog_prompts = MobileAppCatalogPrompts.get_prompts()
+    mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
+    mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
+    website_alert_prompts = WebsiteAlertPrompts.get_prompts()
 
     return {
         "app": [
@@ -350,12 +365,18 @@ def get_prompt_categories():
             ("Website Catalog", website_catalog_prompts),
             ("Website Configuration", website_configuration_prompts),
             ("Website Metrics", website_metrics_prompts),
+            ("Website Alerts", website_alert_prompts),
         ],
         "settings": [
             ("Custom Dashboard", custom_dashboard_prompts),
         ],
         "maintenance": [
             ("Maintenance Window", maintenance_window_prompts),
+        "mobile_app": [
+            ("Mobile App Analyze", mobile_app_analyze_prompts),
+            ("Mobile App Catalog", mobile_app_catalog_prompts),
+            ("Mobile App Configuration", mobile_app_configuration_prompts),
+            ("Mobile App Alerts", mobile_app_alert_prompts),
         ]
     }
 
@@ -413,7 +434,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, website, settings, slo). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--list-tools",
@@ -471,6 +492,7 @@ def main():
             set_log_level(args.log_level)
 
         all_categories = {"app", "infra", "events", "automation", "website", "settings", "slo", "releases", "maintenance"}
+        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -498,7 +520,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, website, settings, slo")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo")
             sys.exit(2)
 
         # Print enabled tools for user information

@@ -5,7 +5,7 @@ import importlib
 import json
 import sys
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1378,7 +1378,7 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         # Create the client
         client = AgentMonitoringEventsMCPTools(
@@ -1389,7 +1389,13 @@ class TestAgentMonitoringEventsE2E:
         # Test with time range and event_type_filters
         time_range = "last 24 hours"
 
-        result = await client.get_events(time_range=time_range, event_type_filters=["ISSUE"], api_client=mock_api_client)
+        result = await client.get_events(
+            filters={
+                "time_range": time_range,
+                "event_type_filters": ["ISSUE"]
+            },
+            api_client=mock_api_client
+        )
 
         # Verify result contains empty events list
         assert isinstance(result, dict)
@@ -1686,7 +1692,7 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         # Create the client
         client = AgentMonitoringEventsMCPTools(
@@ -1696,7 +1702,13 @@ class TestAgentMonitoringEventsE2E:
 
         # Test with time range
         time_range = "last 24 hours"
-        result = await client.get_events(time_range=time_range, event_type_filters=["ISSUE"], api_client=mock_api_client)
+        result = await client.get_events(
+            filters={
+                "time_range": time_range,
+                "event_type_filters": ["ISSUE"]
+            },
+            api_client=mock_api_client
+        )
 
         # Verify result contains empty events list
         assert isinstance(result, dict)
@@ -2579,9 +2591,12 @@ class TestAgentMonitoringEventsE2E:
             {"id": "event-1", "eventType": "INCIDENT", "entityType": "application", "state": "OPEN", "severity": 10},
             {"id": "event-2", "eventType": "ISSUE", "entityType": "service", "state": "CLOSED", "severity": 5}
         ]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
-        result = await client.get_events(max_events=10, api_client=mock_api_client)
+        result = await client.get_events(
+            filters={"max_events": 10},
+            api_client=mock_api_client
+        )
 
         assert "events" in result
         assert len(result["events"]) == 2
@@ -2603,11 +2618,13 @@ class TestAgentMonitoringEventsE2E:
             {"id": "event-2", "eventType": "INCIDENT", "entityType": "service", "state": "OPEN"},
             {"id": "event-3", "eventType": "INCIDENT", "entityType": "application", "state": "CLOSED"}
         ]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = await client.get_events(
-            entity_type="application",
-            state="OPEN",
+            filters={
+                "entity_type": "application",
+                "state": "OPEN"
+            },
             api_client=mock_api_client
         )
 
@@ -2631,9 +2648,9 @@ class TestAgentMonitoringEventsE2E:
             {"id": "event-1", "eventType": "INCIDENT", "severity": 10},
             {"id": "event-2", "eventType": "INCIDENT", "severity": 5}
         ]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
-        result = await client.get_events(severity=10, api_client=mock_api_client)
+        result = await client.get_events(filters={"severity": 10}, api_client=mock_api_client)
 
         # After filtering by severity, should have 1 event
         assert len(result["events"]) == 1
@@ -2652,9 +2669,9 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([{"id": "event-1", "severity": 10}]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
-        result = await client.get_events(severity=99, api_client=mock_api_client)
+        result = await client.get_events(filters={"severity": 99}, api_client=mock_api_client)
 
         assert "error" in result
 
@@ -2671,9 +2688,14 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([{"id": "event-1", "eventType": "INCIDENT"}]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
-        result = await client.get_events(event_type_filters=["INCIDENT"], api_client=mock_api_client)
+        result = await client.get_events(
+            filters={
+                "event_type_filters": ["INCIDENT"]
+            },
+            api_client=mock_api_client
+        )
         assert "events" in result
 
     @pytest.mark.asyncio
@@ -2703,7 +2725,7 @@ class TestAgentMonitoringEventsE2E:
         mock_api_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status = 500
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = await client.get_events(api_client=mock_api_client)
 
@@ -2722,8 +2744,9 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps({"not": "a list"}).encode('utf-8')
-        mock_api_client.get_events_without_preload_content.return_value = mock_response
+        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = await client.get_events(api_client=mock_api_client)
 
-        assert "error" in result
+        assert isinstance(result, dict)
+        assert "events" in result

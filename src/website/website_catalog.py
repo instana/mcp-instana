@@ -5,7 +5,6 @@ This module provides website catalog-specific MCP tools for Instana monitoring.
 """
 
 import logging
-from email.message import Message
 from typing import Any, Dict, List, Optional
 
 # Import the necessary classes from the SDK
@@ -19,42 +18,17 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    decode_response,
+    process_tag_catalog_response,
+    project_metric_card,
+    register_as_tool,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
-
-
-def _decode_response(response) -> str:
-    """
-    Safely decode response data using the response's charset or UTF-8 as fallback.
-
-    Args:
-        response: The HTTP response object
-
-    Returns:
-        Decoded response text
-    """
-    # Try to get charset from response headers using standard library parsing
-    charset = 'utf-8'  # Default fallback
-
-    # Check if response has charset information
-    if hasattr(response, 'headers') and response.headers:
-        content_type = response.headers.get('Content-Type', '')
-        if content_type:
-            # Use email.message.Message for proper RFC-compliant Content-Type parsing
-            # This handles quoted values, whitespace, case-insensitivity, etc.
-            msg = Message()
-            msg['content-type'] = content_type
-            parsed_charset = msg.get_content_charset()
-            if parsed_charset:
-                charset = parsed_charset
-
-    try:
-        return response.data.decode(charset)
-    except (UnicodeDecodeError, LookupError):
-        # Fallback to utf-8 if specified charset fails
-        return response.data.decode('utf-8', errors='replace')
 
 
 class WebsiteCatalogMCPTools(BaseInstanaClient):
@@ -66,21 +40,34 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
 
 
     @with_header_auth(WebsiteCatalogApi)
-    async def get_website_catalog_metrics(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website_catalog_metrics(
+        self,
+        ctx=None,
+        api_client=None,
+        view: str = "planner",
+    ) -> Dict[str, Any]:
         """
         Get website monitoring metrics catalog.
 
         Returns metric definitions including metricId, label, description, formatter,
-        aggregations, beaconTypes, and other metadata to help agents construct valid queries.
+        aggregations, and beaconTypes to help agents construct valid queries.
 
         Args:
             ctx: The MCP context (optional)
+            view: "planner" (default) returns compact cards for query planning.
+                  "full" returns the raw SDK response including internal fields.
 
         Returns:
-            Dictionary containing list of metrics with full metadata
+            Dictionary containing list of metrics, count, and description.
         """
         try:
-            logger.debug("[get_website_catalog_metrics] Called")
+            logger.debug(f"[get_website_catalog_metrics] Called with view={view}")
+
+            if view not in ("planner", "full"):
+                return {
+                    "error": f"Invalid view '{view}'. Valid views: 'planner', 'full'",
+                    "valid_views": ["planner", "full"],
+                }
 
             # Use without_preload_content to bypass Pydantic validation
             response = api_client.get_website_catalog_metrics_without_preload_content()
@@ -92,7 +79,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
 
                 # Try to get error details from response
                 try:
-                    error_body = _decode_response(response)
+                    error_body = decode_response(response)
                     logger.error(f"[get_website_catalog_metrics] API Error Response: {error_body}")
                     return {
                         "error": error_message,
@@ -103,18 +90,26 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
                     return {"error": error_message, "status_code": response.status}
 
             # Read and parse the response content
-            response_text = _decode_response(response)
+            response_text = decode_response(response)
             import json
             full_metrics = json.loads(response_text)
 
             # Extract only metric IDs - this is schema information for LLM
             metric_ids = [metric.get("metricId") for metric in full_metrics if metric.get("metricId")]
 
-            result_dict = {
-                "metrics": full_metrics,
-                "count": len(metric_ids),
-                "description": "Website monitoring metrics catalog with full metadata"
-            }
+            if view == "full":
+                result_dict = {
+                    "metrics": full_metrics,
+                    "count": len(metric_ids),
+                    "description": "Website monitoring metrics catalog with full metadata"
+                }
+            else:
+                compact_metrics = [project_metric_card(metric) for metric in full_metrics]
+                result_dict = {
+                    "metrics": compact_metrics,
+                    "count": len(metric_ids),
+                    "description": "Website monitoring metrics catalog with necessary metadata for query planning"
+                }
 
             logger.debug(f"[get_website_catalog_metrics] Returning {len(metric_ids)} metric IDs from catalog")
             return result_dict
@@ -209,7 +204,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
 
                 # Try to get error details from response
                 try:
-                    error_body = _decode_response(response)
+                    error_body = decode_response(response)
                     logger.error(f"[get_website_tag_catalog] API Error Response: {error_body}")
                     return {
                         "error": error_message,
@@ -220,51 +215,14 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
                     return {"error": error_message, "status_code": response.status}
 
             # Read and parse the response content
-            response_text = _decode_response(response)
+            response_text = decode_response(response)
             import json
             full_response = json.loads(response_text)
 
-            # Extract tag names from both tagTree and tags
-            tag_names = []
+            # Use shared function to process tag catalog response
+            result_dict = process_tag_catalog_response(full_response, beacon_type, use_case)
 
-            # Helper function to recursively extract tagName from tree structure
-            def extract_tag_names_from_tree(node):
-                """Recursively extract tagName values from nested tree structure"""
-                if isinstance(node, dict):
-                    # If this node has a tagName, add it
-                    if node.get("tagName"):
-                        tag_names.append(node["tagName"])
-
-                    # Recursively process children
-                    if "children" in node and isinstance(node["children"], list):
-                        for child in node["children"]:
-                            extract_tag_names_from_tree(child)
-                elif isinstance(node, list):
-                    # If it's a list, process each item
-                    for item in node:
-                        extract_tag_names_from_tree(item)
-
-            # Extract from tagTree
-            if "tagTree" in full_response:
-                extract_tag_names_from_tree(full_response["tagTree"])
-
-            # Extract from flat tags list (using 'name' field)
-            if "tags" in full_response and isinstance(full_response["tags"], list):
-                for tag in full_response["tags"]:
-                    if isinstance(tag, dict) and "name" in tag and tag["name"]:
-                        tag_names.append(tag["name"])
-
-            # Remove duplicates and sort
-            tag_names = sorted(set(tag_names))
-
-            result_dict = {
-                "tag_names": tag_names,
-                "count": len(tag_names),
-                "beacon_type": beacon_type,
-                "use_case": use_case
-            }
-
-            logger.debug(f"[get_website_tag_catalog] Returning {len(tag_names)} tag names for {beacon_type}/{use_case}")
+            logger.debug(f"[get_website_tag_catalog] Returning {result_dict['count']} tag names for {beacon_type}/{use_case}")
             return result_dict
         except Exception as e:
             logger.error(f"[get_website_tag_catalog] Error: {e}", exc_info=True)

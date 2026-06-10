@@ -14,6 +14,7 @@
     - [Header-Based Authentication for Streamable HTTP Mode](#header-based-authentication-for-streamable-http-mode)
       - [1. API Token Authentication (Direct API Calls)](#1-api-token-authentication-direct-api-calls)
       - [2. Session Token Authentication (UI-Initiated Calls)](#2-session-token-authentication-ui-initiated-calls)
+      - [3. JWT Token Authentication (IBM Platform Integration)](#3-jwt-token-authentication-ibm-platform-integration)
   - [Starting the Local MCP Server](#starting-the-local-mcp-server)
     - [Server Command Options](#server-command-options)
       - [Using the CLI (PyPI Installation)](#using-the-cli-pypi-installation)
@@ -226,10 +227,39 @@ When using **Streamable HTTP mode**, you must pass Instana credentials via HTTP 
 --header "instana-cookie-name: in-token"
 ```
 
+#### 3. JWT Token Authentication (IBM Platform Integration)
+**Required Headers:**
+- `instana-base-url`: Your Instana instance URL
+- `instana-jwt-token`: JWT token from IBM Platform
+- `instana-csrf-token`: CSRF token for request validation
+
+**Example Configuration:**
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://0.0.0.0:8080/mcp",
+        "--allow-http",
+        "--header",
+        "instana-base-url: https://your-instana-instance.instana.io",
+        "--header",
+        "instana-jwt-token: your_jwt_token_here",
+        "--header",
+        "instana-csrf-token: your_csrf_token_here"
+      ]
+    }
+  }
+}
+```
+
 **Authentication Priority:**
-1. **API Token** (if provided) - Takes precedence
+1. **JWT Token** (if provided with CSRF token) - Takes precedence for IBM Platform integration
 2. **Session Tokens** (if both auth_token and csrf_token provided)
-3. **Environment Variable** (`INSTANA_API_TOKEN`) - Fallback
+3. **API Token** (if provided) - Standard authentication 
+4. **Environment Variable** (`INSTANA_API_TOKEN`) - Fallback
 
 **Authentication Flow:**
 1. HTTP headers must be present in each request

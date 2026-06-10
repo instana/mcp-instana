@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "0.9.7"
+version = "0.9.8"
 description = "MCP server for Instana"
 authors = [
     {name = "Jay Sharma", email = "Jay.Sharma3@ibm.com"},
@@ -18,15 +18,19 @@ license = {text = "Apache-2.0"}
 # ONLY dependencies that are actually imported/used in the code
 dependencies = [
     # Core MCP framework - imported in src/prompts/__init__.py and src/core/server.py
-    "fastmcp>=3.2.4",    # MCP SDK for types and annotations
-    "mcp",    # Instana API client - imported in src/event/events_tools.py
-    "instana-client==1.0.7",
+    # Pinned to 3.3.0 to avoid test compatibility issues with 3.3.1
+    "fastmcp==3.3.0",
+    # MCP SDK for types and annotations
+    # Pinned to 1.26.x to match fastmcp 3.1.x compatibility
+    "mcp",
+    # Instana API client - imported in src/event/events_tools.py
+    "instana-client==1.0.8",
     # Lazy imports for Instana SDK - required by instana-client
     "lazy_imports",
     # HTTP client - imported in src/core/utils.py
     "requests>=2.32.3,<3.0.0",
     # Environment loading - imported in src/core/server.py
-    "python-dotenv==1.1.0",
+    "python-dotenv>=1.2.2,<2.0.0",
     # Data validation - imported in src/infrastructure/infrastructure_metrics.py
     "pydantic==2.11.7",
     "traceloop-sdk>=0.47.5",
@@ -125,6 +129,7 @@ ignore = [
     "PLR0913", # Too many arguments in function definition
     "ERA001",  # Found commented-out code
     "PLC0415", # Import should be at top-level (lazy imports are intentional)
+    "B017",    # assertRaises(Exception) - acceptable in tests for generic error handling
 ]
 
 # Allow autofix for all enabled rules (when `--fix` is provided)

@@ -22,9 +22,6 @@ import pytest
 _MOCKED_KEYS = [
     "mcp",
     "mcp.types",
-    "mcp.server",
-    "mcp.server.lowlevel",
-    "mcp.server.lowlevel.server",
     "instana_client",
     "instana_client.api",
     "instana_client.api.website_analyze_api",

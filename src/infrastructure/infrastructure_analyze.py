@@ -469,16 +469,14 @@ plugin catalog, ensuring compatibility with all monitored technologies without m
                 elements=[]
             )
 
-        # Build metrics array with proper Pydantic objects
-        # Note: granularity is intentionally omitted as it causes data discrepancies with UI
         infra_metrics = []
         for metric_name in metrics:
-            metric_config = SimpleMetricConfiguration(
-                metric=metric_name,
-                aggregation=aggregation.upper()
-            )
-            infra_metric = InfraMetricConfiguration(actual_instance=metric_config)
-            infra_metrics.append(infra_metric)
+            # Create plain dict matching SimpleMetricConfiguration schema
+            metric_dict = {
+                "metric": metric_name,
+                "aggregation": aggregation.upper()
+            }
+            infra_metrics.append(metric_dict)
 
         logger.info(f"Built {len(infra_metrics)} metric configurations (without granularity)")
 

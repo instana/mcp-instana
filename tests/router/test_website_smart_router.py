@@ -32,6 +32,7 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
         self.mock_analyze_client = MagicMock()
         self.mock_catalog_client = MagicMock()
         self.mock_config_client = MagicMock()
+        self.mock_alert_client = MagicMock()
 
         # Create router and directly assign mock clients
         self.router = WebsiteSmartRouterMCPTool.__new__(WebsiteSmartRouterMCPTool)
@@ -41,6 +42,7 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
         self.router.website_analyze_client = self.mock_analyze_client
         self.router.website_catalog_client = self.mock_catalog_client
         self.router.website_configuration_client = self.mock_config_client
+        self.router.website_alert_client = self.mock_alert_client
 
     def test_initialization(self):
         """Test router initialization."""
@@ -48,6 +50,15 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
         self.assertIsNotNone(self.router.website_analyze_client)
         self.assertIsNotNone(self.router.website_catalog_client)
         self.assertIsNotNone(self.router.website_configuration_client)
+        self.assertIsNotNone(self.router.website_alert_client)
+
+    def test_manage_websites_description_uses_current_page_load_metric(self):
+        """Tool guidance should advertise the catalog-backed page load metric."""
+        description = WebsiteSmartRouterMCPTool.manage_websites._mcp_description
+        stale_metric = "page" + "LoadTime"
+
+        self.assertIn('"onLoadTime"', description)
+        self.assertNotIn(stale_metric, description)
 
     def test_invalid_resource_type(self):
         """Test handling of invalid resource type."""
@@ -141,9 +152,9 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
             operation="get_beacon_groups",
             params={
                 "metrics": [
-                    {"metric": "pageLoadTime", "aggregation": "P95"},
-                    {"metric": "pageLoadTime", "aggregation": "MEAN"},
-                    {"metric": "pageLoadTime", "aggregation": "MAX"}
+                    {"metric": "onLoadTime", "aggregation": "P95"},
+                    {"metric": "onLoadTime", "aggregation": "MEAN"},
+                    {"metric": "onLoadTime", "aggregation": "MAX"}
                 ],
                 "group": {"groupByTag": "beacon.page.name"},
                 "beacon_type": "PAGELOAD"
@@ -221,7 +232,7 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
     def test_catalog_get_metrics(self):
         """Test catalog get_metrics operation."""
         async def mock_get_metrics(*args, **kwargs):
-            return {"metrics": ["beaconCount", "pageLoadTime", "errorRate"]}
+            return {"metrics": ["beaconCount", "onLoadTime", "errorRate"]}
 
         self.mock_catalog_client.get_website_catalog_metrics = mock_get_metrics
 
@@ -233,6 +244,41 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
         self.assertIn("results", result)
         self.assertEqual(result["resource_type"], "catalog")
         self.assertEqual(result["operation"], "get_metrics")
+
+    def test_catalog_get_metrics_default_passes_planner_view(self):
+        """Router should default get_metrics to view='planner'."""
+        captured = {}
+
+        async def mock_get_metrics(*args, **kwargs):
+            captured.update(kwargs)
+            return {"metrics": []}
+
+        self.mock_catalog_client.get_website_catalog_metrics = mock_get_metrics
+
+        asyncio.run(self.router.manage_websites(
+            resource_type="catalog",
+            operation="get_metrics"
+        ))
+
+        self.assertEqual(captured.get("view"), "planner")
+
+    def test_catalog_get_metrics_passes_view_full(self):
+        """Router should forward params.view='full' to the catalog client."""
+        captured = {}
+
+        async def mock_get_metrics(*args, **kwargs):
+            captured.update(kwargs)
+            return {"metrics": []}
+
+        self.mock_catalog_client.get_website_catalog_metrics = mock_get_metrics
+
+        asyncio.run(self.router.manage_websites(
+            resource_type="catalog",
+            operation="get_metrics",
+            params={"view": "full"}
+        ))
+
+        self.assertEqual(captured.get("view"), "full")
 
     def test_catalog_get_tag_catalog(self):
         """Test catalog get_tag_catalog operation."""
@@ -337,6 +383,68 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
 
         self.assertIn("error", result)
         self.assertIn("Invalid operation", result["error"])
+
+    # Alert Tests - New find_active_*_alert_configs operations
+    def test_alert_find_active_configs_success(self):
+        """Test alert find_active_website_alert_configs operation"""
+        async def mock_alert(*args, **kwargs):
+            return {
+                "configs": [
+                    {"id": "alert-1", "name": "Alert 1"},
+                    {"id": "alert-2", "name": "Alert 2"}
+                ],
+                "count": 2,
+                "total": 2
+            }
+
+        self.mock_alert_client.find_active_website_alert_configs = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_active_website_alert_configs",
+            params={"website_id": "web-123"}
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["operation"], "find_active_website_alert_configs")
+        self.assertEqual(result["results"]["count"], 2)
+
+    def test_alert_find_active_configs_with_alert_ids(self):
+        """Test find_active_website_alert_configs with alert_ids filter"""
+        async def mock_alert(*args, **kwargs):
+            self.assertEqual(kwargs.get("website_id"), "web-123")
+            self.assertEqual(kwargs.get("alert_ids"), ["alert-1", "alert-2"])
+            return {"configs": [{"id": "alert-1"}], "count": 1, "total": 1}
+
+        self.mock_alert_client.find_active_website_alert_configs = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_active_website_alert_configs",
+            params={
+                "website_id": "web-123",
+                "alert_ids": ["alert-1", "alert-2"]
+            }
+        ))
+
+        self.assertIn("results", result)
+
+    def test_alert_find_active_configs_empty_results(self):
+        """Test find_active_website_alert_configs with no results"""
+        async def mock_alert(*args, **kwargs):
+            return {"configs": [], "count": 0, "total": 0}
+
+        self.mock_alert_client.find_active_website_alert_configs = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_active_website_alert_configs",
+            params={"website_id": "web-123"}
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["results"]["count"], 0)
+
 
     # Advanced Config Tests
     def test_advanced_config_get_geo_config(self):
@@ -508,7 +616,83 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
 
         self.assertIn("results", result)
 
+    def test_alert_find_config(self):
+        async def mock_alert(*args, **kwargs):
+            return {"id": "alert-1", "name": "Test Alert"}
+
+        self.mock_alert_client.find_website_alert_config = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_website_alert_config",
+            params={"id": "alert-1"}
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["operation"], "find_website_alert_config")
+        self.assertEqual(result["results"]["id"], "alert-1")
+
+    def test_alert_param_mapping(self):
+        async def mock_alert(*args, **kwargs):
+            self.assertEqual(kwargs.get("id"), "alert-123")
+            self.assertEqual(kwargs.get("valid_on"), 1234567890)
+            return {"id": "alert-123"}
+
+        self.mock_alert_client.find_website_alert_config = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_website_alert_config",
+            params={
+                "id": "alert-123",
+                "valid_on": 1234567890
+            }
+        ))
+
+        self.assertIn("results", result)
+
+    def test_alert_no_params(self):
+        async def mock_alert(*args, **kwargs):
+            self.assertIsNone(kwargs.get("id"))
+            self.assertIsNone(kwargs.get("valid_on"))
+            return {"configs": []}
+
+        self.mock_alert_client.find_website_alert_config = mock_alert
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_website_alert_config",
+            params={}
+        ))
+
+        self.assertIn("results", result)
+
+    def test_alert_invalid_operation(self):
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="invalid_op",
+            params={}
+        ))
+
+        self.assertIn("error", result)
+        self.assertIn("Invalid operation", result["error"])
+
+    def test_alert_exception_handling(self):
+        async def mock_error(*args, **kwargs):
+            raise Exception("alert error")
+
+        self.mock_alert_client.find_website_alert_config = mock_error
+
+        result = asyncio.run(self.router.manage_websites(
+            resource_type="alert",
+            operation="find_website_alert_config",
+            params={"id": "alert-1"}
+        ))
+
+        self.assertIn("error", result)
+        self.assertIn("Smart router error", result["error"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
-

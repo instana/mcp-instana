@@ -55,6 +55,7 @@ PARAM_ENTITY_NAME = "entity_name"
 PARAM_STATE = "state"
 PARAM_PROBLEM = "problem"
 PARAM_SEVERITY = "severity"
+PARAM_EVENT_SPECIFICATION_ID = "event_specification_id"
 
 # Default values
 DEFAULT_MAX_EVENTS = 50
@@ -83,36 +84,47 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         description="""Unified Instana events resource manager for events monitoring operations.
 
 Operations:
-- "get_events": Get all events
-- "get_event": Get a specific event by ID
-- "get_kubernetes_info_events": Get Kubernetes info events with detailed analysis
-- "get_agent_monitoring_events": Get agent monitoring events with detailed analysis
-- "get_events_by_ids": Get multiple events by their IDs
+    - "get_events": Get all events
+    - "get_event": Get a specific event by ID
+    - "get_kubernetes_info_events": Get Kubernetes info events with detailed analysis
+    - "get_agent_monitoring_events": Get agent monitoring events with detailed analysis
+    - "get_events_by_ids": Get multiple events by their IDs
 
 Parameters (params dict):
-- event_id: Event ID (required for get_event)
-- event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
-- from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
-    If timezone not specified in datetime string, defaults to UTC
-- to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
-    If timezone not specified in datetime string, defaults to UTC
-- time_range: Natural language time range like "last 24 hours", "last 2 days"
-- max_events: Maximum number of events to process for analysis (optional, default 50)
-    NOTE: This is a post-processing limit, not an API parameter
-- filter_event_updates: Boolean flag to filter results to only show events with state changes within timeframe (optional)
-- exclude_triggered_before: Boolean flag to exclude events triggered before the timeframe (optional)
-    NOTE: This is a boolean flag, not a timestamp
-- event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE", "CHANGE"]).
-    NOTE: Allowed values: INCIDENT, ISSUE, CHANGE. Invalid values will result in an error.
-- entity_type: Affected entity type to filter by (optional)
-    * For infrastructure incidents: Use entity types like "host", "docker", "kubernetes"
-    * For application incidents: Use "application" - this filters events with applicationId
-    * For service incidents: Use "service" - this filters events with serviceId
-- entity_name: Affected entity name to filter by (e.g., "Kubernetes Pod", "Process", "CRI-O Container") (optional, supports partial matches)
-- state: Event state to filter by (e.g., "open", "closed") (optional)
-- problem: Problem description to filter events by (e.g., "CPU usage high", "High error rate", "online") (optional)
-- severity: Event severity to filter by (exact match only). (optional)
-    NOTE: Allowed values (strict): -1 → change (informational events), 5  → warning, 10 → critical. Natural language mappings: "change events" → severity = -1, "warning events" → severity = 5,"critical events" → severity = 10. Only the above severity values are supported.
+- For "get_event" and "get_events_by_ids", pass flat params:
+    - event_id: Event ID (required for get_event)
+    - event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
+- For "get_kubernetes_info_events" and "get_agent_monitoring_events", pass flat params:
+    - from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
+        If timezone not specified in datetime string, defaults to UTC
+    - to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
+        If timezone not specified in datetime string, defaults to UTC
+    - time_range: Natural language time range like "last 24 hours", "last 2 days"
+    - query: Optional query string for agent monitoring events
+    - max_events: Maximum number of events to process for analysis (optional, default 50)
+        NOTE: This is a post-processing limit, not an API parameter
+- For "get_events", pass a nested filters object:
+    - filters: Dictionary containing event filters.
+        - from_time: Start timestamp - milliseconds OR datetime string
+        - to_time: End timestamp - milliseconds OR datetime string
+        - time_range: Natural language time range like "last 24 hours", "last 2 days"
+        - query: Optional query string
+        - max_events: Maximum number of events to process for analysis (optional, default 50)
+        - filter_event_updates: Boolean flag to filter results to only show events with state changes within timeframe (optional)
+        - exclude_triggered_before: Boolean flag to exclude events triggered before the timeframe (optional)
+            NOTE: This is a boolean flag, not a timestamp
+        - event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE", "CHANGE"]).
+            NOTE: Allowed values: INCIDENT, ISSUE, CHANGE. Invalid values will result in an error.
+        - entity_type: Affected entity type to filter by (optional)
+            * For infrastructure incidents: Use entity types like "host", "docker", "kubernetes"
+            * For application incidents: Use "application" - this filters events with applicationId
+            * For service incidents: Use "service" - this filters events with serviceId
+        - entity_name: Affected entity name to filter by (e.g., "Kubernetes Pod", "Process", "CRI-O Container") (optional, supports partial matches)
+        - state: Event state to filter by (e.g., "open", "closed") (optional)
+        - problem: Problem description to filter events by (e.g., "CPU usage high", "High error rate", "online") (optional)
+        - severity: Event severity to filter by (exact match only). (optional)
+            NOTE: Allowed values (strict): -1 → change (informational events), 5 → warning, 10 → critical.
+        - event_specification_id: Filter events by event specification ID (optional)
 
 Args:
     operation: Operation to perform
@@ -124,9 +136,9 @@ Returns:
 
 Examples:
     operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
-    operation="get_kubernetes_info_events", params={"time_range": "last 24 hours"}
-    operation="get_agent_monitoring_events", params={"from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
-    operation="get_events", params={"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True,  "exclude_triggered_before": False}
+    operation="get_kubernetes_info_events", params={"time_range": "last 24 hours", "max_events": 50}
+    operation="get_agent_monitoring_events", params={"query": "Monitoring issue", "from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
+    operation="get_events", params={"filters": {"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
     operation="get_events_by_ids", params={"event_ids": ["1a2b3c4d5e6f", "7g8h9i0j1k2l"]}"""
     )
     async def manage_events(
@@ -151,33 +163,37 @@ Examples:
                     "valid_operations": EVENTS_VALID_OPERATIONS
                 }
 
-            # Extract common parameters using constants
-            event_id = params.get(PARAM_EVENT_ID)
-            event_ids = params.get(PARAM_EVENT_IDS)
-            from_time = params.get(PARAM_FROM_TIME)
-            to_time = params.get(PARAM_TO_TIME)
-            time_range = params.get(PARAM_TIME_RANGE)
-            query = params.get(PARAM_QUERY)
-            max_events = params.get(PARAM_MAX_EVENTS, DEFAULT_MAX_EVENTS)
-            filter_event_updates = params.get(PARAM_FILTER_EVENT_UPDATES)
-            exclude_triggered_before = params.get(PARAM_EXCLUDE_TRIGGERED_BEFORE)
-            event_type_filters = params.get(PARAM_EVENT_TYPE_FILTERS)
-            entity_type = params.get(PARAM_ENTITY_TYPE)
-            entity_name = params.get(PARAM_ENTITY_NAME)
-            state = params.get(PARAM_STATE)
-            problem = params.get(PARAM_PROBLEM)
-            severity = params.get(PARAM_SEVERITY)
+            source_params = params.get("filters", {}) if operation == OPERATION_GET_EVENTS else params
+
+            filters = {
+                PARAM_EVENT_ID: source_params.get(PARAM_EVENT_ID),
+                PARAM_EVENT_IDS: source_params.get(PARAM_EVENT_IDS),
+                PARAM_FROM_TIME: source_params.get(PARAM_FROM_TIME),
+                PARAM_TO_TIME: source_params.get(PARAM_TO_TIME),
+                PARAM_TIME_RANGE: source_params.get(PARAM_TIME_RANGE),
+                PARAM_QUERY: source_params.get(PARAM_QUERY),
+                PARAM_MAX_EVENTS: source_params.get(PARAM_MAX_EVENTS, DEFAULT_MAX_EVENTS),
+                PARAM_FILTER_EVENT_UPDATES: source_params.get(PARAM_FILTER_EVENT_UPDATES),
+                PARAM_EXCLUDE_TRIGGERED_BEFORE: source_params.get(PARAM_EXCLUDE_TRIGGERED_BEFORE),
+                PARAM_EVENT_TYPE_FILTERS: source_params.get(PARAM_EVENT_TYPE_FILTERS),
+                PARAM_ENTITY_TYPE: source_params.get(PARAM_ENTITY_TYPE),
+                PARAM_ENTITY_NAME: source_params.get(PARAM_ENTITY_NAME),
+                PARAM_STATE: source_params.get(PARAM_STATE),
+                PARAM_PROBLEM: source_params.get(PARAM_PROBLEM),
+                PARAM_SEVERITY: source_params.get(PARAM_SEVERITY),
+                PARAM_EVENT_SPECIFICATION_ID: source_params.get(PARAM_EVENT_SPECIFICATION_ID),
+            }
 
             logger.debug(
                 f"[manage_events] Parameters extracted - "
-                f"operation: {operation}, time_range: {time_range}, "
-                f"from_time: {from_time}, to_time: {to_time}, max_events: {max_events}, "
-                f"event_type_filters: {event_type_filters}, entity_type: {entity_type}, entity_name: {entity_name}, state: {state}, problem: {problem}, severity: {severity}"
+                f"operation: {operation}, time_range: {filters[PARAM_TIME_RANGE]}, "
+                f"from_time: {filters[PARAM_FROM_TIME]}, to_time: {filters[PARAM_TO_TIME]}, max_events: {filters[PARAM_MAX_EVENTS]}, "
+                f"event_type_filters: {filters[PARAM_EVENT_TYPE_FILTERS]}, entity_type: {filters[PARAM_ENTITY_TYPE]}, entity_name: {filters[PARAM_ENTITY_NAME]}, state: {filters[PARAM_STATE]}, problem: {filters[PARAM_PROBLEM]}, severity: {filters[PARAM_SEVERITY]}"
             )
 
             # Convert datetime strings to timestamps for from_time and to_time
             conversion_result = convert_datetime_params(
-                {PARAM_FROM_TIME: from_time, PARAM_TO_TIME: to_time},
+                {PARAM_FROM_TIME: filters[PARAM_FROM_TIME], PARAM_TO_TIME: filters[PARAM_TO_TIME]},
                 [PARAM_FROM_TIME, PARAM_TO_TIME],
                 default_timezone="UTC"
             )
@@ -200,7 +216,7 @@ Examples:
                 time_validation = TimeValidator.validate_time_parameters(
                     from_time=from_time,
                     to_time=to_time,
-                    time_range=time_range
+                    time_range=filters[PARAM_TIME_RANGE]
                 )
 
                 if not time_validation.is_valid():
@@ -215,11 +231,11 @@ Examples:
                     }
 
                 # Validate max_events
-                max_events_error = EventsValidator.validate_max_events(max_events)
+                max_events_error = EventsValidator.validate_max_events(filters[PARAM_MAX_EVENTS])
                 if max_events_error:
                     logger.warning(
                         f"[manage_events] max_events validation failed: {max_events_error.message}, "
-                        f"provided value: {max_events}"
+                        f"provided value: {filters[PARAM_MAX_EVENTS]}"
                     )
                     return {
                         "operation": operation,
@@ -235,7 +251,7 @@ Examples:
 
             if operation == OPERATION_GET_EVENT:
                 result = await self.events_client.get_event(
-                    event_id=event_id,
+                    event_id=filters[PARAM_EVENT_ID],
                     ctx=ctx
                 )
 
@@ -243,43 +259,48 @@ Examples:
                 result = await self.events_client.get_kubernetes_info_events(
                     from_time=from_time,
                     to_time=to_time,
-                    time_range=time_range,
-                    max_events=max_events,
+                    time_range=filters[PARAM_TIME_RANGE],
+                    max_events=filters[PARAM_MAX_EVENTS],
                     ctx=ctx
                 )
 
             elif operation == OPERATION_GET_AGENT_MONITORING_EVENTS:
                 result = await self.events_client.get_agent_monitoring_events(
-                    query=query,
+                    query=filters[PARAM_QUERY],
                     from_time=from_time,
                     to_time=to_time,
-                    max_events=max_events,
-                    time_range=time_range,
+                    max_events=filters[PARAM_MAX_EVENTS],
+                    time_range=filters[PARAM_TIME_RANGE],
                     ctx=ctx
                 )
 
             elif operation == OPERATION_GET_EVENTS:
+                event_filters = {
+                    "query": filters[PARAM_QUERY],
+                    "from_time": from_time,
+                    "to_time": to_time,
+                    "filter_event_updates": filters[PARAM_FILTER_EVENT_UPDATES],
+                    "exclude_triggered_before": filters[PARAM_EXCLUDE_TRIGGERED_BEFORE],
+                    "max_events": filters[PARAM_MAX_EVENTS],
+                    "time_range": filters[PARAM_TIME_RANGE],
+                    "event_type_filters": filters[PARAM_EVENT_TYPE_FILTERS],
+                    "entity_type": filters[PARAM_ENTITY_TYPE],
+                    "entity_name": filters[PARAM_ENTITY_NAME],
+                    "state": filters[PARAM_STATE],
+                    "problem": filters[PARAM_PROBLEM],
+                    "severity": filters[PARAM_SEVERITY],
+                    "event_specification_id": filters[PARAM_EVENT_SPECIFICATION_ID],
+                }
+
                 result = await self.events_client.get_events(
-                    query=query,
-                    from_time=from_time,
-                    to_time=to_time,
-                    filter_event_updates=filter_event_updates,
-                    exclude_triggered_before=exclude_triggered_before,
-                    max_events=max_events,
-                    time_range=time_range,
-                    event_type_filters=event_type_filters,
-                    entity_type=entity_type,
-                    entity_name=entity_name,
-                    state=state,
-                    problem=problem,
-                    severity=severity,
+                    filters=event_filters,
                     ctx=ctx
                 )
 
 
             elif operation == OPERATION_GET_EVENTS_BY_IDS:
                 result = await self.events_client.get_events_by_ids(
-                    event_ids=event_ids,
+                    event_ids=filters[PARAM_EVENT_IDS],
                     ctx=ctx
                 )
 

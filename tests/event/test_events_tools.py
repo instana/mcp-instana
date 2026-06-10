@@ -10,7 +10,7 @@ import sys
 import unittest
 from datetime import datetime
 from functools import wraps
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # Create a null handler that will discard all log messages
@@ -1125,9 +1125,14 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             }
         ]''')
 
-        self.events_api.get_events_without_preload_content.return_value = mock_response
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
-        result = asyncio.run(self.client.get_events(entity_type="jvm", state="open"))
+        result = asyncio.run(self.client.get_events(
+            filters={
+                "entity_type": "jvm",
+                "state": "open"
+            }
+        ))
 
         self.assertIn("events", result)
         self.assertEqual(result["total_events"], 1)

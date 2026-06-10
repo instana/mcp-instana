@@ -32,7 +32,7 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "0.9.7"
+    __version__ = "0.9.8"
 
 # Registry to store all tools
 MCP_TOOLS = {}
@@ -97,20 +97,22 @@ def _validate_http_headers(instana_token, instana_base_url):
     return None
 
 
-def _validate_http_auth_headers(instana_api_token, instana_auth_token, instana_csrf_token, instana_base_url):
+def _validate_http_auth_headers(instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url):
     """Validate HTTP authentication headers."""
     # Check for API token auth (needs token + base_url)
     has_api_token_auth = instana_api_token and instana_base_url
-
+    # Check for JWT token auth (needs jwt_token + csrf_token + base_url)
+    # JWT requires CSRF since it's treated as UI user for POST/PUT/DELETE operations
+    has_jwt_token_auth = instana_jwt_token and instana_csrf_token and instana_base_url
     # Check for session token auth (needs auth_token + csrf_token + base_url)
     has_session_auth = instana_auth_token and instana_csrf_token and instana_base_url
 
-    if not has_api_token_auth and not has_session_auth:
+    if not has_api_token_auth and not has_jwt_token_auth and not has_session_auth:
         missing = []
         if not instana_base_url:
             missing.append("instana-base-url")
-        if not instana_api_token and not (instana_auth_token and instana_csrf_token):
-            missing.append("either (instana-api-token) OR (instana-auth-token + instana-csrf-token)")
+        if not instana_api_token and not (instana_jwt_token and instana_csrf_token) and not (instana_auth_token and instana_csrf_token):
+            missing.append("either (instana-api-token) OR (instana-jwt-token + instana-csrf-token) OR (instana-auth-token + instana-csrf-token)")
         error_msg = f"HTTP mode detected but missing required headers: {', '.join(missing)}"
         logger.error(AUTH_FAILED_MSG, error_msg)
         return {"error": error_msg}
@@ -125,38 +127,121 @@ def _validate_http_auth_headers(instana_api_token, instana_auth_token, instana_c
     return None
 
 
-def _create_api_client_with_config(base_url, instana_api_token, auth_headers):
+def _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token):
+    """Configure authentication type and validate tokens."""
+    if "Authorization" not in auth_headers:
+        logger.debug("Using session token authentication")
+        return None
+
+    auth_value = auth_headers["Authorization"]
+
+    if auth_value.startswith("Bearer "):
+        return _configure_jwt_auth(instana_jwt_token)
+
+    if auth_value.startswith("apiToken "):
+        return _configure_api_token_auth(configuration, instana_api_token)
+
+    return None
+
+
+def _configure_jwt_auth(instana_jwt_token):
+    """Configure JWT token authentication."""
+    if instana_jwt_token is None:
+        error_msg = "JWT token is required but not provided"
+        logger.error(AUTH_FAILED_MSG, error_msg)
+        return {"error": error_msg}
+    logger.debug("Using JWT token authentication")
+    return None
+
+
+def _configure_api_token_auth(configuration, instana_api_token):
+    """Configure API token authentication.
+
+    Note: For API token auth, we use the SDK's built-in api_key configuration
+    instead of manually setting the Authorization header. This prevents conflicts
+    where both methods might be used simultaneously.
+    """
+    if instana_api_token is None:
+        error_msg = "API token is required but not provided"
+        logger.error(AUTH_FAILED_MSG, error_msg)
+        return {"error": error_msg}
+    configuration.api_key['ApiKeyAuth'] = instana_api_token
+    configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
+    logger.debug("Using API token authentication via SDK configuration")
+    return None
+
+
+def _mask_token_for_logging(token_value):
+    """Mask token value for secure logging."""
+    if len(token_value) > 30:
+        return f"{token_value[:20]}...{token_value[-10:]}"
+    return token_value[:10] + "..."
+
+
+def _set_authorization_header(api_client_instance, auth_headers):
+    """Set Authorization header on API client.
+
+    Note: This should only be called for JWT and Session auth.
+    For API token auth, the SDK's configuration handles authentication.
+    """
+    if "Authorization" not in auth_headers:
+        return
+
+    auth_header_value = auth_headers["Authorization"]
+
+    # Skip setting Authorization header if it's an API token
+    # (SDK configuration handles this via api_key)
+    if auth_header_value.startswith("apiToken "):
+        logger.debug("Skipping Authorization header for API token (using SDK configuration)")
+        return
+
+    # Set header for JWT Bearer tokens and other auth types
+    masked_value = _mask_token_for_logging(auth_header_value)
+    api_client_instance.set_default_header("Authorization", auth_header_value)
+    logger.debug(f"Set Authorization header: {masked_value}")
+
+
+def _set_csrf_headers(api_client_instance, auth_headers):
+    """Set CSRF and Cookie headers on API client."""
+    if "X-CSRF-TOKEN" not in auth_headers:
+        return
+
+    csrf_value = auth_headers["X-CSRF-TOKEN"]
+    masked_csrf = f"{csrf_value[:10]}...{csrf_value[-5:]}" if len(csrf_value) > 15 else csrf_value[:5] + "..."
+    api_client_instance.set_default_header("X-CSRF-TOKEN", csrf_value)
+    logger.debug(f"Set X-CSRF-TOKEN header: {masked_csrf}")
+
+    if "Cookie" in auth_headers:
+        api_client_instance.set_default_header("Cookie", auth_headers["Cookie"])
+        logger.debug("Set session auth headers (CSRF + Cookie)")
+    else:
+        logger.debug("Set CSRF header for JWT auth (no Cookie)")
+
+
+def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers):
     """Create API client with configuration based on auth type."""
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
 
     configuration = Configuration()
     configuration.host = base_url
+    # Disable SSL verification for self-signed certificates (development/testing)
+    configuration.verify_ssl = False
+    configuration.ssl_ca_cert = None
 
-    # Configure based on auth type
-    if "Authorization" in auth_headers:
-        # API token mode
-        if instana_api_token is None:
-            error_msg = "API token is required but not provided"
-            logger.error(AUTH_FAILED_MSG, error_msg)
-            return None, {"error": error_msg}
-        configuration.api_key['ApiKeyAuth'] = instana_api_token
-        configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
-        logger.debug("Using API token authentication")
-    else:
-        # Session token mode
-        logger.debug("Using session token authentication")
+    # Configure authentication type
+    error = _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token)
+    if error:
+        return None, error
 
     # Create API client instance
     api_client_instance = ApiClient(configuration=configuration)
     user_agent_value = f"MCP-server/{__version__}"
     api_client_instance.set_default_header("User-Agent", header_value=user_agent_value)
 
-    # For session auth, add CSRF and Cookie headers
-    if "X-CSRF-TOKEN" in auth_headers:
-        api_client_instance.set_default_header("X-CSRF-TOKEN", auth_headers["X-CSRF-TOKEN"])
-        api_client_instance.set_default_header("Cookie", auth_headers["Cookie"])
-        logger.debug("Set session auth headers")
+    # Set authentication headers
+    _set_authorization_header(api_client_instance, auth_headers)
+    _set_csrf_headers(api_client_instance, auth_headers)
 
     return api_client_instance, None
 
@@ -173,14 +258,15 @@ def _try_http_mode_auth(api_class):
         instana_csrf_token = headers.get("instana-csrf-token")
         instana_base_url = headers.get("instana-base-url")
         instana_cookie_name = headers.get("instana-cookie-name")
+        instana_jwt_token = headers.get("instana-jwt-token")
 
         # Check if we're in HTTP mode
-        if not (instana_api_token or instana_auth_token or instana_csrf_token or instana_base_url):
+        if not (instana_api_token or instana_jwt_token or instana_auth_token or instana_csrf_token or instana_base_url):
             return None
 
         # Validate headers
         validation_error = _validate_http_auth_headers(
-            instana_api_token, instana_auth_token, instana_csrf_token, instana_base_url
+            instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url
         )
         if validation_error:
             return validation_error
@@ -189,13 +275,14 @@ def _try_http_mode_auth(api_class):
         auth_headers = build_instana_api_headers(
             auth_token=instana_auth_token,
             csrf_token=instana_csrf_token,
+            jwt_token=instana_jwt_token,
             api_token=instana_api_token,
             cookie_name=instana_cookie_name
         )
 
         # Create API client
         api_client_instance, error = _create_api_client_with_config(
-            instana_base_url, instana_api_token, auth_headers
+            instana_base_url, instana_api_token, instana_jwt_token, auth_headers
         )
         if error:
             return error
@@ -543,6 +630,31 @@ def process_tag_catalog_response(full_response: Dict[str, Any], beacon_type: str
         "count": len(tag_names),
         "beacon_type": beacon_type,
         "use_case": use_case
+    }
+
+
+def project_metric_card(metric: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Project a raw metric catalog entry to a compact card for query planning.
+
+    Keeps fields that help a planner build valid analyze calls (metricId, label,
+    description, aggregations, beaconTypes, formatter) and drops internal SDK
+    fields (pathToValueInBeacon, tagName, defaultAggregation) that bloat the
+    payload or mislead the planner.
+
+    Args:
+        metric: A single metric entry from the Instana metric catalog.
+
+    Returns:
+        Compact metric card with a stable schema (keys present even when value is None).
+    """
+    return {
+        "metricId": metric.get("metricId"),
+        "label": metric.get("label"),
+        "description": metric.get("description"),
+        "aggregations": metric.get("aggregations") or [],
+        "beaconTypes": metric.get("beaconTypes") or [],
+        "formatter": metric.get("formatter"),
     }
 
 

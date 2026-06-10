@@ -48,7 +48,8 @@ sys.modules['instana_client.api.website_catalog_api'].WebsiteCatalogApi = mock_w
 # Patch the with_header_auth decorator
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test
-    from src.website.website_catalog import WebsiteCatalogMCPTools, _decode_response
+    from src.core.utils import decode_response as _decode_response
+    from src.website.website_catalog import WebsiteCatalogMCPTools
 
 
 class TestDecodeResponse(unittest.TestCase):
@@ -112,7 +113,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
                 "beaconTypes": ["pageLoad", "error"]
             },
             {
-                "metricId": "pageLoadTime",
+                "metricId": "onLoadTime",
                 "label": "Page Load Time",
                 "description": "Time to load page",
                 "formatter": "LATENCY",
@@ -153,10 +154,84 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
 
         # Check second metric has aggregations
         page_load = metrics[1]
-        self.assertEqual(page_load["metricId"], "pageLoadTime")
+        self.assertEqual(page_load["metricId"], "onLoadTime")
         self.assertIn("MEAN", page_load["aggregations"])
         self.assertIn("P95", page_load["aggregations"])
         self.assertIn("P99", page_load["aggregations"])
+
+    def test_get_website_catalog_metrics_default_strips_internal_fields(self):
+        """Default (planner) view should strip pathToValueInBeacon, tagName, defaultAggregation."""
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = json.dumps([
+            {
+                "metricId": "uniqueUsers",
+                "label": "Unique users",
+                "description": "Number of unique user ids.",
+                "formatter": "NUMBER",
+                "aggregations": ["DISTINCT_COUNT"],
+                "beaconTypes": ["pageLoad"],
+                "pathToValueInBeacon": ["userId"],
+                "tagName": "beacon.userId",
+                "defaultAggregation": None,
+            }
+        ]).encode('utf-8')
+        self.catalog_api.get_website_catalog_metrics_without_preload_content = Mock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_website_catalog_metrics())
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(
+            result["description"],
+            "Website monitoring metrics catalog with necessary metadata for query planning",
+        )
+        metric = result["metrics"][0]
+        self.assertEqual(metric["metricId"], "uniqueUsers")
+        self.assertEqual(metric["aggregations"], ["DISTINCT_COUNT"])
+        self.assertNotIn("pathToValueInBeacon", metric)
+        self.assertNotIn("tagName", metric)
+        self.assertNotIn("defaultAggregation", metric)
+        # Stable schema: all six compact keys present
+        self.assertEqual(
+            set(metric.keys()),
+            {"metricId", "label", "description", "aggregations", "beaconTypes", "formatter"},
+        )
+
+    def test_get_website_catalog_metrics_full_view_preserves_internal_fields(self):
+        """view='full' should return the raw SDK fields including internal ones."""
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = json.dumps([
+            {
+                "metricId": "uniqueUsers",
+                "label": "Unique users",
+                "description": "Number of unique user ids.",
+                "pathToValueInBeacon": ["userId"],
+                "tagName": "beacon.userId",
+            }
+        ]).encode('utf-8')
+        self.catalog_api.get_website_catalog_metrics_without_preload_content = Mock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_website_catalog_metrics(view="full"))
+
+        self.assertEqual(
+            result["description"],
+            "Website monitoring metrics catalog with full metadata",
+        )
+        metric = result["metrics"][0]
+        self.assertEqual(metric["pathToValueInBeacon"], ["userId"])
+        self.assertEqual(metric["tagName"], "beacon.userId")
+
+    def test_get_website_catalog_metrics_invalid_view(self):
+        """Unknown view should return a structured error without calling the API."""
+        self.catalog_api.get_website_catalog_metrics_without_preload_content = Mock()
+
+        result = asyncio.run(self.client.get_website_catalog_metrics(view="bogus"))
+
+        self.assertIn("error", result)
+        self.assertIn("bogus", result["error"])
+        self.assertEqual(result["valid_views"], ["planner", "full"])
+        self.catalog_api.get_website_catalog_metrics_without_preload_content.assert_not_called()
 
     def test_get_website_catalog_metrics_http_error(self):
         """Test get_website_catalog_metrics with HTTP error"""
@@ -337,4 +412,3 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

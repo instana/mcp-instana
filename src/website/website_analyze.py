@@ -7,11 +7,9 @@ This module provides website analyze-specific MCP tools for Instana monitoring.
 import json
 import logging
 from datetime import datetime
-from email.message import Message
 from typing import Any, Dict, List, Optional, Union
 
 # Constants
-DEFAULT_CHARSET = 'utf-8'
 DEFAULT_GROUP_BY_TAG = 'beacon.location.path'  # Default grouping by URL path
 DEFAULT_GROUP_BY_TAG_ENTITY = 'NOT_APPLICABLE'
 
@@ -43,42 +41,15 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    decode_response,
+    register_as_tool,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
-
-
-def _decode_response(response) -> str:
-    """
-    Safely decode response data using the response's charset or UTF-8 as fallback.
-
-    Args:
-        response: The HTTP response object
-
-    Returns:
-        Decoded response text
-    """
-    # Try to get charset from response headers using standard library parsing
-    charset = DEFAULT_CHARSET  # Default fallback
-
-    # Check if response has charset information
-    if hasattr(response, 'headers') and response.headers:
-        content_type = response.headers.get('Content-Type', '')
-        if content_type:
-            # Use email.message.Message for proper RFC-compliant Content-Type parsing
-            # This handles quoted values, whitespace, case-insensitivity, etc.
-            msg = Message()
-            msg['content-type'] = content_type
-            parsed_charset = msg.get_content_charset()
-            if parsed_charset:
-                charset = parsed_charset
-
-    try:
-        return response.data.decode(charset)
-    except (UnicodeDecodeError, LookupError):
-        # Fallback to DEFAULT_CHARSET if specified charset fails
-        return response.data.decode(DEFAULT_CHARSET, errors='replace')
 
 
 class WebsiteAnalyzeMCPTools(BaseInstanaClient):
@@ -294,7 +265,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
                     # Try to get error details from response
                     try:
-                        error_body = _decode_response(response)
+                        error_body = decode_response(response)
                         logger.error(f"[get_website_beacon_groups] API Error Response: {error_body}")
 
                         # Check if error is related to invalid metrics
@@ -327,7 +298,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                         return {"error": error_message, "status_code": response.status}
 
                 #Read the response
-                response_text = _decode_response(response)
+                response_text = decode_response(response)
 
                 # Parse the response as JSON
                 result_dict = json.loads(response_text)
@@ -631,7 +602,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
             result = api_client.get_beacons_without_preload_content(get_website_beacons=config_object)
 
             # Process results
-            response_text = _decode_response(result)
+            response_text = decode_response(result)
             result_dict = json.loads(response_text)
 
             # Clean NaN values
@@ -687,7 +658,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 "description": "List of metric names with aggregations (REQUIRED)",
                 "examples": [
                     {"metric": "beaconCount", "aggregation": "SUM"},
-                    {"metric": "pageLoadTime", "aggregation": "MEAN"}
+                    {"metric": "onLoadTime", "aggregation": "MEAN"}
                 ]
             })
 

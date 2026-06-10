@@ -21,6 +21,7 @@ ANALYZE_VALID_OPERATIONS = ["get_beacon_groups", "get_beacons"]
 CATALOG_VALID_OPERATIONS = ["get_metrics", "get_tag_catalog"]
 CONFIGURATION_VALID_OPERATIONS = ["get_all", "get"]
 ADVANCED_CONFIG_VALID_OPERATIONS = ["get_geo_config", "get_ip_masking", "get_geo_rules"]
+ALERT_VALID_OPERATIONS = ["find_active_website_alert_configs", "find_website_alert_config"]
 
 # Define parameter key constants to avoid typos
 PARAM_METRICS = "metrics"
@@ -36,6 +37,9 @@ PARAM_WEBSITE_ID = "website_id"
 PARAM_WEBSITE_NAME = "website_name"
 PARAM_NAME = "name"
 PARAM_PAYLOAD = "payload"
+PARAM_ALERT_ID = "id"
+PARAM_VALID_ON = "valid_on"
+PARAM_ALERT_IDS = "alert_ids"
 
 
 class WebsiteSmartRouterMCPTool(BaseInstanaClient):
@@ -49,6 +53,7 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
+        from src.website.website_alert import WebsiteAlertMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
@@ -57,19 +62,21 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         self.website_analyze_client = WebsiteAnalyzeMCPTools(read_token, base_url)
         self.website_catalog_client = WebsiteCatalogMCPTools(read_token, base_url)
         self.website_configuration_client = WebsiteConfigurationMCPTools(read_token, base_url)
+        self.website_alert_client = WebsiteAlertMCPTools(read_token, base_url)
 
-        logger.info("Smart Router Website initialized with Analyze, Catalog, and Configuration tools")
+        logger.info("Smart Router Website initialized with Analyze, Catalog, Configuration and Alert tools")
 
     @register_as_tool(
         title="Manage Instana Website Resources",
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
-        description="""Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations.
+        description="""Unified Instana website resource manager for beacon monitoring, catalog, configuration and alert operations.
 
 Resource Types:
     - "analyze": Query website beacon data with grouping or filtering
     - "catalog": Get available metrics and tags for website monitoring
     - "configuration": Get website configurations
     - "advanced_config": Retrieve advanced configurations (geo-location, IP masking, geo rules) - READ ONLY
+    - "alert": Get mobile app alert configurations
 
 CRITICAL WORKFLOW:
     BEFORE calling analyze operations, you MUST call get_tag_catalog to get valid tag names.
@@ -87,7 +94,7 @@ ANALYZE (resource_type="analyze"):
         to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
 
     Examples:
-        metrics: [{"metric": "beaconCount", "aggregation": "SUM"}, {"metric": "pageLoadTime", "aggregation": "P95"}]
+        metrics: [{"metric": "beaconCount", "aggregation": "SUM"}, {"metric": "onLoadTime", "aggregation": "P95"}]
         tag_filter_expression: {"type": "TAG_FILTER", "name": "beacon.page.name", "operator": "CONTAINS", "entity": "NOT_APPLICABLE", "value": "checkout"}
 
     get_beacon_groups - Use for grouped/aggregated data (e.g., "beacon count per page")
@@ -97,7 +104,7 @@ CATALOG (resource_type="catalog"):
     operations: get_metrics, get_tag_catalog
     params: {beacon_type, use_case}
 
-    get_metrics - Get website metrics catalog with full metadata (metricId, label, description, formatter, aggregations, beaconTypes)
+    get_metrics - Get website metrics catalog with necessary metadata for query planning (metricId, label, description, formatter, aggregations, beaconTypes). Use returned metricId values exactly; they are authoritative over examples. Use params.view="full" to retrieve raw SDK metadata (rarely needed).
     get_tag_catalog - Get valid tag names for beacon_type and use_case
         Valid beacon_type: "PAGELOAD", "PAGECHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"
         Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
@@ -127,11 +134,23 @@ ADVANCED_CONFIG (resource_type="advanced_config"):
     get_geo_rules - Get custom geo mapping rules
         Returns: Array of geo mapping rules with CIDR ranges and location data
 
+ALERT (resource_type="alert"):
+    operations: find_active_website_alert_configs, find_website_alert_config
+    params: {website_id, alert_ids, id, valid_on}
+
+    find_active_website_alert_configs - Get all alert configurations for a website
+        - website_id: Website ID to get alert configs for (required)
+        - alert_ids: Optional list of specific alert IDs to filter (optional)
+
+    find_website_alert_config - Get a specific alert configuration by ID
+        - id: Specific alert configuration ID to retrieve (required)
+        - valid_on: Unix timestamp (ms) to retrieve the configuration active at that time (optional, default is latest active version)
+
+
 Args:
-    resource_type: "analyze", "catalog", "configuration", or "advanced_config"
+    resource_type: "analyze", "catalog", "configuration", "advanced_config", or "alert"
     operation: Specific operation for the resource type
     params: Operation-specific parameters (optional)
-    ctx: MCP context (internal)
 
 Returns:
     Dictionary with results from the appropriate tool
@@ -143,7 +162,9 @@ Examples:
     resource_type="catalog", operation="get_metrics"
     resource_type="configuration", operation="get_all"
     resource_type="configuration", operation="get", params={"website_name": "robot-shop"}
-    resource_type="advanced_config", operation="get_geo_config", params={"website_name": "robot-shop"}"""
+    resource_type="advanced_config", operation="get_geo_config", params={"website_name": "robot-shop"}
+    resource_type="alert", operation="find_active_website_alert_configs", params={"website_id": "website-abc123"}
+    resource_type="alert", operation="find_website_alert_config", params={"id": "alert-123", "valid_on": 1234567890000}"""
     )
     async def manage_websites(
         self,
@@ -162,10 +183,10 @@ Examples:
                 params = {}
 
             # Validate resource_type
-            if resource_type not in ["analyze", "catalog", "configuration", "advanced_config"]:
+            if resource_type not in ["analyze", "catalog", "configuration", "advanced_config", "alert"]:
                 return {
-                    "error": f"Invalid resource_type '{resource_type}'. Valid types: 'analyze', 'catalog', 'configuration', 'advanced_config'",
-                    "valid_types": ["analyze", "catalog", "configuration", "advanced_config"]
+                    "error": f"Invalid resource_type '{resource_type}'. Valid types: 'analyze', 'catalog', 'configuration', 'advanced_config', 'alert'",
+                    "valid_types": ["analyze", "catalog", "configuration", "advanced_config", "alert"]
                 }
 
             # Route to the appropriate resource handler
@@ -177,10 +198,12 @@ Examples:
                 return await self._handle_configuration(operation, params, ctx)
             elif resource_type == "advanced_config":
                 return await self._handle_advanced_config(operation, params, ctx)
+            elif resource_type == "alert":
+                return await self._handle_alert(operation, params, ctx)
             else:
                 return {
                     "error": f"Unsupported resource_type: {resource_type}",
-                    "supported_types": ["analyze", "catalog", "configuration", "advanced_config"]
+                    "supported_types": ["analyze", "catalog", "configuration", "advanced_config", "alert"]
                 }
 
         except Exception as e:
@@ -307,8 +330,9 @@ Examples:
 
         #Route to specific operation
         if operation == "get_metrics":
-            logger.debug("Routing to Website Catalog Metrics")
-            result = await self.website_catalog_client.get_website_catalog_metrics(ctx = ctx)
+            view = (params or {}).get("view", "planner")
+            logger.debug(f"Routing to Website Catalog Metrics | view={view}")
+            result = await self.website_catalog_client.get_website_catalog_metrics(ctx=ctx, view=view)
 
         elif operation == "get_tag_catalog":
             # Extract required parameters
@@ -422,5 +446,58 @@ Examples:
             "operation": operation,
             "website_name": website_name if website_name else None,
             "website_id": website_id if website_id else None,
+            "results": result
+        }
+
+    async def _handle_alert(
+        self,
+        operation: str,
+        params: Dict[str, Any],
+        ctx
+        ) -> Dict[str, Any]:
+        """Handle Website alert operations"""
+
+        # Validate operation
+        if operation not in ALERT_VALID_OPERATIONS:
+            return {
+                "error": f"Invalid operation '{operation}' for alert",
+                "valid_operations": ALERT_VALID_OPERATIONS
+            }
+
+        # Initialize result to avoid unbound variable error
+        result = None
+
+        #Route to specific operation
+        if operation == "find_active_website_alert_configs":
+            website_id = params.get(PARAM_WEBSITE_ID)
+            alert_ids = params.get(PARAM_ALERT_IDS)
+
+            logger.debug(f"Routing to find_active_website_alert_configs with website_id={website_id}")
+            result = await self.website_alert_client.find_active_website_alert_configs(
+                website_id=website_id,
+                alert_ids=alert_ids,
+                ctx=ctx
+            )
+        elif operation == "find_website_alert_config":
+            alert_id = params.get(PARAM_ALERT_ID)
+            valid_on = params.get(PARAM_VALID_ON)
+
+            logger.debug(f"Routing to find_website_alert_config with id={alert_id}")
+            result = await self.website_alert_client.find_website_alert_config(
+                id=alert_id,
+                valid_on=valid_on,
+                ctx=ctx
+            )
+        else:
+            # This should never happen due to validation above, but handle it gracefully
+            return {
+                "error": f"Unhandled operation '{operation}' for alert",
+                "valid_operations": ALERT_VALID_OPERATIONS
+            }
+
+        # Return structured response
+        return {
+            "resource_type": "alert",
+            "operation": operation,
             "results": result
         }

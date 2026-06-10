@@ -28,8 +28,37 @@ class TestBuildInstanaApiHeaders:
         assert "instanaAuthToken=session_token_123" in headers["Cookie"]
         assert "Authorization" not in headers  # API token NOT used
 
-    def test_priority_2_api_token_when_no_session_token(self):
-        """Test that API token is used when session token is not provided."""
+    def test_priority_2_jwt_token_over_api_token(self):
+        """Test that JWT token with CSRF takes priority over API token."""
+        headers = build_instana_api_headers(
+            jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+            csrf_token="csrf_token_123",
+            api_token="api_token_789"  # Both provided
+        )
+
+        # Should use JWT token with CSRF, not API token
+        assert "Authorization" in headers
+        assert headers["Authorization"] == "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        assert "X-CSRF-TOKEN" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_123"
+        assert "Cookie" not in headers
+
+    def test_priority_2_jwt_token_when_no_session_token(self):
+        """Test that JWT token with CSRF is used when session token is not provided."""
+        headers = build_instana_api_headers(
+            jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+            csrf_token="csrf_token_456"
+        )
+
+        # Should use JWT token with Bearer prefix and CSRF
+        assert "Authorization" in headers
+        assert headers["Authorization"] == "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        assert "X-CSRF-TOKEN" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_456"
+        assert "Cookie" not in headers
+
+    def test_priority_3_api_token_when_no_session_or_jwt_token(self):
+        """Test that API token is used when session token and JWT token are not provided."""
         headers = build_instana_api_headers(
             api_token="api_token_789"
         )
@@ -40,7 +69,7 @@ class TestBuildInstanaApiHeaders:
         assert "X-CSRF-TOKEN" not in headers
         assert "Cookie" not in headers
 
-    def test_priority_2_api_token_when_partial_session_token(self):
+    def test_priority_3_api_token_when_partial_session_token(self):
         """Test that API token is used when only auth_token is provided (missing csrf_token)."""
         headers = build_instana_api_headers(
             auth_token="session_token_123",
@@ -52,8 +81,30 @@ class TestBuildInstanaApiHeaders:
         assert headers["Authorization"] == "apiToken api_token_789"
         assert "X-CSRF-TOKEN" not in headers
 
+    def test_jwt_token_requires_csrf(self):
+        """Test that JWT token requires CSRF token."""
+        with pytest.raises(ValueError, match="CSRF token must be provided for JWT authentication"):
+            build_instana_api_headers(
+                jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+                # Missing csrf_token
+            )
+
+    def test_jwt_token_with_csrf_when_partial_session_token(self):
+        """Test that JWT token with CSRF is used when only auth_token is provided (missing full session)."""
+        headers = build_instana_api_headers(
+            auth_token="session_token_123",
+            csrf_token="csrf_token_456",
+            jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        )
+
+        # Should use JWT token with CSRF because session is incomplete (no cookie_name)
+        assert "Authorization" in headers
+        assert headers["Authorization"] == "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        assert "X-CSRF-TOKEN" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_456"
+
     @patch.dict(os.environ, {"INSTANA_API_TOKEN": "env_api_token_999"})
-    def test_priority_3_environment_fallback(self):
+    def test_priority_4_environment_fallback(self):
         """Test that environment variable is used as fallback."""
         headers = build_instana_api_headers()
 
@@ -74,6 +125,20 @@ class TestBuildInstanaApiHeaders:
         assert "X-CSRF-TOKEN" in headers
         assert "Cookie" in headers
         assert "Authorization" not in headers
+
+    @patch.dict(os.environ, {"INSTANA_API_TOKEN": "env_api_token_999"})
+    def test_jwt_token_overrides_environment(self):
+        """Test that JWT token with CSRF takes priority over environment variable."""
+        headers = build_instana_api_headers(
+            jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+            csrf_token="csrf_token_789"
+        )
+
+        # Should use JWT token with CSRF, not environment
+        assert "Authorization" in headers
+        assert headers["Authorization"] == "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        assert "X-CSRF-TOKEN" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_789"
 
     @patch.dict(os.environ, {"INSTANA_API_TOKEN": "env_api_token_999"})
     def test_api_token_overrides_environment(self):
@@ -211,3 +276,63 @@ class TestBuildInstanaApiHeaders:
 
         assert "Authorization" in headers
         assert headers["Authorization"] == f"apiToken {max_length_token}"
+
+    def test_jwt_token_exceeds_max_length(self):
+        """Test that JWT token exceeding maximum length is rejected."""
+        long_token = "a" * 2049  # Exceeds MAX_TOKEN_LENGTH of 2048
+        with pytest.raises(ValueError, match="JWT token exceeds maximum length"):
+            build_instana_api_headers(
+                jwt_token=long_token,
+                csrf_token="valid_csrf"
+            )
+
+    def test_jwt_token_at_max_length(self):
+        """Test that JWT token at exactly maximum length is accepted."""
+        max_length_token = "a" * 2048  # Exactly MAX_TOKEN_LENGTH
+        headers = build_instana_api_headers(
+            jwt_token=max_length_token,
+            csrf_token="valid_csrf"
+        )
+
+        assert "Authorization" in headers
+        assert headers["Authorization"] == f"Bearer {max_length_token}"
+        assert "X-CSRF-TOKEN" in headers
+
+    def test_session_token_priority_over_jwt_token(self):
+        """Test that session token takes priority over JWT token."""
+        headers = build_instana_api_headers(
+            auth_token="session_token_123",
+            csrf_token="csrf_token_456",
+            jwt_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+            cookie_name="instanaAuthToken"
+        )
+
+        # Should use session token, not JWT token
+        assert "X-CSRF-TOKEN" in headers
+        assert "Cookie" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_456"
+        assert "instanaAuthToken=session_token_123" in headers["Cookie"]
+        assert "Authorization" not in headers  # JWT token NOT used
+
+    def test_jwt_token_format(self):
+        """Test that JWT token uses Bearer prefix format and includes CSRF."""
+        jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.test"
+        headers = build_instana_api_headers(
+            jwt_token=jwt_token,
+            csrf_token="csrf_token_123"
+        )
+
+        assert "Authorization" in headers
+        assert headers["Authorization"].startswith("Bearer ")
+        assert headers["Authorization"] == f"Bearer {jwt_token}"
+        assert "X-CSRF-TOKEN" in headers
+        assert headers["X-CSRF-TOKEN"] == "csrf_token_123"
+
+    def test_api_token_format(self):
+        """Test that API token uses apiToken prefix format."""
+        api_token = "test_api_token_123"
+        headers = build_instana_api_headers(api_token=api_token)
+
+        assert "Authorization" in headers
+        assert headers["Authorization"].startswith("apiToken ")
+        assert headers["Authorization"] == f"apiToken {api_token}"

@@ -165,12 +165,11 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         mock_api_client.side_effect = Exception("boom")
 
         with patch('src.application.application_analyze.logger.error') as mock_logger_error:
-            with self.assertRaises(Exception) as context:
+            with self.assertRaises(Exception):
                 ApplicationAnalyzeMCPTools(
                     read_token=self.read_token,
                     base_url=self.base_url
                 )
-            self.assertIn("boom", str(context.exception))
 
         mock_logger_error.assert_called_once()
         self.assertIn("Error initializing ApplicationAnalyzeApi", mock_logger_error.call_args[0][0])

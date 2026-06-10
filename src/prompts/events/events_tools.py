@@ -67,13 +67,15 @@ class EventsPrompts:
     ) -> str:
         """Show me all closed issues with severity higher than 5, group by metrics, for Apr 22 from 10 to 11 am """
         return f"""
-        Get events:
-        - From time: {from_time or 1745383800000} (Apr 22, 2025 10:00 AM)
-        - To time: {to_time or 1745387400000} (Apr 22, 2025 11:00 AM)
-        - State: {state or 'closed'}
-        - Severity: {severity or 10} (critical)
-        - Event type filters: {event_type_filters or '["ISSUE"]'}
-        - Max events: {max_events}
+        Get events using filters:
+        {{
+            - From time: {from_time or 1745383800000} (Apr 22, 2025 10:00 AM)
+            - To time: {to_time or 1745387400000} (Apr 22, 2025 11:00 AM)
+            - State: {state or 'closed'}
+            - Severity: {severity or 10} (critical)
+            - Event type filters: {event_type_filters or '["ISSUE"]'}
+            - Max events: {max_events}
+        }}
         """
 
     @auto_register_prompt
@@ -88,11 +90,13 @@ class EventsPrompts:
         """Show me details for CRI-O Container issues generated in the last 45 min that had "high error rate" problem"""
         return f"""
         Get events:
-        - Time range: {time_range or 'last 45 minutes'}
-        - Entity name: {entity_name or 'CRI-O Container'}
-        - Problem: {problem or 'high error rate'}
-        - Event type filters: {event_type_filters or '["ISSUE"]'}
-        - Max events: {max_events}
+        {{
+            - Time range: {time_range or 'last 45 minutes'}
+            - Entity name: {entity_name or 'CRI-O Container'}
+            - Problem: {problem or 'high error rate'}
+            - Event type filters: {event_type_filters or '["ISSUE"]'}
+            - Max events: {max_events}
+        }}
         """
 
     @auto_register_prompt
@@ -106,16 +110,18 @@ class EventsPrompts:
         """Show me application incidents from the last week grouped by problem and sorted by severity"""
         return f"""
         Get events:
-        - Time range: {time_range or 'last week'}
-        - Entity type: {entity_type or 'application'}
-        - Event type filters: {event_type_filters or '["INCIDENT"]'}
-        - Max events: {max_events}
+        {{
+            - Time range: {time_range or 'last week'}
+            - Entity type: {entity_type or 'application'}
+            - Event type filters: {event_type_filters or '["INCIDENT"]'}
+            - Max events: {max_events}
+        }}
         """
 
     @auto_register_prompt
     @staticmethod
     def get_events_by_ids(
-        event_ids: Union[List[str], str]
+        event_ids: list[str] | str
     ) -> str:
         """Get multiple events by their IDs"""
         return f"""

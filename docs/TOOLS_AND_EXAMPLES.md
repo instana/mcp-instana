@@ -62,6 +62,15 @@
     - [Example Prompts](#example-prompts-7)
       - [Release Management](#release-management)
       - [Release Impact Analysis](#release-impact-analysis)
+  - [9. Mobile App Monitoring](#9-mobile-app-monitoring)
+    - [Capabilities](#capabilities-8)
+    - [Example Prompts](#example-prompts-8)
+      - [Beacon Analysis](#beacon-analysis-1)
+      - [Performance Metrics](#performance-metrics)
+      - [Geographic Analysis](#geographic-analysis-1)
+      - [Device and Platform Analysis](#device-and-platform-analysis)
+      - [Configuration](#configuration-1)
+      - [Alert Management](#alert-management)
   - [Advanced Usage Tips](#advanced-usage-tips)
     - [Time Range Specifications](#time-range-specifications)
     - [Filtering and Grouping](#filtering-and-grouping)
@@ -89,7 +98,7 @@ The Instana MCP (Model Context Protocol) Server enables AI assistants and automa
 **What you can do:**
 - Query application and infrastructure metrics
 - Analyze events and incidents
-- Monitor website performance
+- Monitor website and mobile app performance
 - Manage SLOs and releases
 - Create and configure dashboards
 - Browse automation actions
@@ -737,6 +746,128 @@ Show me how error rates changed after the release deployed at 2:47 PM IST on Mar
 ```
 Get statistics on latency evolution after the Checkout Service release compared to the previous week
 ```
+
+## 9. Mobile App Monitoring
+
+**Tool Name:** `manage_mobile_apps`
+
+### Capabilities
+
+Monitor mobile application performance, analyze user sessions, track crashes, and configure mobile app settings.
+
+**Resource Types:**
+- **analyze**: Query mobile app beacon data with grouping or filtering
+- **catalog**: Get available metrics and tags for mobile app monitoring
+- **configuration**: Get mobile app configurations
+- **advanced_config**: Retrieve advanced configurations (geo-location, IP masking, geo rules)
+- **alert**: Get mobile app alert configurations
+
+### Example Prompts
+
+#### Beacon Analysis
+
+```
+Show me all session start beacons for the "Robot Shop" mobile app in the last hour
+```
+
+```
+Get beacon count per mobile app grouped by view name for the last 24 hours
+```
+
+```
+Analyze crash beacons for iOS devices in the last 7 days
+```
+
+```
+Show me HTTP request beacons with response time greater than 2 seconds
+```
+
+#### Performance Metrics
+
+```
+What are the available metrics for mobile app monitoring?
+```
+
+```
+Get P95 latency for all views in the "Shopping App" mobile app
+```
+
+```
+Show me beacon count and average session duration grouped by device model
+```
+
+```
+Analyze performance metrics for the "Checkout" view across different mobile OS versions
+```
+
+#### Geographic Analysis
+
+```
+Show me session distribution by country for the last 30 days
+```
+
+```
+Get beacon count grouped by city for the "Delivery App"
+```
+
+```
+Analyze crash rates by geographic region
+```
+
+#### Device and Platform Analysis
+
+```
+Show me beacon distribution across iOS and Android platforms
+```
+
+```
+Get session count grouped by device manufacturer
+```
+
+```
+Analyze app version adoption rates across different devices
+```
+
+#### Configuration
+
+```
+List all mobile apps configured in Instana
+```
+
+```
+Get configuration details for the "Robot Shop" mobile app
+```
+
+```
+Show me geo-location configuration for the mobile app
+```
+
+```
+Get IP masking settings for the "Shopping App"
+```
+
+#### Alert Management
+
+```
+Show me all active alert configurations for the "Robot Shop" mobile app
+```
+
+```
+Get details for mobile app alert configuration with ID "alert-123"
+```
+
+```
+List all alert configurations for mobile app ID "app-abc123"
+```
+
+**Important Notes:**
+- Always call `get_mobile_app_metric_catalog` first to get valid metrics
+- Then call `get_mobile_app_tag_catalog` to get valid tag names
+- Tag names MUST start with "mobileBeacon." (e.g., "mobileBeacon.mobileApp.name")
+- ALWAYS include `"entity": "NOT_APPLICABLE"` in every tag filter
+- Default beacon type is "SESSION_START"
+
+---
 
 ---
 
