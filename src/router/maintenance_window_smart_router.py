@@ -180,43 +180,43 @@ Examples:
     resource_type="window", operation="create", application_id="app-123", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
     resource_type="window", operation="create", imap_code="ORZ-000012", start_time="1748786400000", duration_minutes="30", rrule="FREQ=DAILY;INTERVAL=1", until_date="2026-06-17T23:59:59Z"
     resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_days="1", reason="Extended maintenance", change_request_id="CHG0012345"
-    
+
     # WINDOW operations - modify
     resource_type="window", operation="modify", window_id="mw-789", duration_minutes="60"
     resource_type="window", operation="modify", window_id="mw-789", end_time="1748790000000"
     resource_type="window", operation="modify", window_id="mw-789", reason="Extended maintenance"
     resource_type="window", operation="modify", window_id="mw-789", duration_minutes="90", reason="Extended due to issues"
-    
+
     # WINDOW operations - close
     resource_type="window", operation="close", window_id="mw-789"
     resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed successfully"
     resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed with minor issues"
-    
+
     # WINDOW operations - list_active
     resource_type="window", operation="list_active"
     resource_type="window", operation="list_active", imap_code="EAL-012471"
     resource_type="window", operation="list_active", application_id="app-123"
-    
+
     # WINDOW operations - list_scheduled
     resource_type="window", operation="list_scheduled"
     resource_type="window", operation="list_scheduled", imap_code="EAL-012471"
     resource_type="window", operation="list_scheduled", application_id="app-123"
-    
+
     # WINDOW operations - list_all
     resource_type="window", operation="list_all"
     resource_type="window", operation="list_all", imap_code="EAL-012471"
     resource_type="window", operation="list_all", application_id="app-123"
-    
+
     # WINDOW operations - list_expired
     resource_type="window", operation="list_expired"
     resource_type="window", operation="list_expired", imap_code="EAL-012471"
     resource_type="window", operation="list_expired", application_id="app-123"
-    
+
     # WINDOW operations - bulk_create
     resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", duration_hours="2", reason="Coordinated deployment"
     resource_type="window", operation="bulk_create", application_ids="app-123,app-456", start_time="1748786400000", duration_minutes="120", reason="Coordinated deployment"
     resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012,XYZ-999999", start_time="1748786400000", template="deployment", change_request_id="CHG0012345"
-    
+
     # WINDOW operations - validate
     resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120"
     resource_type="window", operation="validate", application_id="app-123", start_time="1748786400000", template="deployment"
