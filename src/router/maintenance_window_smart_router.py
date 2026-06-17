@@ -99,54 +99,16 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana maintenance window manager for lifecycle management.
 
-IMPORTANT FOR WATSONX ORCHESTRATE ROUTING:
-- Use this tool for maintenance window questions such as:
-  * "Show me scheduled maintenance windows"
-  * "List active maintenance windows"
-  * "What maintenance windows are planned?"
-  * "Create a maintenance window for EAL-012471"
-  * "Close maintenance window mw-789"
-  * "Show all maintenance windows"
-  * "Are there any upcoming maintenance windows?"
-  * "Can you give me scheduled maintenance windows applications?"
-- For listing scheduled windows: resource_type="window", operation="list_scheduled"
-- For listing active windows: resource_type="window", operation="list_active"
-- For listing all windows: resource_type="window", operation="list_all"
-- For creating windows: resource_type="window", operation="create"
-
-ALL PARAMETERS ARE FLAT STRINGS - No nested objects required!
-
-TIME FORMAT INSTRUCTIONS FOR LLM:
-- start_time, end_time, until_date: Must be Unix timestamp in milliseconds (integer)
-- When user provides natural language time (e.g., "in 2 hours", "tomorrow at 10am"):
-  * Calculate the Unix timestamp in milliseconds
-  * Convert relative times to absolute timestamps
-  * Example: "in 2 hours" from now = current_time_ms + (2 * 60 * 60 * 1000)
-- ISO format times should be converted to Unix milliseconds
-- Example: "2026-06-01T14:00:00Z" = 1748786400000
-
-DURATION FORMAT INSTRUCTIONS FOR LLM:
-- duration_minutes: Integer representing minutes (e.g., 120 for 2 hours)
-- duration_hours: Integer representing hours (e.g., 2 for 2 hours)
-- duration_days: Integer representing days (e.g., 1 for 1 day)
-- When user says "2 hours", provide duration_hours="2" OR duration_minutes="120"
-- When user says "30 minutes", provide duration_minutes="30"
-- When user says "1 day", provide duration_days="1" OR duration_hours="24"
-- Do NOT pass string values like "2 hours" - convert to integer
-
 Resource Types:
-- "window": Create, modify, close, and list maintenance windows
-- "templates": Retrieve available maintenance window templates
+    - "window": Create, modify, close, and list maintenance windows
+    - "templates": Retrieve available maintenance window templates
 
 WINDOW (resource_type="window"):
     operations: create, modify, close, list_active, list_scheduled, list_all, list_expired, bulk_create, validate
 
     create - Create a new maintenance window
         Required: imap_code OR application_id, start_time
-        Optional: end_time, duration_minutes, duration_hours, duration_days,
-                  reason, template, change_request_id, affected_services,
-                  notification_channels, use_tag_filter_expression, tag_name,
-                  rrule, until_date
+        Optional: end_time, duration_minutes, duration_hours, duration_days, reason, template, change_request_id, affected_services, notification_channels, use_tag_filter_expression, tag_name, rrule, until_date
 
     modify - Modify an existing maintenance window
         Required: window_id
@@ -157,7 +119,7 @@ WINDOW (resource_type="window"):
         Optional: completion_notes
 
     list_active - List all currently active maintenance windows
-        Optional: imap_code, application_id (filter by application)
+        Optional: imap_code, application_id
 
     list_scheduled - List all upcoming scheduled maintenance windows
         Optional: imap_code, application_id
@@ -169,9 +131,8 @@ WINDOW (resource_type="window"):
         Optional: imap_code, application_id
 
     bulk_create - Create maintenance windows for multiple applications at once
-        Required: application_ids (JSON array string) OR imap_codes (JSON array string), start_time
-        Optional: duration_minutes, duration_hours, duration_days, reason, template,
-                  change_request_id, use_tag_filter_expression, tag_name
+        Required: application_ids OR imap_codes, start_time
+        Optional: duration_minutes, duration_hours, duration_days, reason, template, change_request_id, use_tag_filter_expression, tag_name
 
     validate - Validate maintenance window parameters without creating
         Required: imap_code OR application_id, start_time
@@ -181,7 +142,88 @@ TEMPLATES (resource_type="templates"):
     operations: get
 
     get - Retrieve all available maintenance window templates
-        No parameters required"""
+        No parameters required
+
+Args:
+    resource_type: "window" or "templates" (default: "window")
+    operation: Operation to perform (default: "list_scheduled")
+    application_id: Single application ID (legacy support)
+    application_ids: Comma-separated or JSON array of application IDs
+    imap_code: Single IMAP code (e.g., "EAL-012512")
+    imap_codes: Comma-separated or JSON array of IMAP codes
+    window_id: Maintenance window ID (for modify/close)
+    start_time: Start time (Unix timestamp ms or ISO string)
+    end_time: End time (Unix timestamp ms or ISO string)
+    duration_minutes: Duration in minutes (e.g., "120")
+    duration_hours: Duration in hours (e.g., "2")
+    duration_days: Duration in days (e.g., "1")
+    reason: Reason/description for the maintenance window
+    template: Template name ("deployment", "database_migration", "infrastructure_upgrade", "emergency", "routine")
+    change_request_id: ServiceNow change request ID
+    affected_services: Comma-separated or JSON array of service names
+    notification_channels: Comma-separated or JSON array of channels
+    completion_notes: Notes when closing a window
+    use_tag_filter_expression: "true" or "false"
+    tag_name: Tag name for filter expression
+    rrule: Recurrence rule (RFC 5545)
+    until_date: End date for recurring windows (ISO string)
+    ctx: MCP context (internal)
+
+Returns:
+    Dictionary with results from the appropriate tool
+
+Examples:
+    # WINDOW operations - create
+    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
+    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2", reason="Scheduled deployment"
+    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", template="deployment"
+    resource_type="window", operation="create", application_id="app-123", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
+    resource_type="window", operation="create", imap_code="ORZ-000012", start_time="1748786400000", duration_minutes="30", rrule="FREQ=DAILY;INTERVAL=1", until_date="2026-06-17T23:59:59Z"
+    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_days="1", reason="Extended maintenance", change_request_id="CHG0012345"
+    
+    # WINDOW operations - modify
+    resource_type="window", operation="modify", window_id="mw-789", duration_minutes="60"
+    resource_type="window", operation="modify", window_id="mw-789", end_time="1748790000000"
+    resource_type="window", operation="modify", window_id="mw-789", reason="Extended maintenance"
+    resource_type="window", operation="modify", window_id="mw-789", duration_minutes="90", reason="Extended due to issues"
+    
+    # WINDOW operations - close
+    resource_type="window", operation="close", window_id="mw-789"
+    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed successfully"
+    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed with minor issues"
+    
+    # WINDOW operations - list_active
+    resource_type="window", operation="list_active"
+    resource_type="window", operation="list_active", imap_code="EAL-012471"
+    resource_type="window", operation="list_active", application_id="app-123"
+    
+    # WINDOW operations - list_scheduled
+    resource_type="window", operation="list_scheduled"
+    resource_type="window", operation="list_scheduled", imap_code="EAL-012471"
+    resource_type="window", operation="list_scheduled", application_id="app-123"
+    
+    # WINDOW operations - list_all
+    resource_type="window", operation="list_all"
+    resource_type="window", operation="list_all", imap_code="EAL-012471"
+    resource_type="window", operation="list_all", application_id="app-123"
+    
+    # WINDOW operations - list_expired
+    resource_type="window", operation="list_expired"
+    resource_type="window", operation="list_expired", imap_code="EAL-012471"
+    resource_type="window", operation="list_expired", application_id="app-123"
+    
+    # WINDOW operations - bulk_create
+    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", duration_hours="2", reason="Coordinated deployment"
+    resource_type="window", operation="bulk_create", application_ids="app-123,app-456", start_time="1748786400000", duration_minutes="120", reason="Coordinated deployment"
+    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012,XYZ-999999", start_time="1748786400000", template="deployment", change_request_id="CHG0012345"
+    
+    # WINDOW operations - validate
+    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120"
+    resource_type="window", operation="validate", application_id="app-123", start_time="1748786400000", template="deployment"
+    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2"
+
+    # TEMPLATES operations
+    resource_type="templates", operation="get\""""
     )
     async def manage_maintenance_windows(
         self,
@@ -210,142 +252,7 @@ TEMPLATES (resource_type="templates"):
         until_date: Optional[str] = None,
         ctx=None
     ) -> Dict[str, Any]:
-        """
-        Unified Instana maintenance window manager for lifecycle management.
-
-        IMPORTANT FOR WATSONX ORCHESTRATE ROUTING:
-        - Use this tool for maintenance window questions such as:
-          * "Show me scheduled maintenance windows"
-          * "List active maintenance windows"
-          * "What maintenance windows are planned?"
-          * "Create a maintenance window for EAL-012471"
-          * "Close maintenance window mw-789"
-          * "Show all maintenance windows"
-          * "Are there any upcoming maintenance windows?"
-          * "Can you give me scheduled maintenance windows applications?"
-        - For listing scheduled windows: resource_type="window", operation="list_scheduled"
-        - For listing active windows: resource_type="window", operation="list_active"
-        - For listing all windows: resource_type="window", operation="list_all"
-        - For creating windows: resource_type="window", operation="create"
-
-        ALL PARAMETERS ARE FLAT STRINGS - No nested objects required!
-
-        Resource Types:
-        - "window": Create, modify, close, and list maintenance windows
-        - "templates": Retrieve available maintenance window templates
-
-        WINDOW (resource_type="window"):
-            operations: create, modify, close, list_active, list_scheduled, list_all, list_expired, bulk_create, validate
-
-            create - Create a new maintenance window
-                Required: imap_code OR application_id, start_time
-                Optional: end_time, duration_minutes, duration_hours, duration_days,
-                          reason, template, change_request_id, affected_services,
-                          notification_channels, use_tag_filter_expression, tag_name,
-                          rrule, until_date
-
-            modify - Modify an existing maintenance window
-                Required: window_id
-                Optional: end_time, duration_minutes, reason, rrule, until_date
-
-            close - Close and document a maintenance window
-                Required: window_id
-                Optional: completion_notes
-
-            list_active - List all currently active maintenance windows
-                Optional: imap_code, application_id (filter by application)
-
-            list_scheduled - List all upcoming scheduled maintenance windows
-                Optional: imap_code, application_id
-
-            list_all - List all maintenance windows (active, scheduled, and expired)
-                Optional: imap_code, application_id
-
-            list_expired - List all expired/completed maintenance windows
-                Optional: imap_code, application_id
-
-            bulk_create - Create maintenance windows for multiple applications at once
-                Required: application_ids (JSON array string) OR imap_codes (JSON array string), start_time
-                Optional: duration_minutes, duration_hours, duration_days, reason, template,
-                          change_request_id, use_tag_filter_expression, tag_name
-
-            validate - Validate maintenance window parameters without creating
-                Required: imap_code OR application_id, start_time
-                Optional: duration_minutes, template
-
-        TEMPLATES (resource_type="templates"):
-            operations: get
-
-            get - Retrieve all available maintenance window templates
-                No parameters required
-
-        Args:
-            resource_type: (OPTIONAL) "window" or "templates". Defaults to "window". Do NOT ask the user for this — use "window" unless the user explicitly asks for templates.
-            operation: (OPTIONAL) Operation to perform. Defaults to "list_scheduled". Do NOT ask the user for this — infer it from context.
-            application_id: Single application ID (legacy support, treated as IMAP code)
-            application_ids: JSON array string of application IDs for bulk operations (e.g., '["id1","id2"]')
-            imap_code: Single IMAP code (e.g., "EAL-012512", "ORZ-000012", "MUR-123456")
-            imap_codes: JSON array string of IMAP codes for bulk operations (e.g., '["EAL-012512","ORZ-000012"]')
-            window_id: Existing maintenance window ID (required for modify/close)
-            start_time: Start time as Unix timestamp ms, ISO string, or natural language (e.g., "in 2 hours", "tomorrow at 10am")
-            end_time: End time as Unix timestamp ms, ISO string, or natural language
-            duration_minutes: Duration in minutes as string (e.g., "120")
-            duration_hours: Duration in hours as string (e.g., "2")
-            duration_days: Duration in days as string (e.g., "1")
-            reason: Reason/description for the maintenance window
-            template: Predefined template name ("deployment", "database_migration", "infrastructure_upgrade", "emergency", "routine")
-            change_request_id: ServiceNow change request ID (e.g., "CHG0012345")
-            affected_services: JSON array string of affected service names (e.g., '["payment-api","order-service"]')
-            notification_channels: JSON array string of notification channels (e.g., '["slack","email"]')
-            completion_notes: Notes to record when closing a window
-            use_tag_filter_expression: "true" or "false" — use tag filter expression format
-            tag_name: Tag name for filter expression (e.g., "environment:production")
-            rrule: Recurrence rule string (RFC 5545, e.g., "FREQ=DAILY;INTERVAL=1")
-            until_date: End date for recurring windows as ISO string (e.g., "2026-06-01T23:59:59Z")
-            ctx: MCP context (internal)
-
-        Returns:
-            Dictionary with results from the appropriate tool
-
-        Examples:
-            # Create with template and natural language time
-            resource_type="window", operation="create",
-            imap_code="EAL-012471", start_time="in 2 hours", template="deployment"
-
-            # Create with custom duration
-            resource_type="window", operation="create",
-            imap_code="EAL-012471", start_time="2026-06-01T14:00:00Z",
-            duration_minutes="120", reason="Scheduled deployment"
-
-            # Create recurring maintenance window
-            resource_type="window", operation="create",
-            imap_code="ORZ-000012", start_time="in 3 hours",
-            duration_minutes="30", rrule="FREQ=DAILY;INTERVAL=1",
-            until_date="2026-06-17T23:59:59Z"
-
-            # List all active windows
-            resource_type="window", operation="list_active"
-
-            # List windows for specific application
-            resource_type="window", operation="list_active", imap_code="EAL-012471"
-
-            # Modify window duration
-            resource_type="window", operation="modify",
-            window_id="mw-789", duration_minutes="60"
-
-            # Close window with notes
-            resource_type="window", operation="close",
-            window_id="mw-789", completion_notes="Completed successfully"
-
-            # Bulk create for multiple IMAP codes
-            resource_type="window", operation="bulk_create",
-            imap_codes='["EAL-012471","ORZ-000012"]',
-            start_time="2026-06-02T02:00:00Z", duration_hours="2",
-            reason="Coordinated microservices deployment"
-
-            # Get available templates
-            resource_type="templates", operation="get"
-        """
+        """Unified Instana maintenance window manager for lifecycle management."""
         try:
             # Apply defaults for optional params (WatsonX may omit them entirely)
             if not resource_type:

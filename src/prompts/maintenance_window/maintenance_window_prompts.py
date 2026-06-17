@@ -3,6 +3,23 @@ Maintenance Window Prompts for WatsonX Assistant Integration
 
 These prompts help WatsonX Assistant understand how to map natural language
 requests to the maintenance window management tool parameters.
+
+TIME FORMAT INSTRUCTIONS:
+    - start_time and end_time accept Unix timestamps in milliseconds (e.g., "1748786400000")
+    - Also accept ISO 8601 datetime strings (e.g., "2026-06-10T10:00:00Z")
+    - Natural language times like "in 2 hours" or "tomorrow at 10am" should be converted to timestamps
+    - Use src.core.timestamp_utils for timestamp conversions
+
+DURATION FORMAT INSTRUCTIONS:
+    - duration_minutes: Specify duration in minutes (e.g., "120" for 2 hours)
+    - duration_hours: Specify duration in hours (e.g., "2" for 2 hours)
+    - duration_days: Specify duration in days (e.g., "1" for 1 day)
+    - Only ONE duration parameter should be provided (minutes, hours, OR days)
+    - If using a template, duration is optional (template provides default)
+    - Examples:
+        * "2 hours" → duration_hours="2" OR duration_minutes="120"
+        * "30 minutes" → duration_minutes="30"
+        * "1 day" → duration_days="1" OR duration_hours="24" OR duration_minutes="1440"
 """
 
 from typing import Optional
