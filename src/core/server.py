@@ -493,8 +493,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "settings", "slo", "releases", "maintenance"}
-        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases"}
+        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -522,7 +521,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance")
             sys.exit(2)
 
         # Print enabled tools for user information

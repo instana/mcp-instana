@@ -277,7 +277,19 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         try:
             logger.info("=== MAINTENANCE OPERATION START ===")
             logger.info(f"Operation: {operation}")
-            logger.info(f"IMAP Code: {imap_code or application_id}")
+
+            # Log relevant parameters based on operation
+            if operation in ["modify", "close"]:
+                logger.info(f"Window ID: {window_id}")
+            else:
+                logger.info(f"IMAP Code: {imap_code or application_id}")
+
+            if operation == "modify":
+                logger.info(f"Duration Minutes: {duration_minutes}")
+                logger.info(f"Duration Hours: {duration_hours}")
+                logger.info(f"Duration Days: {duration_days}")
+                logger.info(f"End Time: {end_time}")
+                logger.info(f"Reason: {reason}")
 
             # Log recurrence parameters if provided
             if rrule:
@@ -366,10 +378,19 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     ctx=ctx
                 )
             elif operation == "modify":
+                # Convert duration_hours and duration_days to duration_minutes
+                final_duration_minutes = duration_minutes
+                if duration_hours and not duration_minutes:
+                    final_duration_minutes = duration_hours * 60
+                    logger.info(f"Converted duration_hours={duration_hours} to duration_minutes={final_duration_minutes}")
+                elif duration_days and not duration_minutes and not duration_hours:
+                    final_duration_minutes = duration_days * 24 * 60
+                    logger.info(f"Converted duration_days={duration_days} to duration_minutes={final_duration_minutes}")
+
                 return await self._modify_maintenance_window(
                     window_id=window_id,
                     end_time=end_time,
-                    duration_minutes=duration_minutes,
+                    duration_minutes=final_duration_minutes,
                     reason=reason,
                     rrule=rrule,
                     until_date=until_date,

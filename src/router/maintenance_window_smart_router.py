@@ -173,24 +173,20 @@ Returns:
     Dictionary with results from the appropriate tool
 
 Examples:
-    # WINDOW operations - create
+    # WINDOW operations - create (covers: imap_code, duration_minutes, duration_hours, template, recurring)
     resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
-    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2", reason="Scheduled deployment"
-    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", template="deployment"
-    resource_type="window", operation="create", application_id="app-123", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
+    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2", template="deployment", change_request_id="CHG0012345"
     resource_type="window", operation="create", imap_code="ORZ-000012", start_time="1748786400000", duration_minutes="30", rrule="FREQ=DAILY;INTERVAL=1", until_date="2026-06-17T23:59:59Z"
-    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_days="1", reason="Extended maintenance", change_request_id="CHG0012345"
 
-    # WINDOW operations - modify
+    # WINDOW operations - modify (covers: duration_minutes, end_time, reason)
     resource_type="window", operation="modify", window_id="mw-789", duration_minutes="60"
-    resource_type="window", operation="modify", window_id="mw-789", end_time="1748790000000"
-    resource_type="window", operation="modify", window_id="mw-789", reason="Extended maintenance"
-    resource_type="window", operation="modify", window_id="mw-789", duration_minutes="90", reason="Extended due to issues"
+    resource_type="window", operation="modify", window_id="mw-789", end_time="1748790000000", reason="Extended maintenance"
+    resource_type="window", operation="modify", window_id="mw-789", duration_hours="3", rrule="FREQ=DAILY;INTERVAL=2"
 
-    # WINDOW operations - close
+    # WINDOW operations - close (covers: with/without notes)
     resource_type="window", operation="close", window_id="mw-789"
     resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed successfully"
-    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed with minor issues"
+    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed with issues - rollback performed"
 
     # WINDOW operations - list_active
     resource_type="window", operation="list_active"
@@ -214,15 +210,15 @@ Examples:
 
     # WINDOW operations - bulk_create
     resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", duration_hours="2", reason="Coordinated deployment"
-    resource_type="window", operation="bulk_create", application_ids="app-123,app-456", start_time="1748786400000", duration_minutes="120", reason="Coordinated deployment"
-    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012,XYZ-999999", start_time="1748786400000", template="deployment", change_request_id="CHG0012345"
+    resource_type="window", operation="bulk_create", application_ids="app-123,app-456", start_time="1748786400000", duration_minutes="120", reason="Multi-app maintenance"
+    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", template="deployment", change_request_id="CHG0012345"
 
     # WINDOW operations - validate
     resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120"
-    resource_type="window", operation="validate", application_id="app-123", start_time="1748786400000", template="deployment"
-    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2"
+    resource_type="window", operation="validate", application_id="app-123", start_time="1748786400000", duration_hours="2"
+    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", template="deployment"
 
-    # TEMPLATES operations
+    # TEMPLATES operations (covers: get templates)
     resource_type="templates", operation="get\""""
     )
     async def manage_maintenance_windows(
@@ -254,13 +250,22 @@ Examples:
     ) -> Dict[str, Any]:
         """Unified Instana maintenance window manager for lifecycle management."""
         try:
+            # Log all incoming parameters for debugging
+            logger.info("=== Maintenance Window Router Called ===")
+            logger.info(f"resource_type={resource_type}, operation={operation}")
+            logger.info(f"window_id={window_id}")
+            logger.info(f"imap_code={imap_code}, application_id={application_id}")
+            logger.info(f"start_time={start_time}, duration_minutes={duration_minutes}")
+            logger.info(f"duration_hours={duration_hours}, duration_days={duration_days}")
+            logger.info(f"template={template}, reason={reason}")
+
             # Apply defaults for optional params (WatsonX may omit them entirely)
             if not resource_type:
                 resource_type = RESOURCE_TYPE_WINDOW
             if not operation:
                 operation = OP_LIST_SCHEDULED
 
-            logger.info(f"Maintenance Window Router: resource_type={resource_type}, operation={operation}")
+            logger.info(f"After defaults: resource_type={resource_type}, operation={operation}")
 
             # Build params dict from flat string parameters
             params = {}
@@ -334,11 +339,21 @@ Examples:
                 }
 
         except Exception as e:
-            logger.error(f"Error in maintenance window smart router: {e}", exc_info=True)
+            logger.error("=== ERROR in Maintenance Window Router ===")
+            logger.error(f"Error: {e}", exc_info=True)
+            logger.error(f"resource_type={resource_type}, operation={operation}")
+            logger.error(f"imap_code={imap_code}, application_id={application_id}")
             return {
                 "error": f"Maintenance window router error: {e!s}",
+                "error_type": type(e).__name__,
                 "resource_type": resource_type,
-                "operation": operation
+                "operation": operation,
+                "parameters": {
+                    "imap_code": imap_code,
+                    "application_id": application_id,
+                    "start_time": start_time,
+                    "duration_minutes": duration_minutes
+                }
             }
 
     async def _handle_window(
