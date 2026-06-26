@@ -301,6 +301,9 @@ def _create_api_client_from_config(base_url, api_token):
 
     configuration = Configuration()
     configuration.host = base_url
+    # Disable SSL verification for self-signed certificates (development/testing)
+    configuration.verify_ssl = False
+    configuration.ssl_ca_cert = None
     configuration.api_key['ApiKeyAuth'] = api_token
     configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 

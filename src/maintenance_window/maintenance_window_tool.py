@@ -112,7 +112,7 @@ logger = logging.getLogger(__name__)
 
 class MaintenanceWindowMCPTools(BaseInstanaClient):
     """
-    Tools for maintenance window management in Instana MCP
+    Tools for maintenance window management in Instana MCP.
 
     This class provides comprehensive maintenance window lifecycle management including
     creation, modification, closure, and ServiceNow integration. It supports both
@@ -262,35 +262,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "details": Dict[str, Any],
                 "message": str
             }
-
-        Raises:
-            ValueError: If required parameters are missing or invalid
-
-        Examples:
-            # Create with template
-            result = await execute_maintenance_operation(
-                operation="create",
-                application_id="app-123",
-                template="deployment",
-                start_time=1709020800000,
-                reason="v2.0 deployment",
-                ctx=ctx
-            )
-
-            # Modify existing window
-            result = await execute_maintenance_operation(
-                operation="modify",
-                window_id="mw-789",
-                end_time=1709027400000,
-                reason="Extended due to issues",
-                ctx=ctx
-            )
         """
         try:
             logger.info("=== MAINTENANCE OPERATION START ===")
             logger.info(f"Operation: {operation}")
 
-            # Log relevant parameters based on operation
             if operation in ["modify", "close"]:
                 logger.info(f"Window ID: {window_id}")
             else:
@@ -303,14 +279,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 logger.info(f"End Time: {end_time}")
                 logger.info(f"Reason: {reason}")
 
-            # Log recurrence parameters if provided
             if rrule:
-                logger.info("🔁 RECURRING WINDOW REQUESTED")
+                logger.info("RECURRING WINDOW REQUESTED")
                 logger.info(f"RRULE parameter: {rrule}")
                 logger.info(f"Until Date parameter: {until_date}")
 
             # Convert string parameters to appropriate types
-            # LLM should provide values in correct format as per docString
             if start_time is not None and isinstance(start_time, str):
                 try:
                     start_time = int(start_time)
@@ -356,7 +330,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                         "suggestion": "Provide duration_days as integer (e.g., 1)"
                     }
 
-            # Validate operation
             valid_operations = [
                 "create", "modify", "close", "list_active", "list_scheduled",
                 "list_all", "list_expired", "bulk_create", "validate", "get_templates"
@@ -368,7 +341,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "valid_operations": valid_operations
                 }
 
-            # Route to appropriate handler
             if operation == "create":
                 return await self._create_maintenance_window(
                     application_id=application_id,
@@ -390,7 +362,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     ctx=ctx
                 )
             elif operation == "modify":
-                # Convert duration_hours and duration_days to duration_minutes
                 final_duration_minutes = duration_minutes
                 if duration_hours and not duration_minutes:
                     final_duration_minutes = duration_hours * 60
@@ -537,11 +508,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         Create a new maintenance window in Instana using real API structure.
 
-        This method handles the creation of maintenance windows with full validation,
-        template application, and ServiceNow integration. Supports both IMAP codes
-        and legacy application IDs. Uses Instana's actual API format with query
-        strings or tag filter expressions.
-
         Args:
             application_id: Application ID (legacy support, will be treated as IMAP code)
             imap_code: IMAP code (e.g., EAL-012512, ORZ-000012)
@@ -563,10 +529,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             Dictionary with creation results including window_id
         """
         try:
-            # Use imap_code if provided, otherwise use application_id as imap_code
             target_code = imap_code or application_id
 
-            # Validate required parameters
             if not target_code:
                 return {"error": "imap_code or application_id is required"}
 
@@ -586,7 +550,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Calculate duration and end time
             if not end_time:
-                # Determine duration in milliseconds
                 if duration_days:
                     duration_ms = duration_days * 24 * 60 * 60 * 1000
                     duration_amount = duration_days
@@ -600,13 +563,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
                     # IMPORTANT: For recurring windows, Instana requires whole hours
                     if rrule and duration_min < 60:
-                        logger.warning("⚠️ Recurring windows require duration >= 1 hour")
+                        logger.warning("Recurring windows require duration >= 1 hour")
                         logger.warning(f"Converting {duration_min} minutes to 1 hour for recurring window")
                         duration_min = 60
                     elif rrule and duration_min % 60 != 0:
-                        # Round up to nearest hour for recurring windows
                         duration_hours_rounded = (duration_min + 59) // 60
-                        logger.warning("⚠️ Recurring windows require whole hours")
+                        logger.warning("Recurring windows require whole hours")
                         logger.warning(f"Rounding {duration_min} minutes up to {duration_hours_rounded} hour(s)")
                         duration_min = duration_hours_rounded * 60
 
@@ -616,7 +578,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
                 end_time = start_time + duration_ms
             else:
-                # Calculate duration from start and end times
                 duration_ms = end_time - start_time
                 duration_hours_calc = duration_ms // (60 * 60 * 1000)
                 if duration_hours_calc >= 24:
@@ -638,7 +599,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "start_time_readable": start_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
                     "current_time": current_time,
                     "current_time_readable": current_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
-                    "suggestion": f"Use a time after {current_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}. Try: 'starting at {(current_dt.replace(hour=current_dt.hour+2)).strftime('%Y-%m-%d %H:%M:%S')} UTC'"
+                    "suggestion": f"Use a time after {current_dt.strftime('%Y-%m-%d %H:%M:%S UTC')}."
                 }
 
             if end_time <= start_time:
@@ -649,7 +610,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             reason_sanitized = (reason or template_config.get("description", "Maintenance")).replace(" ", "_")
             window_name = f"{target_code}_{reason_sanitized}_{date_str}"
 
-            # Determine scheduling type and build scheduling object
+            # Build scheduling object
             scheduling_obj = {
                 "start": start_time,
                 "duration": {
@@ -665,21 +626,14 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 logger.info(f"Input RRULE: {rrule}")
                 logger.info(f"Input until_date: {until_date}")
 
-                # IMPORTANT: Instana uses "RECURRENT" not "RECURRING"
                 scheduling_obj["type"] = "RECURRENT"
 
-                # Build rrule with UNTIL if provided
                 if until_date:
-                    logger.info("Processing until_date for RRULE...")
-                    # Parse until_date to ensure it's in the right format
                     try:
-                        # Try parsing ISO format
                         until_dt = datetime.fromisoformat(until_date.replace('Z', '+00:00'))
-                        # Format as YYYYMMDDTHHMMSSZ for RRULE
                         until_formatted = until_dt.strftime('%Y%m%dT%H%M%SZ')
                         logger.info(f"Converted until_date: {until_date} -> {until_formatted}")
 
-                        # Add UNTIL to rrule if not already present
                         if 'UNTIL=' not in rrule.upper():
                             rrule_with_until = f"{rrule};UNTIL={until_formatted}"
                             logger.info(f"Added UNTIL to RRULE: {rrule_with_until}")
@@ -693,30 +647,21 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     logger.info("No until_date provided, using RRULE without UNTIL")
                     rrule_with_until = rrule
 
-                # Add rrule to scheduling object
                 scheduling_obj["rrule"] = rrule_with_until
-
-                # Add timezone (required for recurring windows in Instana)
-                # Default to UTC if not specified
                 scheduling_obj["timezoneId"] = "UTC"
 
-                logger.info(f"✅ Final RRULE for API: {rrule_with_until}")
-                logger.info("✅ Scheduling type set to: RECURRENT (Instana format)")
-                logger.info("✅ Timezone set to: UTC")
+                logger.info(f"Final RRULE for API: {rrule_with_until}")
+                logger.info("Scheduling type set to: RECURRENT (Instana format)")
                 logger.info("=== END RECURRING WINDOW SETUP ===")
             else:
                 logger.info("Creating ONE_TIME maintenance window (no rrule provided)")
 
-            # Build maintenance window payload matching Instana's real API structure
-            window_id = str(uuid.uuid4()).replace('-', '')[:16]  # Generate 16-char ID
+            # Build maintenance window payload
+            window_id = str(uuid.uuid4()).replace('-', '')[:16]
 
             if use_tag_filter_expression:
-                # Format 2: Tag Filter Expression (for synthetic monitoring)
                 window_payload = {
                     "id": window_id,
-            if use_tag_filter_expression:
-                # Format 2: Tag Filter Expression (for synthetic monitoring)
-                window_payload = {
                     "name": window_name,
                     "query": "",
                     "scheduling": scheduling_obj,
@@ -734,7 +679,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "retriggerOpenAlertsEnabled": False
                 }
             else:
-                # Format 1: Simple Query String (default)
                 window_payload = {
                     "id": window_id,
                     "name": window_name,
@@ -745,14 +689,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "retriggerOpenAlertsEnabled": False
                 }
 
-            # Create maintenance window via Instana API
-            # The API requires PUT with an ID in both the path and payload
-            window_id = str(uuid.uuid4()).replace('-', '')[:16]  # Generate 16-char ID
-
-            # Add ID to payload as required by API
-            window_payload["id"] = window_id
-
-            # Log the payload being sent
             logger.info("=== CREATING MAINTENANCE WINDOW ===")
             logger.info(f"Window ID: {window_id}")
             logger.info(f"Window Name: {window_name}")
@@ -772,28 +708,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             )
 
             if isinstance(result, dict) and "error" in result:
-
-            endpoint = f"api/settings/v2/maintenance/{window_id}"
-            logger.info(f"API Endpoint: {endpoint}")
-
-            # Log the complete payload for debugging
-            logger.info("Complete API Payload:")
-            logger.info(json.dumps(window_payload, indent=2))
-
-            result = await self.make_request(
-                endpoint=endpoint,
-                method="PUT",
-                json=window_payload
-            )
-
-            if "error" in result:
-                logger.error(f"❌ Failed to create maintenance window: {result.get('error')}")
+                logger.error(f"Failed to create maintenance window: {result.get('error')}")
                 logger.error("Payload that was rejected:")
                 logger.error(json.dumps(window_payload, indent=2))
 
-                # Check if it's a 422 error (validation error)
                 if "422" in str(result.get('error')):
-                    logger.error("⚠️ 422 Unprocessable Entity - Instana rejected the payload")
+                    logger.error("422 Unprocessable Entity - Instana rejected the payload")
                     logger.error("Common causes:")
                     logger.error("  1. Invalid RRULE format")
                     logger.error("  2. RRULE not supported by this Instana version")
@@ -804,31 +724,22 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
                 return result
 
-            # Use the returned ID (API returns the same ID)
             returned_id = result.get("id", window_id) if isinstance(result, dict) else window_id
             window_id = returned_id
 
-            # Log success and verify scheduling type in response
             response_scheduling = result.get("scheduling", {}) if isinstance(result, dict) else {}
-            # Use the generated ID (API returns the same ID)
-            returned_id = result.get("id", window_id)
-            window_id = returned_id
-
-            # Log success and verify scheduling type in response
-            response_scheduling = result.get("scheduling", {})
             response_type = response_scheduling.get("type", "UNKNOWN")
-            logger.info("✅ Maintenance window created successfully")
+            logger.info("Maintenance window created successfully")
             logger.info(f"Response scheduling type: {response_type}")
             if response_type == "RECURRENT":
                 response_rrule = response_scheduling.get("rrule", "NOT_FOUND")
-                logger.info("✅ RECURRING window confirmed in response")
+                logger.info("RECURRING window confirmed in response")
                 logger.info(f"Response RRULE: {response_rrule}")
             elif response_type == "ONE_TIME" and scheduling_obj.get('type') == 'RECURRENT':
-                logger.warning("⚠️ WARNING: Requested RECURRING but response shows ONE_TIME")
+                logger.warning("WARNING: Requested RECURRING but response shows ONE_TIME")
                 logger.warning("This may indicate the RRULE was not accepted by Instana API")
             logger.info("=== END MAINTENANCE WINDOW CREATION ===")
 
-            # Integrate with ServiceNow if change request provided
             if change_request_id and self.servicenow_token:
                 await self._update_servicenow_change(
                     change_request_id=change_request_id,
@@ -836,14 +747,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     status="maintenance_scheduled"
                 )
 
-            # Format human-readable times
             start_dt = datetime.fromtimestamp(start_time / 1000)
             end_dt = datetime.fromtimestamp(end_time / 1000)
 
             return {
                 "operation": "create",
                 "status": "success",
-                "summary": "✅ Maintenance window created successfully!",
+                "summary": "Maintenance window created successfully!",
                 "details": {
                     "window_id": window_id,
                     "application": target_code,
@@ -857,7 +767,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "template_used": template or "none"
                 },
                 "next_steps": [
-                    "View in Instana UI: Settings → Maintenance Windows",
+                    "View in Instana UI: Settings -> Maintenance Windows",
                     f"Window ID for reference: {window_id}",
                     f"To modify: 'Extend maintenance window {window_id} by X hours'",
                     f"To close: 'Close maintenance window {window_id} with notes [your notes]'"
@@ -889,16 +799,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         Modify an existing maintenance window.
 
-        Allows extending or shortening maintenance windows, and updating recurrence rules.
-        Uses the same payload structure as create operation per Instana API specification.
-
         Args:
             window_id: Maintenance window ID to modify
-            end_time: New end time in Unix timestamp milliseconds (not used - duration is used instead)
+            end_time: New end time (not used - duration is used instead)
             duration_minutes: New duration in minutes
             reason: Reason for modification (used to update window name)
-            rrule: New recurrence rule (e.g., "FREQ=DAILY;INTERVAL=1;UNTIL=20260318T235959Z")
-            until_date: New end date for recurrence in ISO format (e.g., "2026-03-18T23:59:59Z")
+            rrule: New recurrence rule
+            until_date: New end date for recurrence in ISO format
             ctx: MCP context
 
         Returns:
@@ -917,15 +824,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             existing_window = await self._api_get_window(window_id=window_id, ctx=ctx)
 
             if isinstance(existing_window, dict) and "error" in existing_window:
-            # Get existing window
-            endpoint = f"api/settings/v2/maintenance/{window_id}"
-            existing_window = await self.make_request(endpoint=endpoint, method="GET")
-
-            if "error" in existing_window:
                 return {"error": f"Maintenance window not found: {window_id}"}
 
             # Build update payload - preserve ALL fields from existing window
-            # The API requires all fields to be present, especially for RECURRENT windows
             update_payload = {
                 "id": window_id,
                 "name": existing_window.get("name"),
@@ -936,7 +837,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "retriggerOpenAlertsEnabled": existing_window.get("retriggerOpenAlertsEnabled", False)
             }
 
-            # Preserve optional fields if they exist
             optional_fields = [
                 "tagFilterExpression",
                 "applicationNames",
@@ -949,18 +849,16 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Update duration if provided
             if duration_minutes:
-                # Convert duration_minutes to appropriate unit
-                if duration_minutes >= 1440:  # >= 1 day
+                if duration_minutes >= 1440:
                     duration_amount = duration_minutes // 1440
                     duration_unit = "DAYS"
-                elif duration_minutes >= 60:  # >= 1 hour
+                elif duration_minutes >= 60:
                     duration_amount = duration_minutes // 60
                     duration_unit = "HOURS"
                 else:
                     duration_amount = duration_minutes
                     duration_unit = "MINUTES"
 
-                # Update only the duration within the scheduling object
                 if "scheduling" not in update_payload:
                     update_payload["scheduling"] = {}
                 update_payload["scheduling"]["duration"] = {
@@ -968,54 +866,41 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "unit": duration_unit
                 }
 
-            # Update RRULE if provided (for RECURRENT windows)
+            # Update RRULE if provided
             if rrule or until_date:
                 if "scheduling" not in update_payload:
                     update_payload["scheduling"] = {}
 
-                # If until_date is provided, update the RRULE with new UNTIL value
                 if until_date:
-                    # Parse the until_date and convert to RRULE format
                     try:
-                        # Handle ISO format or timestamp
                         if isinstance(until_date, str):
                             if 'T' in until_date:
-                                # ISO format: "2026-03-18T23:59:59Z"
                                 dt = datetime.fromisoformat(until_date.replace('Z', '+00:00'))
                             else:
-                                # Date only: "2026-03-18"
                                 dt = datetime.fromisoformat(until_date + "T23:59:59+00:00")
                         else:
-                            # Assume timestamp in milliseconds
                             dt = datetime.fromtimestamp(until_date / 1000)
 
-                        # Format as RRULE UNTIL value (YYYYMMDDTHHMMSSZ)
                         until_rrule = dt.strftime("%Y%m%dT%H%M%SZ")
 
-                        # Get existing RRULE and update UNTIL
                         existing_rrule = update_payload["scheduling"].get("rrule", "")
                         if existing_rrule:
-                            # Remove old UNTIL if present
                             rrule_without_until = re.sub(r';UNTIL=[^;]+', '', existing_rrule)
                             rrule_without_until = re.sub(r'UNTIL=[^;]+;?', '', rrule_without_until)
-                            # Add new UNTIL
                             new_rrule = f"{rrule_without_until};UNTIL={until_rrule}"
                             update_payload["scheduling"]["rrule"] = new_rrule
                         else:
-                            # No existing RRULE, create a basic one
                             update_payload["scheduling"]["rrule"] = f"FREQ=DAILY;INTERVAL=1;UNTIL={until_rrule}"
                     except Exception as e:
                         logger.error(f"Error parsing until_date: {e}")
                         return {"error": f"Invalid until_date format: {until_date}. Use ISO format like '2026-03-18T23:59:59Z'"}
 
-                # If explicit rrule is provided, use it directly
                 if rrule:
                     update_payload["scheduling"]["rrule"] = rrule
 
             # Update window name if reason provided
             if reason:
                 current_name = existing_window.get("name", "")
-                # Append modification reason to name
                 update_payload["name"] = f"{current_name}_modified_{reason.replace(' ', '_')}"
 
             # Update maintenance window via SDK
@@ -1030,18 +915,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Fetch the updated window to verify changes
             updated_window = await self._api_get_window(window_id=window_id, ctx=ctx)
-            # Update maintenance window using PUT with same structure as create
-            result = await self.make_request(
-                endpoint=endpoint,
-                method="PUT",
-                json=update_payload
-            )
-
-            if "error" in result:
-                return result
-
-            # Fetch the updated window to verify changes
-            updated_window = await self.make_request(endpoint=endpoint, method="GET")
 
             # Calculate new end time for response
             start_time = update_payload["scheduling"]["start"]
@@ -1058,13 +931,10 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             new_end_time = start_time + duration_ms
 
-            # Extract RRULE info if present
             scheduling = updated_window.get("scheduling", {}) if isinstance(updated_window, dict) else {}
-            scheduling = updated_window.get("scheduling", {})
             rrule_after = scheduling.get("rrule", "")
             recurrence_type = scheduling.get("type", "ONE_TIME")
 
-            # Build modification summary
             modifications = []
             if duration_minutes:
                 modifications.append(f"duration changed to {duration_amount} {duration_unit}")
@@ -1076,7 +946,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             modification_summary = ", ".join(modifications) if modifications else "window updated"
 
             return {
-            response = {
                 "operation": "modify",
                 "status": "success",
                 "window_id": window_id,
@@ -1094,8 +963,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 }
             }
 
-            return response
-
         except Exception as e:
             logger.error(f"Error modifying maintenance window: {e}", exc_info=True)
             return {"error": f"Failed to modify maintenance window: {e!s}"}
@@ -1110,7 +977,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         Close and document a maintenance window.
 
         Closes an active maintenance window by deleting it, and documents
-        Closes an active maintenance window, re-enables alerts, and documents
         completion notes for audit trail.
 
         Args:
@@ -1129,23 +995,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Close maintenance window via SDK delete
             await self._api_delete_window(window_id=window_id, ctx=ctx)
-            # Build closure payload
-            closure_payload = {
-                "status": "completed",
-                "completionNotes": completion_notes or "Maintenance completed",
-                "closedAt": get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]
-            }
-
-            # Close maintenance window
-            endpoint = f"api/settings/v2/maintenance/{window_id}/close"
-            result = await self.make_request(
-                endpoint=endpoint,
-                method="POST",
-                json=closure_payload
-            )
-
-            if "error" in result:
-                return result
 
             return {
                 "operation": "close",
@@ -1153,8 +1002,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "window_id": window_id,
                 "completion_notes": completion_notes or "Maintenance completed",
                 "closed_at": closed_at,
-                "completion_notes": closure_payload["completionNotes"],
-                "closed_at": closure_payload["closedAt"],
                 "message": f"Maintenance window closed successfully: {window_id}"
             }
 
@@ -1186,42 +1033,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             if not isinstance(all_windows, list):
                 all_windows = []
 
-            # Debug: Log the structure of the response
             logger.info(f"Number of windows fetched: {len(all_windows)}")
-            endpoint = "api/settings/v2/maintenance"
-            # Don't use query parameters - get all windows and filter in code
-            result = await self.make_request(endpoint=endpoint, method="GET")
 
-            if "error" in result:
-                return result
-
-            # Get all windows from response
-            # The API might return a dict with different keys
-            if isinstance(result, list):
-                all_windows = result
-            elif isinstance(result, dict):
-                # Try different possible keys
-                all_windows = result.get("items", result.get("data", result.get("maintenanceWindows", [])))
-            else:
-                all_windows = []
-
-            # Debug: Log the structure of the response
-            logger.info(f"API Response type: {type(result)}")
-            if isinstance(result, dict):
-                logger.info(f"API Response keys: {list(result.keys())}")
-            logger.info(f"Number of windows in all_windows: {len(all_windows)}")
-            logger.info(f"Raw result for debugging: {str(result)[:500]}")  # First 500 chars
-
-            # Filter for active windows using the 'state' field or occurrence times
             current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
             current_time = current_time_result["timestamp"]
             active_windows = []
 
             for window in all_windows:
-                # Check state field first (most reliable)
                 state = window.get("state", "")
                 if state == "ACTIVE":
-                    # Filter by application_id if provided
                     if application_id:
                         query = window.get("query", "")
                         tag_filter = window.get("tagFilterExpression", {})
@@ -1230,7 +1050,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                             active_windows.append(window)
                     else:
                         active_windows.append(window)
-                # Fallback: check occurrence times if state not available
                 elif not state:
                     occurrence = window.get("occurrence", {})
                     start_time = occurrence.get("start", 0)
@@ -1246,9 +1065,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                         else:
                             active_windows.append(window)
 
-            # If no active windows found, provide helpful information about other windows
             if len(active_windows) == 0:
-                # Count other window types
                 expired_count = sum(1 for w in all_windows if w.get("state") == "EXPIRED")
                 scheduled_count = sum(1 for w in all_windows if w.get("state") == "SCHEDULED")
 
@@ -1299,29 +1116,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
-            endpoint = "api/settings/v2/maintenance"
-            # Don't use query parameters - get all windows and filter in code
-            result = await self.make_request(endpoint=endpoint, method="GET")
 
-            if "error" in result:
-                return result
-
-            # Get all windows from response
-            all_windows = result if isinstance(result, list) else result.get("items", [])
-
-            # Filter for scheduled windows using the 'state' field
             scheduled_windows = []
-
-            # Debug: Log all states
             states_found = [w.get("state", "UNKNOWN") for w in all_windows]
             logger.info(f"States found in windows: {states_found}")
 
             for window in all_windows:
-                # Check state field (most reliable)
                 state = window.get("state", "")
                 logger.debug(f"Checking window {window.get('name', 'unknown')}: state={state}")
                 if state == "SCHEDULED":
-                    # Filter by application_id if provided
                     if application_id:
                         query = window.get("query", "")
                         tag_filter = window.get("tagFilterExpression", {})
@@ -1366,17 +1169,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
-            endpoint = "api/settings/v2/maintenance"
-            # Get all windows
-            result = await self.make_request(endpoint=endpoint, method="GET")
 
-            if "error" in result:
-                return result
-
-            # Get all windows from response
-            all_windows = result if isinstance(result, list) else result.get("items", [])
-
-            # Filter by application_id if provided
             if application_id:
                 filtered_windows = []
                 for window in all_windows:
@@ -1387,12 +1180,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                         filtered_windows.append(window)
                 all_windows = filtered_windows
 
-            # Group windows by state for better visibility
-            windows_by_state = {
-                "active": [],
-                "scheduled": [],
-                "expired": []
-            }
+            windows_by_state = {"active": [], "scheduled": [], "expired": []}
 
             for window in all_windows:
                 state = window.get("state", "").upper()
@@ -1403,7 +1191,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 elif state == "EXPIRED":
                     windows_by_state["expired"].append(window)
 
-            # Create summary message
             summary_parts = []
             if windows_by_state["active"]:
                 summary_parts.append(f"{len(windows_by_state['active'])} active")
@@ -1455,43 +1242,29 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
-            endpoint = "api/settings/v2/maintenance"
-            # Get all windows
-            result = await self.make_request(endpoint=endpoint, method="GET")
 
-            if "error" in result:
-                return result
-
-            # Get all windows from response
-            all_windows = result if isinstance(result, list) else result.get("items", [])
-
-            # Filter for expired windows using the 'state' field
             expired_windows = []
-
-            # Debug: Log all states
             states_found = [w.get("state", "UNKNOWN") for w in all_windows]
             logger.info(f"States found in windows for list_expired: {states_found}")
 
             for window in all_windows:
-                # Check state field (most reliable)
                 state = window.get("state", "")
                 window_name = window.get("name", "unknown")
                 logger.debug(f"Checking window {window_name}: state={state}, application_id filter={application_id}")
 
                 if state == "EXPIRED":
-                    # Filter by application_id if provided
                     if application_id:
                         query = window.get("query", "")
                         tag_filter = window.get("tagFilterExpression", {})
                         tag_value = tag_filter.get("value", "") if tag_filter else ""
                         logger.debug(f"  Filtering by app_id: query={query}, tag_value={tag_value}")
                         if application_id in query or application_id in tag_value or f"imap={application_id}" in query:
-                            logger.info(f"  ✓ Adding expired window: {window_name}")
+                            logger.info(f"  Adding expired window: {window_name}")
                             expired_windows.append(window)
                         else:
-                            logger.debug("  ✗ Skipped (app_id filter didn't match)")
+                            logger.debug("  Skipped (app_id filter didn't match)")
                     else:
-                        logger.info(f"  ✓ Adding expired window: {window_name}")
+                        logger.info(f"  Adding expired window: {window_name}")
                         expired_windows.append(window)
 
             logger.info(f"Total expired windows found: {len(expired_windows)}")
@@ -1507,7 +1280,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error listing expired windows: {e}", exc_info=True)
             return {"error": f"Failed to list expired windows: {e!s}"}
-
 
     async def _bulk_create_windows(
         self,
@@ -1545,7 +1317,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             Dictionary with bulk creation results
         """
         try:
-            # Use imap_codes if provided, otherwise use application_ids
             target_codes = imap_codes or application_ids
 
             if not target_codes:
@@ -1673,7 +1444,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             return {"status": "skipped", "reason": "ServiceNow not configured"}
 
         try:
-            # ServiceNow integration logic would go here
             logger.info(f"Updating ServiceNow change {change_request_id} with window {window_id}")
 
             return {
@@ -1686,5 +1456,3 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"ServiceNow update failed: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
-
-

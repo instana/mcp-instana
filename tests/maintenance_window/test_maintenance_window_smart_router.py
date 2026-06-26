@@ -30,7 +30,6 @@ sys.modules['instana_client.models'] = MagicMock()
 sys.modules['instana_client.models.maintenance_config_v2'] = MagicMock()
 sys.modules['instana_client.configuration'] = MagicMock()
 sys.modules['instana_client.api_client'] = MagicMock()
-sys.modules['instana_client.models'] = MagicMock()
 
 
 class TestMaintenanceWindowSmartRouter(unittest.TestCase):
