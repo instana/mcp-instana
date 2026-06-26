@@ -25,7 +25,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Mock instana_client before any src imports
 sys.modules['instana_client'] = MagicMock()
 sys.modules['instana_client.api'] = MagicMock()
+sys.modules['instana_client.api.maintenance_configuration_api'] = MagicMock()
 sys.modules['instana_client.models'] = MagicMock()
+sys.modules['instana_client.models.maintenance_config_v2'] = MagicMock()
+sys.modules['instana_client.configuration'] = MagicMock()
+sys.modules['instana_client.api_client'] = MagicMock()
 
 
 class TestMaintenanceWindowSmartRouter(unittest.TestCase):
