@@ -112,7 +112,7 @@ logger = logging.getLogger(__name__)
 
 class MaintenanceWindowMCPTools(BaseInstanaClient):
     """
-    Tools for maintenance window management in Instana MCP.
+    Tools for maintenance window management in Instana MCP
 
     This class provides comprehensive maintenance window lifecycle management including
     creation, modification, closure, and ServiceNow integration. It supports both
