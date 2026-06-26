@@ -714,6 +714,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 # Format 2: Tag Filter Expression (for synthetic monitoring)
                 window_payload = {
                     "id": window_id,
+            if use_tag_filter_expression:
+                # Format 2: Tag Filter Expression (for synthetic monitoring)
+                window_payload = {
                     "name": window_name,
                     "query": "",
                     "scheduling": scheduling_obj,
@@ -742,6 +745,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     "retriggerOpenAlertsEnabled": False
                 }
 
+            # Create maintenance window via Instana API
+            # The API requires PUT with an ID in both the path and payload
+            window_id = str(uuid.uuid4()).replace('-', '')[:16]  # Generate 16-char ID
+
+            # Add ID to payload as required by API
+            window_payload["id"] = window_id
+
             # Log the payload being sent
             logger.info("=== CREATING MAINTENANCE WINDOW ===")
             logger.info(f"Window ID: {window_id}")
@@ -762,6 +772,21 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             )
 
             if isinstance(result, dict) and "error" in result:
+
+            endpoint = f"api/settings/v2/maintenance/{window_id}"
+            logger.info(f"API Endpoint: {endpoint}")
+
+            # Log the complete payload for debugging
+            logger.info("Complete API Payload:")
+            logger.info(json.dumps(window_payload, indent=2))
+
+            result = await self.make_request(
+                endpoint=endpoint,
+                method="PUT",
+                json=window_payload
+            )
+
+            if "error" in result:
                 logger.error(f"❌ Failed to create maintenance window: {result.get('error')}")
                 logger.error("Payload that was rejected:")
                 logger.error(json.dumps(window_payload, indent=2))
@@ -785,6 +810,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Log success and verify scheduling type in response
             response_scheduling = result.get("scheduling", {}) if isinstance(result, dict) else {}
+            # Use the generated ID (API returns the same ID)
+            returned_id = result.get("id", window_id)
+            window_id = returned_id
+
+            # Log success and verify scheduling type in response
+            response_scheduling = result.get("scheduling", {})
             response_type = response_scheduling.get("type", "UNKNOWN")
             logger.info("✅ Maintenance window created successfully")
             logger.info(f"Response scheduling type: {response_type}")
@@ -886,6 +917,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             existing_window = await self._api_get_window(window_id=window_id, ctx=ctx)
 
             if isinstance(existing_window, dict) and "error" in existing_window:
+            # Get existing window
+            endpoint = f"api/settings/v2/maintenance/{window_id}"
+            existing_window = await self.make_request(endpoint=endpoint, method="GET")
+
+            if "error" in existing_window:
                 return {"error": f"Maintenance window not found: {window_id}"}
 
             # Build update payload - preserve ALL fields from existing window
@@ -994,6 +1030,18 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Fetch the updated window to verify changes
             updated_window = await self._api_get_window(window_id=window_id, ctx=ctx)
+            # Update maintenance window using PUT with same structure as create
+            result = await self.make_request(
+                endpoint=endpoint,
+                method="PUT",
+                json=update_payload
+            )
+
+            if "error" in result:
+                return result
+
+            # Fetch the updated window to verify changes
+            updated_window = await self.make_request(endpoint=endpoint, method="GET")
 
             # Calculate new end time for response
             start_time = update_payload["scheduling"]["start"]
@@ -1012,6 +1060,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Extract RRULE info if present
             scheduling = updated_window.get("scheduling", {}) if isinstance(updated_window, dict) else {}
+            scheduling = updated_window.get("scheduling", {})
             rrule_after = scheduling.get("rrule", "")
             recurrence_type = scheduling.get("type", "ONE_TIME")
 
@@ -1027,6 +1076,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             modification_summary = ", ".join(modifications) if modifications else "window updated"
 
             return {
+            response = {
                 "operation": "modify",
                 "status": "success",
                 "window_id": window_id,
@@ -1044,6 +1094,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 }
             }
 
+            return response
+
         except Exception as e:
             logger.error(f"Error modifying maintenance window: {e}", exc_info=True)
             return {"error": f"Failed to modify maintenance window: {e!s}"}
@@ -1058,6 +1110,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         Close and document a maintenance window.
 
         Closes an active maintenance window by deleting it, and documents
+        Closes an active maintenance window, re-enables alerts, and documents
         completion notes for audit trail.
 
         Args:
@@ -1076,6 +1129,23 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Close maintenance window via SDK delete
             await self._api_delete_window(window_id=window_id, ctx=ctx)
+            # Build closure payload
+            closure_payload = {
+                "status": "completed",
+                "completionNotes": completion_notes or "Maintenance completed",
+                "closedAt": get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]
+            }
+
+            # Close maintenance window
+            endpoint = f"api/settings/v2/maintenance/{window_id}/close"
+            result = await self.make_request(
+                endpoint=endpoint,
+                method="POST",
+                json=closure_payload
+            )
+
+            if "error" in result:
+                return result
 
             return {
                 "operation": "close",
@@ -1083,6 +1153,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "window_id": window_id,
                 "completion_notes": completion_notes or "Maintenance completed",
                 "closed_at": closed_at,
+                "completion_notes": closure_payload["completionNotes"],
+                "closed_at": closure_payload["closedAt"],
                 "message": f"Maintenance window closed successfully: {window_id}"
             }
 
@@ -1116,6 +1188,29 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Debug: Log the structure of the response
             logger.info(f"Number of windows fetched: {len(all_windows)}")
+            endpoint = "api/settings/v2/maintenance"
+            # Don't use query parameters - get all windows and filter in code
+            result = await self.make_request(endpoint=endpoint, method="GET")
+
+            if "error" in result:
+                return result
+
+            # Get all windows from response
+            # The API might return a dict with different keys
+            if isinstance(result, list):
+                all_windows = result
+            elif isinstance(result, dict):
+                # Try different possible keys
+                all_windows = result.get("items", result.get("data", result.get("maintenanceWindows", [])))
+            else:
+                all_windows = []
+
+            # Debug: Log the structure of the response
+            logger.info(f"API Response type: {type(result)}")
+            if isinstance(result, dict):
+                logger.info(f"API Response keys: {list(result.keys())}")
+            logger.info(f"Number of windows in all_windows: {len(all_windows)}")
+            logger.info(f"Raw result for debugging: {str(result)[:500]}")  # First 500 chars
 
             # Filter for active windows using the 'state' field or occurrence times
             current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
@@ -1204,6 +1299,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
+            endpoint = "api/settings/v2/maintenance"
+            # Don't use query parameters - get all windows and filter in code
+            result = await self.make_request(endpoint=endpoint, method="GET")
+
+            if "error" in result:
+                return result
+
+            # Get all windows from response
+            all_windows = result if isinstance(result, list) else result.get("items", [])
 
             # Filter for scheduled windows using the 'state' field
             scheduled_windows = []
@@ -1262,6 +1366,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
+            endpoint = "api/settings/v2/maintenance"
+            # Get all windows
+            result = await self.make_request(endpoint=endpoint, method="GET")
+
+            if "error" in result:
+                return result
+
+            # Get all windows from response
+            all_windows = result if isinstance(result, list) else result.get("items", [])
 
             # Filter by application_id if provided
             if application_id:
@@ -1342,6 +1455,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             if not isinstance(all_windows, list):
                 all_windows = []
+            endpoint = "api/settings/v2/maintenance"
+            # Get all windows
+            result = await self.make_request(endpoint=endpoint, method="GET")
+
+            if "error" in result:
+                return result
+
+            # Get all windows from response
+            all_windows = result if isinstance(result, list) else result.get("items", [])
 
             # Filter for expired windows using the 'state' field
             expired_windows = []
@@ -1385,6 +1507,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error listing expired windows: {e}", exc_info=True)
             return {"error": f"Failed to list expired windows: {e!s}"}
+
 
     async def _bulk_create_windows(
         self,
@@ -1563,3 +1686,5 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"ServiceNow update failed: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
+
+
