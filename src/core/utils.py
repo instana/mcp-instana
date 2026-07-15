@@ -4,17 +4,68 @@ Base Instana API Client Module
 This module provides the base client for interacting with the Instana API.
 """
 
+import json
 import logging
 import sys
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Union
+from src.core.api_headers import build_instana_api_headers
 
 import requests
 
-from src.core.api_headers import build_instana_api_headers
-
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, Any], Dict[str, str]]:
+    """
+    Parse payload from string or dict format.
+    
+    This utility function handles payload parsing with multiple fallback strategies:
+    1. If payload is None or empty, returns error
+    2. If payload is already a dict, returns it as-is
+    3. If payload is a string, attempts to parse as JSON
+    4. If JSON parsing fails, attempts to parse as Python literal (ast.literal_eval)
+    5. If all parsing fails, returns error dict
+    
+    Args:
+        payload: Payload as dict, JSON string, or Python literal string
+    
+    Returns:
+        Parsed dict if successful, error dict with 'error' key otherwise
+        
+    Examples:
+        >>> parse_payload('{"key": "value"}')
+        {'key': 'value'}
+        
+        >>> parse_payload("{'key': 'value'}")
+        {'key': 'value'}
+        
+        >>> parse_payload({'key': 'value'})
+        {'key': 'value'}
+        
+        >>> parse_payload(None)
+        {'error': 'payload is required'}
+    """
+    if not payload:
+        return {"error": "payload is required"}
+    
+    if isinstance(payload, dict):
+        return payload
+    
+    if isinstance(payload, str):
+        # Try JSON parsing first
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            # Fall back to Python literal evaluation
+            try:
+                import ast
+                return ast.literal_eval(payload)
+            except (ValueError, SyntaxError) as e:
+                return {"error": f"Invalid payload format: {e!s}"}
+    
+    return {"error": f"Payload must be dict or JSON string, got {type(payload).__name__}"}
 
 # Import MCP dependencies
 from fastmcp import Context
@@ -32,7 +83,7 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "0.9.9"
+    __version__ = "0.9.6"
 
 # Registry to store all tools
 MCP_TOOLS = {}
@@ -88,12 +139,12 @@ def _validate_http_headers(instana_token, instana_base_url):
         error_msg = f"HTTP mode detected but missing required headers: {', '.join(missing)}"
         print(f" {error_msg}", file=sys.stderr)
         return {"error": error_msg}
-
+    
     if not instana_base_url.startswith("http://") and not instana_base_url.startswith("https://"):
         error_msg = "Instana base URL must start with http:// or https://"
         print(f" {error_msg}", file=sys.stderr)
         return {"error": error_msg}
-
+    
     return None
 
 
@@ -106,7 +157,7 @@ def _validate_http_auth_headers(instana_api_token, instana_jwt_token, instana_au
     has_jwt_token_auth = instana_jwt_token and instana_csrf_token and instana_base_url
     # Check for session token auth (needs auth_token + csrf_token + base_url)
     has_session_auth = instana_auth_token and instana_csrf_token and instana_base_url
-
+    
     if not has_api_token_auth and not has_jwt_token_auth and not has_session_auth:
         missing = []
         if not instana_base_url:
@@ -116,14 +167,14 @@ def _validate_http_auth_headers(instana_api_token, instana_jwt_token, instana_au
         error_msg = f"HTTP mode detected but missing required headers: {', '.join(missing)}"
         logger.error(AUTH_FAILED_MSG, error_msg)
         return {"error": error_msg}
-
+    
     # Validate URL format - HTTP protocol is allowed for development/testing environments
     # In production, HTTPS should always be used for security
     if not instana_base_url.startswith("http://") and not instana_base_url.startswith("https://"):  # NOSONAR - HTTP allowed for dev/test
         error_msg = "Instana base URL must start with http:// or https://"
         logger.error(AUTH_FAILED_MSG, error_msg)
         return {"error": error_msg}
-
+    
     return None
 
 
@@ -132,15 +183,15 @@ def _configure_auth_type(configuration, auth_headers, instana_api_token, instana
     if "Authorization" not in auth_headers:
         logger.debug("Using session token authentication")
         return None
-
+    
     auth_value = auth_headers["Authorization"]
-
+    
     if auth_value.startswith("Bearer "):
         return _configure_jwt_auth(instana_jwt_token)
-
+    
     if auth_value.startswith("apiToken "):
         return _configure_api_token_auth(configuration, instana_api_token)
-
+    
     return None
 
 
@@ -156,7 +207,7 @@ def _configure_jwt_auth(instana_jwt_token):
 
 def _configure_api_token_auth(configuration, instana_api_token):
     """Configure API token authentication.
-
+    
     Note: For API token auth, we use the SDK's built-in api_key configuration
     instead of manually setting the Authorization header. This prevents conflicts
     where both methods might be used simultaneously.
@@ -180,21 +231,21 @@ def _mask_token_for_logging(token_value):
 
 def _set_authorization_header(api_client_instance, auth_headers):
     """Set Authorization header on API client.
-
+    
     Note: This should only be called for JWT and Session auth.
     For API token auth, the SDK's configuration handles authentication.
     """
     if "Authorization" not in auth_headers:
         return
-
+    
     auth_header_value = auth_headers["Authorization"]
-
+    
     # Skip setting Authorization header if it's an API token
     # (SDK configuration handles this via api_key)
     if auth_header_value.startswith("apiToken "):
         logger.debug("Skipping Authorization header for API token (using SDK configuration)")
         return
-
+    
     # Set header for JWT Bearer tokens and other auth types
     masked_value = _mask_token_for_logging(auth_header_value)
     api_client_instance.set_default_header("Authorization", auth_header_value)
@@ -205,12 +256,12 @@ def _set_csrf_headers(api_client_instance, auth_headers):
     """Set CSRF and Cookie headers on API client."""
     if "X-CSRF-TOKEN" not in auth_headers:
         return
-
+    
     csrf_value = auth_headers["X-CSRF-TOKEN"]
     masked_csrf = f"{csrf_value[:10]}...{csrf_value[-5:]}" if len(csrf_value) > 15 else csrf_value[:5] + "..."
     api_client_instance.set_default_header("X-CSRF-TOKEN", csrf_value)
     logger.debug(f"Set X-CSRF-TOKEN header: {masked_csrf}")
-
+    
     if "Cookie" in auth_headers:
         api_client_instance.set_default_header("Cookie", auth_headers["Cookie"])
         logger.debug("Set session auth headers (CSRF + Cookie)")
@@ -222,27 +273,27 @@ def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_toke
     """Create API client with configuration based on auth type."""
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
-
+    
     configuration = Configuration()
     configuration.host = base_url
     # Disable SSL verification for self-signed certificates (development/testing)
     configuration.verify_ssl = False
     configuration.ssl_ca_cert = None
-
+    
     # Configure authentication type
     error = _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token)
     if error:
         return None, error
-
+    
     # Create API client instance
     api_client_instance = ApiClient(configuration=configuration)
     user_agent_value = f"MCP-server/{__version__}"
     api_client_instance.set_default_header("User-Agent", header_value=user_agent_value)
-
+    
     # Set authentication headers
     _set_authorization_header(api_client_instance, auth_headers)
     _set_csrf_headers(api_client_instance, auth_headers)
-
+    
     return api_client_instance, None
 
 
@@ -251,7 +302,7 @@ def _try_http_mode_auth(api_class):
     try:
         from fastmcp.server.dependencies import get_http_headers
         headers = get_http_headers()
-
+        
         # Extract all possible authentication headers
         instana_api_token = headers.get("instana-api-token")
         instana_auth_token = headers.get("instana-auth-token")
@@ -259,18 +310,18 @@ def _try_http_mode_auth(api_class):
         instana_base_url = headers.get("instana-base-url")
         instana_cookie_name = headers.get("instana-cookie-name")
         instana_jwt_token = headers.get("instana-jwt-token")
-
+        
         # Check if we're in HTTP mode
         if not (instana_api_token or instana_jwt_token or instana_auth_token or instana_csrf_token or instana_base_url):
             return None
-
+        
         # Validate headers
         validation_error = _validate_http_auth_headers(
             instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url
         )
         if validation_error:
             return validation_error
-
+        
         # Build auth headers
         auth_headers = build_instana_api_headers(
             auth_token=instana_auth_token,
@@ -279,16 +330,16 @@ def _try_http_mode_auth(api_class):
             api_token=instana_api_token,
             cookie_name=instana_cookie_name
         )
-
+                
         # Create API client
         api_client_instance, error = _create_api_client_with_config(
             instana_base_url, instana_api_token, instana_jwt_token, auth_headers
         )
         if error:
             return error
-
+        
         return api_class(api_client=api_client_instance)
-
+        
     except (ImportError, AttributeError) as e:
         logger.error("Header detection failed, using STDIO mode: %s", e)
         return None
@@ -298,16 +349,16 @@ def _create_api_client_from_config(base_url, api_token):
     """Create API client from configuration (for STDIO mode)."""
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
-
+    
     configuration = Configuration()
     configuration.host = base_url
     configuration.api_key['ApiKeyAuth'] = api_token
     configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
-
+    
     api_client_instance = ApiClient(configuration=configuration)
     user_agent_value = f"MCP-server/{__version__}"
     api_client_instance.set_default_header("User-Agent", header_value=user_agent_value)
-
+    
     return api_client_instance
 
 
@@ -364,15 +415,15 @@ def _auth_try_stdio(self, api_class):
     """Try STDIO mode authentication and return (api_instance, error)."""
     print(" Using constructor-based authentication (STDIO mode)", file=sys.stderr)
     print(f" self.base_url: {self.base_url}", file=sys.stderr)
-
+    
     validation_error = _validate_stdio_credentials(self)
     if validation_error:
         return None, validation_error
-
+    
     api_instance = _find_existing_api_client(self, api_class)
     if not api_instance:
         api_instance = _create_stdio_api_client(self, api_class)
-
+    
     return api_instance, None
 
 
@@ -381,21 +432,21 @@ async def _auth_wrapper_logic(func, self, args, kwargs, api_class, allow_mock):
     # Check for mock client
     if _auth_check_mock(allow_mock, kwargs):
         return await func(self, *args, **kwargs)
-
+    
     # Try HTTP mode first
     api_instance, error = _auth_try_http(api_class)
     if error:
         return error
-
+    
     if api_instance:
         kwargs['api_client'] = api_instance
         return await func(self, *args, **kwargs)
-
+    
     # Fall back to STDIO mode
     api_instance, error = _auth_try_stdio(self, api_class)
     if error:
         return error
-
+    
     kwargs['api_client'] = api_instance
     return await func(self, *args, **kwargs)
 
@@ -434,12 +485,12 @@ def with_header_auth(api_class, allow_mock=True):
     def decorator(func: Callable) -> Callable:
         import inspect
         sig = inspect.signature(func)
-
+        
         new_params = [
             param for name, param in sig.parameters.items()
             if name not in ('api_client',)
         ]
-
+        
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
             try:
@@ -450,10 +501,10 @@ def with_header_auth(api_class, allow_mock=True):
                 traceback.print_exc(file=sys.stderr)
                 error_msg = f"Authentication error: {e}" if isinstance(e, str) else f"Authentication error: {e!s}"
                 return {"error": error_msg}
-
+        
         wrapper.__signature__ = sig.replace(parameters=new_params)
         return wrapper
-
+    
     return decorator
 class BaseInstanaClient:
     """Base client for Instana API with common functionality."""
@@ -474,12 +525,12 @@ class BaseInstanaClient:
     def handle_api_error_response(self, response, operation_name: str, logger) -> Dict[str, Any]:
         """
         Handle API error responses in a standardized way.
-
+        
         Args:
             response: The API response object
             operation_name: Name of the operation for error messages
             logger: Logger instance for logging errors
-
+            
         Returns:
             Dictionary with error information
         """
@@ -542,7 +593,7 @@ def decode_response(response) -> str:
         Decoded response text
     """
     from email.message import Message
-
+    
     # Try to get charset from response headers using standard library parsing
     charset = DEFAULT_CHARSET  # Default fallback
 
@@ -565,66 +616,94 @@ def decode_response(response) -> str:
         return response.data.decode(DEFAULT_CHARSET, errors='replace')
 
 
+def _extract_tag_name_from_dict(node, tag_names):
+    """Extract tag name from a dict node if present."""
+    tag_name = node.get("tagName")
+    if not tag_name:
+        return
+    
+    # For infrastructure catalog format with type TAG
+    if node.get("type") == "TAG":
+        if tag_name not in tag_names:
+            tag_names.append(tag_name)
+    else:
+        # For website/mobile app catalogs
+        tag_names.append(tag_name)
+
+
+def _process_dict_children(node, tag_names):
+    """Process children, tagTree, and tags arrays in a dict node."""
+    # Process children array
+    children = node.get("children")
+    if isinstance(children, list):
+        for child in children:
+            extract_tag_names_from_tree(child, tag_names)
+    
+    # Process tagTree (infrastructure catalog)
+    if "tagTree" in node:
+        extract_tag_names_from_tree(node["tagTree"], tag_names)
+    
+    # Process tags array (alternative structure)
+    tags = node.get("tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            extract_tag_names_from_tree(tag, tag_names)
+
+
 def extract_tag_names_from_tree(node, tag_names=None):
     """
     Recursively extract tag names from nested tree structure.
-
+    Handles multiple tag catalog formats (infrastructure, website, mobile app).
+    
     Args:
         node: The tree node (dict or list) to extract tag names from
         tag_names: List to collect tag names (created if None)
-
+        
     Returns:
         List of extracted tag names
     """
     if tag_names is None:
         tag_names = []
-
+    
     if isinstance(node, dict):
-        # If this node has a tagName, add it
-        if node.get("tagName"):
-            tag_names.append(node["tagName"])
-
-        # Recursively process children
-        if "children" in node and isinstance(node["children"], list):
-            for child in node["children"]:
-                extract_tag_names_from_tree(child, tag_names)
+        _extract_tag_name_from_dict(node, tag_names)
+        _process_dict_children(node, tag_names)
     elif isinstance(node, list):
-        # If it's a list, process each item
         for item in node:
             extract_tag_names_from_tree(item, tag_names)
-
+    
     return tag_names
 
 
 def process_tag_catalog_response(full_response: Dict[str, Any], beacon_type: str, use_case: str) -> Dict[str, Any]:
     """
     Process tag catalog API response to extract tag names.
-
+    
     This shared function reduces code duplication between website and mobile app catalog modules.
-
+    
     Args:
         full_response: The full API response containing tagTree and/or tags
         beacon_type: The beacon type for the catalog
         use_case: The use case for the catalog
-
+        
     Returns:
         Dictionary with tag_names, count, beacon_type, and use_case
     """
     tag_names = []
-
+    
     # Extract from tagTree using shared utility function
     if "tagTree" in full_response:
         extract_tag_names_from_tree(full_response["tagTree"], tag_names)
-
+    
     # Extract from flat tags list (using 'name' field)
     if "tags" in full_response and isinstance(full_response["tags"], list):
         for tag in full_response["tags"]:
             if isinstance(tag, dict) and "name" in tag and tag["name"]:
                 tag_names.append(tag["name"])
-
+    
     # Remove duplicates and sort
     tag_names = sorted(set(tag_names))
-
+    
     return {
         "tag_names": tag_names,
         "count": len(tag_names),
@@ -658,16 +737,36 @@ def project_metric_card(metric: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+WEBSITE_BEACON_TYPE_MAP = {
+    "PAGELOAD": "pageLoad",
+    "PAGE_CHANGE": "pageChange",
+    "RESOURCELOAD": "resourceLoad",
+    "CUSTOM": "custom",
+    "HTTPREQUEST": "httpRequest",
+    "ERROR": "error",
+}
+
+MOBILE_BEACON_TYPE_MAP = {
+    "SESSION_START": "sessionStart",
+    "VIEW_CHANGE": "viewChange",
+    "HTTP_REQUEST": "httpRequest",
+    "CUSTOM": "custom",
+    "CRASH": "crash",
+    "PERF": "perf",
+    "DROP_BEACON": "dropBeacon",
+}
+
+
 def normalize_beacon_type(beacon_type: str, beacon_type_map: Dict[str, str]) -> str:
     """
     Normalize beacon type from uppercase to camelCase format.
-
+    
     This shared function reduces code duplication between website and mobile app routers.
-
+    
     Args:
         beacon_type: The beacon type to normalize (e.g., "SESSION_START", "PAGELOAD")
         beacon_type_map: Mapping of uppercase to camelCase formats
-
+        
     Returns:
         Normalized beacon type in camelCase format
     """

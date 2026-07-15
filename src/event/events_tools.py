@@ -15,10 +15,6 @@ try:
     from instana_client.api.events_api import (
         EventsApi,
     )
-    try:
-        has_get_events_id_query = True
-    except ImportError:
-        has_get_events_id_query = False
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
@@ -967,7 +963,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"[get_events] Error: {e}", exc_info=True)
             return {"error": f"Failed to get events: {e!s}"}
-
+        
     def _extract_event_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         ALLOWED_FILTERS = {
             "query": None,
@@ -980,14 +976,16 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             "time_range": None,
             "entity_type": None,
             "entity_name": None,
+            "entity_label": None,
             "state": None,
             "problem": None,
             "severity": None,
             "event_specification_id": None,
+            "rca": None,
         }
 
         return {k: filters.get(k, v) for k, v in ALLOWED_FILTERS.items()}
-
+    
     def _validate_event_type_filters(self, event_type_filters):
         if not event_type_filters:
             return
@@ -1004,7 +1002,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     f"Invalid event_type '{event_type}'. Must be one of: "
                     f"{', '.join(sorted(VALID_EVENT_TYPES))}"
                 )
-
+    
     async def _fetch_events_api(
         self,
         api_client,
@@ -1024,7 +1022,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         if inspect.iscoroutine(result):
             return await result
         return result
-
+    
     def _parse_events_response(self, response_data):
         if response_data.status != 200:
             raise ValueError(f"HTTP {response_data.status}")
@@ -1035,13 +1033,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             return []
 
         return result
-
+    
     def _apply_event_filters(self, events, f):
         """Apply filters to events with reduced cognitive complexity."""
         # Early return if no filters are specified
         if not any([
-            f["entity_type"], f["state"], f["entity_name"],
-            f["problem"], f["severity"], f["query"]
+            f["entity_type"], f["state"], f["entity_name"], f["entity_label"],
+            f["problem"], f["severity"], f["query"], f["rca"] is not None
         ]):
             return events
 
@@ -1052,26 +1050,31 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         if not isinstance(event, dict):
             return False
 
-        # Check each filter condition - early return on first mismatch
-        if f["entity_type"] and not self._matches_entity_type(event, f["entity_type"]):
-            return False
+        # Define filter checks as tuples of (filter_value, matcher_function)
+        filter_checks = [
+            (f["entity_type"], lambda: self._matches_entity_type(event, f["entity_type"])),
+            (f["state"], lambda: self._matches_state(event, f["state"])),
+            (f["problem"], lambda: self._matches_problem(event, f["problem"])),
+            (f["entity_name"], lambda: self._matches_entity_name(event, f["entity_name"])),
+            (f["entity_label"], lambda: self._matches_entity_label(event, f["entity_label"])),
+            (f["event_specification_id"], lambda: self._matches_event_specification_id(event, f["event_specification_id"])),
+            (f["query"], lambda: self._matches_query(event, f["query"])),
+        ]
 
-        if f["state"] and not self._matches_state(event, f["state"]):
-            return False
+        # Check filters that use truthy values
+        for filter_value, matcher in filter_checks:
+            if filter_value and not matcher():
+                return False
 
-        if f["problem"] and not self._matches_problem(event, f["problem"]):
-            return False
-
+        # Check severity (uses None check instead of truthy)
         if f["severity"] is not None and not self._matches_severity(event, f["severity"]):
             return False
 
-        if f["entity_name"] and not self._matches_entity_name(event, f["entity_name"]):
+        # Check rca (uses None check instead of truthy)
+        if f["rca"] is not None and not self._matches_rca(event, f["rca"]):
             return False
 
-        if f["event_specification_id"] and not self._matches_event_specification_id(event, f["event_specification_id"]):
-            return False
-
-        return not (f["query"] and not self._matches_query(event, f["query"]))
+        return True
 
     def _matches_entity_type(self, event, entity_type):
         """Check if event matches entity type filter."""
@@ -1084,7 +1087,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
     def _matches_problem(self, event, problem):
         """Check if event matches problem filter."""
         p = problem.lower()
-        return (p in event.get("problem", "").lower() or
+        return (p in event.get("problem", "").lower() or 
                 p in event.get("detail", "").lower())
 
     def _matches_severity(self, event, severity):
@@ -1094,10 +1097,14 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         return event.get("severity") == severity
 
     def _matches_entity_name(self, event, entity_name):
-        """Check if event matches entity name filter."""
+        """Check if event matches entity name filter (category/type)."""
         n = entity_name.lower()
-        return (n in event.get("entityName", "").lower() or
-                n in event.get("entityLabel", "").lower())
+        return n in event.get("entityName", "").lower()
+
+    def _matches_entity_label(self, event, entity_label):
+        """Check if event matches entity label filter (specific instance identifier)."""
+        label = entity_label.lower()
+        return label in event.get("entityLabel", "").lower()
 
     def _matches_event_specification_id(self, event, event_specification_id):
         """Check if event matches event specification ID filter."""
@@ -1107,6 +1114,15 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """Check if event matches query filter."""
         return query.lower() in str(event).lower()
 
+    def _matches_rca(self, event, rca):
+        """Check if event matches root cause analysis filter."""
+        probable_cause = event.get("probableCause", {})
+        has_rca = probable_cause.get("found", False)
+        
+        # If rca is True, return events where probableCause.found is True
+        # If rca is False, return events where probableCause.found is False or missing
+        return has_rca == rca
+    
     def _optimize_and_limit(self, events, max_events):
         limited = events[:max_events]
         return [self._optimize_event_data(e) for e in limited]

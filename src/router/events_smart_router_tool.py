@@ -6,10 +6,10 @@ to the appropriate specialized tools.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
-from fastmcp import Context
 from mcp.types import ToolAnnotations
+from fastmcp import Context
 
 from src.core.timestamp_utils import convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -52,10 +52,12 @@ PARAM_EXCLUDE_TRIGGERED_BEFORE = "exclude_triggered_before"
 PARAM_EVENT_TYPE_FILTERS = "event_type_filters"
 PARAM_ENTITY_TYPE = "entity_type"
 PARAM_ENTITY_NAME = "entity_name"
+PARAM_ENTITY_LABEL = "entity_label"
 PARAM_STATE = "state"
 PARAM_PROBLEM = "problem"
 PARAM_SEVERITY = "severity"
 PARAM_EVENT_SPECIFICATION_ID = "event_specification_id"
+PARAM_RCA = "rca"
 
 # Default values
 DEFAULT_MAX_EVENTS = 50
@@ -116,15 +118,26 @@ Parameters (params dict):
         - event_type_filters: List of event type filters (optional, e.g., ["INCIDENT", "ISSUE", "CHANGE"]).
             NOTE: Allowed values: INCIDENT, ISSUE, CHANGE. Invalid values will result in an error.
         - entity_type: Affected entity type to filter by (optional)
-            * For infrastructure incidents: Use entity types like "host", "docker", "kubernetes"
-            * For application incidents: Use "application" - this filters events with applicationId
-            * For service incidents: Use "service" - this filters events with serviceId
-        - entity_name: Affected entity name to filter by (e.g., "Kubernetes Pod", "Process", "CRI-O Container") (optional, supports partial matches)
-        - state: Event state to filter by (e.g., "open", "closed") (optional)
+            * Allowed values (case-insensitive): "INFRASTRUCTURE", "SERVICE", "APPLICATION", "ENDPOINT"
+            * For infrastructure incidents (hosts, docker, kubernetes, etc.): Use "INFRASTRUCTURE"
+            * For application incidents: Use "APPLICATION"
+            * For service incidents: Use "SERVICE"
+            * For endpoint incidents: Use "ENDPOINT"
+        - entity_name: Affected entity name (category/type) to filter by (optional, supports partial matches)
+            * Examples: "Kubernetes Pod", "Kubernetes Deployment", "Process", "IBM MQ Subscription", "IBM MQ Queue Usage", "Service", "Application", "Endpoint"
+            * This represents the human-readable category/type of the entity, not the specific instance name
+        - entity_label: Specific entity instance identifier to filter by (optional, supports partial matches)
+            * Examples: "qotd-load/qotd-load-7fd7f4c4b8-46z7c", "recommendation-agent", "POST /pay/{id}", "All Services"
+            * This is the actual name/identifier of the specific entity instance
+        - state: Event state to filter by (e.g., "open", "closed", "manually closed") (optional)
         - problem: Problem description to filter events by (e.g., "CPU usage high", "High error rate", "online") (optional)
         - severity: Event severity to filter by (exact match only). (optional)
             NOTE: Allowed values (strict): -1 → change (informational events), 5 → warning, 10 → critical.
         - event_specification_id: Filter events by event specification ID (optional)
+        - rca: Boolean flag to filter events by root cause analysis availability (optional)
+            * Set to true to return only events where probableCause.found is true (events with RCA)
+            * Set to false to return only events where probableCause.found is false or missing (events without RCA)
+            * If not provided, returns all events regardless of RCA status
 
 Args:
     operation: Operation to perform
@@ -138,7 +151,7 @@ Examples:
     operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
     operation="get_kubernetes_info_events", params={"time_range": "last 24 hours", "max_events": 50}
     operation="get_agent_monitoring_events", params={"query": "Monitoring issue", "from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
-    operation="get_events", params={"filters": {"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
+    operation="get_events", params={"filters": {"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "entity_label": "payment-service-v2", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
     operation="get_events_by_ids", params={"event_ids": ["1a2b3c4d5e6f", "7g8h9i0j1k2l"]}"""
     )
     async def manage_events(
@@ -178,17 +191,19 @@ Examples:
                 PARAM_EVENT_TYPE_FILTERS: source_params.get(PARAM_EVENT_TYPE_FILTERS),
                 PARAM_ENTITY_TYPE: source_params.get(PARAM_ENTITY_TYPE),
                 PARAM_ENTITY_NAME: source_params.get(PARAM_ENTITY_NAME),
+                PARAM_ENTITY_LABEL: source_params.get(PARAM_ENTITY_LABEL),
                 PARAM_STATE: source_params.get(PARAM_STATE),
                 PARAM_PROBLEM: source_params.get(PARAM_PROBLEM),
                 PARAM_SEVERITY: source_params.get(PARAM_SEVERITY),
                 PARAM_EVENT_SPECIFICATION_ID: source_params.get(PARAM_EVENT_SPECIFICATION_ID),
+                PARAM_RCA: source_params.get(PARAM_RCA),
             }
 
             logger.debug(
                 f"[manage_events] Parameters extracted - "
                 f"operation: {operation}, time_range: {filters[PARAM_TIME_RANGE]}, "
                 f"from_time: {filters[PARAM_FROM_TIME]}, to_time: {filters[PARAM_TO_TIME]}, max_events: {filters[PARAM_MAX_EVENTS]}, "
-                f"event_type_filters: {filters[PARAM_EVENT_TYPE_FILTERS]}, entity_type: {filters[PARAM_ENTITY_TYPE]}, entity_name: {filters[PARAM_ENTITY_NAME]}, state: {filters[PARAM_STATE]}, problem: {filters[PARAM_PROBLEM]}, severity: {filters[PARAM_SEVERITY]}"
+                f"event_type_filters: {filters[PARAM_EVENT_TYPE_FILTERS]}, entity_type: {filters[PARAM_ENTITY_TYPE]}, entity_name: {filters[PARAM_ENTITY_NAME]}, entity_label: {filters[PARAM_ENTITY_LABEL]}, state: {filters[PARAM_STATE]}, problem: {filters[PARAM_PROBLEM]}, severity: {filters[PARAM_SEVERITY]}, rca: {filters[PARAM_RCA]}"
             )
 
             # Convert datetime strings to timestamps for from_time and to_time
@@ -197,13 +212,13 @@ Examples:
                 [PARAM_FROM_TIME, PARAM_TO_TIME],
                 default_timezone="UTC"
             )
-
+            
             if "error" in conversion_result:
                 return {
                     "error": conversion_result["error"],
                     "operation": operation
                 }
-
+            
             # Update the converted values
             from_time = conversion_result["params"][PARAM_FROM_TIME]
             to_time = conversion_result["params"][PARAM_TO_TIME]
@@ -286,10 +301,12 @@ Examples:
                     "event_type_filters": filters[PARAM_EVENT_TYPE_FILTERS],
                     "entity_type": filters[PARAM_ENTITY_TYPE],
                     "entity_name": filters[PARAM_ENTITY_NAME],
+                    "entity_label": filters[PARAM_ENTITY_LABEL],
                     "state": filters[PARAM_STATE],
                     "problem": filters[PARAM_PROBLEM],
                     "severity": filters[PARAM_SEVERITY],
                     "event_specification_id": filters[PARAM_EVENT_SPECIFICATION_ID],
+                    "rca": filters[PARAM_RCA],
                 }
 
                 result = await self.events_client.get_events(
@@ -303,6 +320,12 @@ Examples:
                     event_ids=filters[PARAM_EVENT_IDS],
                     ctx=ctx
                 )
+
+            else:
+                return {
+                    "error": f"Unrouted operation '{operation}'",
+                    "operation": operation
+                }
 
             logger.debug(f"[manage_events] Successfully completed operation: {operation}")
             return {

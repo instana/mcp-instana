@@ -28,13 +28,11 @@ def clean_nan_values(data: Any) -> Any:
         return None
     else:
         return data
-
+    
 
 try:
     from instana_client.api.mobile_app_analyze_api import MobileAppAnalyzeApi
-    from instana_client.models.get_mobile_app_beacon_groups import (
-        GetMobileAppBeaconGroups,
-    )
+    from instana_client.models.get_mobile_app_beacon_groups import GetMobileAppBeaconGroups
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
@@ -43,12 +41,7 @@ except ImportError as e:
 from instana_client import DeprecatedTagFilter
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    decode_response,
-    register_as_tool,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, decode_response, register_as_tool, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +112,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         # Convert tag filter expression to SDK model
         if tag_filter_expression:
             try:
-                from instana_client.models.tag_filter_expression_element import (
-                    TagFilterExpressionElement,
-                )
+                from instana_client.models.tag_filter_expression_element import TagFilterExpressionElement
                 tag_filter_obj = TagFilterExpressionElement.from_dict(tag_filter_expression)
                 query_params["tagFilterExpression"] = tag_filter_obj
                 logger.debug(f"[get_mobile_app_beacon_groups] Converted tag filter to SDK object: {tag_filter_obj.to_dict()}")
@@ -271,6 +262,41 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 if tag_validation:
                     return tag_validation
 
+            # STEP 5: Metric compatibility validation (last pre-flight step before query build)
+            if user_provided_metrics:
+                from src.core.metric_validation import (
+                    fetch_metric_catalog_internal,
+                    validate_beacon_type_known,
+                    validate_metric_compatibility,
+                )
+                from instana_client.api.mobile_app_catalog_api import MobileAppCatalogApi
+                from src.core.utils import MOBILE_BEACON_TYPE_MAP
+
+                beacon_type_error = validate_beacon_type_known(
+                    beacon_type=beacon_type,
+                    beacon_type_map=MOBILE_BEACON_TYPE_MAP,
+                )
+                if beacon_type_error:
+                    return beacon_type_error
+
+                catalog_result = fetch_metric_catalog_internal(
+                    api_client=api_client,
+                    catalog_api_class=MobileAppCatalogApi,
+                    fetch_method_name="get_mobile_app_metric_catalog_without_preload_content",
+                )
+                if isinstance(catalog_result, dict) and "error" in catalog_result:
+                    return catalog_result
+
+                compatibility_error = validate_metric_compatibility(
+                    metrics=metrics,
+                    beacon_type=beacon_type,
+                    catalog=catalog_result,
+                    beacon_type_map=MOBILE_BEACON_TYPE_MAP,
+                    catalog_operation="get_mobile_app_metric_catalog",
+                )
+                if compatibility_error:
+                    return compatibility_error
+
             # Build query parameters
             query_params = self._build_beacon_groups_query_params(
                 beacon_type, metrics, group, time_frame, tag_filter_expression, order, pagination
@@ -293,9 +319,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """Execute the beacon groups API call and handle response."""
         try:
-            from instana_client.models.get_mobile_app_beacon_groups import (
-                GetMobileAppBeaconGroups,
-            )
+            from instana_client.models.get_mobile_app_beacon_groups import GetMobileAppBeaconGroups
             logger.debug(f"[get_mobile_app_beacon_groups] Creating GetMobileAppBeaconGroups with params: {query_params}")
             config_object = GetMobileAppBeaconGroups(**query_params)
             logger.debug(f"[get_mobile_app_beacon_groups] Successfully created GetMobileAppBeaconGroups, Config object dict: {config_object.to_dict()}")
@@ -349,8 +373,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     def _apply_beacons_defaults(
         self,
         time_frame: Optional[Dict[str, int]],
-        pagination: Optional[Dict[str, int]]
-    ) -> tuple[Dict[str, int], Dict[str, int]]:
+        pagination: Optional[Dict[str, int]],
+        filter_fields: Optional[bool]
+    ) -> tuple[Dict[str, int], Dict[str, int], bool]:
         """Apply default values for beacons parameters."""
         if not time_frame:
             time_frame = {"windowSize": 3600000}
@@ -362,7 +387,11 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         else:
             pagination = self._validate_pagination(pagination)
 
-        return time_frame, pagination
+        if filter_fields is None:
+            filter_fields = True
+            logger.debug("[get_mobile_app_beacons] Applied default filter_fields: True")
+
+        return time_frame, pagination, filter_fields
 
     def _validate_pagination(self, pagination: Dict[str, int]) -> Dict[str, int]:
         """Validate and adjust pagination parameters."""
@@ -385,7 +414,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     def _convert_single_tag_filter(self, tag_filter: Dict[str, Any]) -> Union[Any, Dict[str, Any]]:
         """Convert a single TAG_FILTER to DeprecatedTagFilter."""
         from instana_client.models.deprecated_tag_filter import DeprecatedTagFilter
-
+        
         name = tag_filter.get("name")
         operator = tag_filter.get("operator")
         value = tag_filter.get("value")
@@ -402,7 +431,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     def _convert_expression_filters(self, elements: List[Dict[str, Any]]) -> List[Any]:
         """Convert EXPRESSION elements to list of DeprecatedTagFilter."""
         from instana_client.models.deprecated_tag_filter import DeprecatedTagFilter
-
+        
         tag_filters = []
         for elem in elements:
             if elem.get("type") == "TAG_FILTER":
@@ -422,7 +451,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     ) -> Union[List[Any], Dict[str, Any]]:
         """
         Convert tag filter expression to deprecated tag filters.
-
+        
         Returns:
             - List[DeprecatedTagFilter]: Successfully converted filters
             - Dict with 'error' key: Conversion error occurred
@@ -483,7 +512,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
         return query_params
 
-    def _process_beacons_response(self, result) -> Dict[str, Any]:
+    def _process_beacons_response(self, result, filter_fields: bool = True) -> Dict[str, Any]:
         """Process and summarize beacons API response."""
         response_text = decode_response(result)
         result_dict = json.loads(response_text)
@@ -497,7 +526,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
         logger.debug(f"[get_mobile_app_beacons] Result before summarization: {len(str(result_dict))} chars")
 
-        summarized_result = self._summarize_beacons_response(result_dict)
+        summarized_result = self._summarize_beacons_response(result_dict, filter_fields)
         logger.debug(
             f"[get_mobile_app_beacons] Result after summarization: {len(str(summarized_result))} chars "
             f"(reduced by {len(str(result_dict)) - len(str(summarized_result))} chars)"
@@ -512,6 +541,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         time_frame: Optional[Dict[str, int]] = None,
         beacon_type: Optional[str] = None,
         pagination: Optional[Dict[str, int]] = None,
+        filter_fields: bool = True,
         ctx=None,
         api_client=None
     ) -> Dict[str, Any]:
@@ -530,6 +560,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 - offset: Number of items to skip from ingestionTime (default: 0)
                 - ingestionTime: Starting timestamp in Unix epoch (optional)
                 Example: {"retrievalSize": 20, "offset": 0}
+            filter_fields: Whether beacon data should have "non-essential" fields removed or be returned as is
             ctx: The MCP context (optional)
 
         Returns:
@@ -540,9 +571,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 f"[get_mobile_app_beacons] Called with beacon_type={beacon_type}, "
                 f"pagination={pagination}, time_frame={time_frame}"
             )
-
+            
             # STEP 1: Apply defaults
-            time_frame, pagination = self._apply_beacons_defaults(time_frame, pagination)
+            time_frame, pagination, filter_fields = self._apply_beacons_defaults(time_frame, pagination, filter_fields)
 
             # STEP 2: Required parameter check
             if not beacon_type:
@@ -580,9 +611,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
             # Create config object
             try:
-                from instana_client.models.get_mobile_app_beacons import (
-                    GetMobileAppBeacons,
-                )
+                from instana_client.models.get_mobile_app_beacons import GetMobileAppBeacons
                 config_object = GetMobileAppBeacons(**query_params)
                 logger.debug(f"[get_mobile_app_beacons] Successfully created GetMobileAppBeacons object: {config_object.to_dict()}")
             except Exception as e:
@@ -594,12 +623,12 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             result = api_client.get_mobile_app_beacons_without_preload_content(get_mobile_app_beacons=config_object)
 
             # Process and return results
-            return self._process_beacons_response(result)
+            return self._process_beacons_response(result, filter_fields)
 
         except Exception as e:
             logger.error(f"[get_mobile_app_beacons] Error: {e}", exc_info=True)
             return {"error": f"Failed to get mobile app beacons: {e!s}"}
-
+        
     def _extract_tags_and_check_entity(
         self,
         expr: Optional[Dict[str, Any]],
@@ -683,7 +712,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             Elicitation dict if validation fails, None if valid
         """
         missing_entity_tags: List[str] = []
-
+        
         # Extract and validate tags from filter expression
         filter_tags = self._extract_tags_and_check_entity(tag_filter_expression, missing_entity_tags)
 
@@ -719,7 +748,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             }
 
         return None
-
+    
     def _validate_metrics(
         self,
         metrics: Optional[List[Dict[str, Any]]],
@@ -727,38 +756,38 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     ) -> Optional[Dict[str, Any]]:
         """
         Validate metric names to catch invalid metrics before API call.
-
+        
         Args:
             metrics: List of metric configurations to validate
             user_provided: Whether metrics were provided by user (vs defaulted)
-
+            
         Returns:
             Elicitation dict if validation fails, None if valid
         """
         if not metrics:
             return None
-
+            
         # Only validate user-provided metrics (skip defaults)
         if not user_provided:
             return None
-
+            
         # Extract metric names
         metric_names = [m.get("metric") for m in metrics if isinstance(m, dict) and "metric" in m]
-
+        
         if not metric_names:
             return {
                 "elicitation_needed": True,
                 "reason": "Metrics list provided but no valid metric names found",
                 "message": "Each metric must have a 'metric' field with the metric name. Example: {'metric': 'beaconCount', 'aggregation': 'SUM'}"
             }
-
+        
         # Check for common invalid patterns
         invalid_metrics = []
         for metric_name in metric_names:
             # Metrics should not contain spaces or special characters (basic validation)
             if not isinstance(metric_name, str) or not metric_name.strip():
                 invalid_metrics.append(metric_name)
-
+        
         if invalid_metrics:
             return {
                 "elicitation_needed": True,
@@ -771,9 +800,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 },
                 "message": "Please call get_mobile_app_metric_catalog first to get the list of valid metric names, then use those exact metric names in your request."
             }
-
+        
         return None
-
+    
     def _get_essential_beacon_fields(self) -> List[str]:
         """Get list of essential fields to extract from beacons."""
         return [
@@ -811,10 +840,13 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             return True
         if isinstance(value, dict) and len(value) == 0:
             return True
-
+        
         # Skip 0 for timing fields that indicate "not measured"
         ZERO_MEASURE_FIELDS = {"errorCount", "coldStartTimeMs", "warmStartTimeMs", "hotStartTimeMs"}
-        return bool(value == 0 and field in ZERO_MEASURE_FIELDS)
+        if value == 0 and field in ZERO_MEASURE_FIELDS:
+            return True
+        
+        return False
 
     def _extract_clean_beacon(self, beacon: Dict[str, Any], essential_fields: List[str]) -> Dict[str, Any]:
         """Extract only essential fields from a beacon."""
@@ -826,7 +858,26 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                     clean_beacon[field] = value
         return clean_beacon
 
-    def _summarize_beacons_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
+    def _process_beacon_items(
+        self, items: List[Any], essential_fields: List[str], filter_fields: bool = True,
+        beacons: Optional[List[Dict[str, Any]]] = None
+    ) -> List[Dict[str, Any]]:
+        """Extract clean beacons from a list of raw item dicts, appending to beacons if provided."""
+        if beacons is None:
+            beacons = []
+        for item in items:
+            if not isinstance(item, dict) or "beacon" not in item:
+                continue
+            beacon = item["beacon"]
+            if not isinstance(beacon, dict):
+                continue
+            if filter_fields:
+                beacons.append(self._extract_clean_beacon(beacon, essential_fields))
+            else:
+                beacons.append(beacon)
+        return beacons
+
+    def _summarize_beacons_response(self, response_data: Dict[str, Any], filter_fields: bool = True) -> Dict[str, Any]:
         """
         Create a structured summary of beacons response with clean, relevant fields.
 
@@ -870,17 +921,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             result["summary"]["timeframe"] = response_data["adjustedTimeframe"]
 
         # Process items (beacons)
-        if "items" in response_data and isinstance(response_data["items"], list):
-            for item in response_data["items"]:
-                if not isinstance(item, dict) or "beacon" not in item:
-                    continue
-
-                beacon = item["beacon"]
-                if not isinstance(beacon, dict):
-                    continue
-
-                clean_beacon = self._extract_clean_beacon(beacon, essential_fields)
-                result["beacons"].append(clean_beacon)
+        items = response_data.get("items")
+        if isinstance(items, list):
+            result["beacons"] = self._process_beacon_items(items, essential_fields, filter_fields, result["beacons"])
 
         return result
 

@@ -23,8 +23,19 @@ load_dotenv()
 from src.observability import task, workflow
 
 # Configure logging
+# Read log level from environment variable (set by start.sh from config.yaml)
+log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level_map = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL
+}
+log_level = log_level_map.get(log_level_name, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,  # Default level, can be overridden
+    level=log_level,  # Default level from config, can be overridden by --log-level flag
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stderr)
@@ -78,7 +89,7 @@ class MCPState:
     smart_router_maintenance_window_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
-    infra_analyze_new_client: Any = None
+    smart_router_infrastructure_client: Any = None
 
 # Global variables to store credentials for lifespan
 _global_token = None
@@ -154,11 +165,11 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                             'title': bound_method._mcp_title,
                             'annotations': bound_method._mcp_annotations
                         }
-
+                        
                         # Add description if available
                         if hasattr(bound_method, '_mcp_description') and bound_method._mcp_description:
                             tool_kwargs['description'] = bound_method._mcp_description
-
+                        
                         server.tool(**tool_kwargs)(bound_method)
 
                         tools_registered += 1
@@ -237,9 +248,6 @@ async def execute_tool(tool_name: str, arguments: dict, clients_state) -> str:
 def get_client_categories():
     """Get client categories with lazy imports to avoid circular dependencies"""
     try:
-        from src.infrastructure.infrastructure_analyze import (
-            InfrastructureAnalyze,
-        )
         from src.router.application_smart_router_tool import (
             ApplicationSmartRouterMCPTool,
         )
@@ -248,13 +256,16 @@ def get_client_categories():
             CustomDashboardSmartRouterMCPTool,
         )
         from src.router.events_smart_router_tool import EventsSmartRouterMCPTool
-        from src.router.maintenance_window_smart_router import (
-            MaintenanceWindowSmartRouterMCPTool,
+        from src.router.infrastructure_smart_router_tool import (
+            InfrastructureSmartRouterMCPTool,
         )
         from src.router.mobile_app_smart_router import MobileAppSmartRouterMCPTool
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
+        from src.router.maintenance_window_smart_router import (
+            MaintenanceWindowSmartRouterMCPTool,
+        )
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -264,7 +275,7 @@ def get_client_categories():
             ('smart_router_client', ApplicationSmartRouterMCPTool),
         ],
         "infra": [
-            ('infra_analyze_new_client', InfrastructureAnalyze),
+            ('smart_router_infrastructure_client', InfrastructureSmartRouterMCPTool),
         ],
         "automation": [
             ('smart_router_automation_client', AutomationSmartRouterMCPTool),
@@ -310,23 +321,27 @@ def get_prompt_categories():
             ApplicationTopologyPrompts,
         )
         from src.prompts.events.events_tools import EventsPrompts
-        from src.prompts.maintenance_window.maintenance_window_prompts import (
-            MaintenanceWindowPrompts,
+        from src.prompts.infrastructure.infrastructure_analyze import (
+            InfrastructureAnalyzePrompts,
         )
-        from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
-        from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
-        from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
-        from src.prompts.mobile_app.mobile_app_configuration import (
-            MobileAppConfigurationPrompts,
+        from src.prompts.infrastructure.infrastructure_catalog import (
+            InfrastructureCatalogPrompts,
         )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
-        from src.prompts.website.website_alert import WebsiteAlertPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
         from src.prompts.website.website_configuration import (
             WebsiteConfigurationPrompts,
         )
+        from src.prompts.maintenance_window.maintenance_window_prompts import (
+            MaintenanceWindowPrompts,
+        )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
+        from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
+        from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
+        from src.prompts.mobile_app.mobile_app_configuration import MobileAppConfigurationPrompts
+        from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
+        from src.prompts.website.website_alert import WebsiteAlertPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
@@ -338,12 +353,14 @@ def get_prompt_categories():
     app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
     app_topology_prompts = ApplicationTopologyPrompts.get_prompts()
     events_prompts = EventsPrompts.get_prompts()
+    infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()
+    infra_catalog_prompts = InfrastructureCatalogPrompts.get_prompts()
     custom_dashboard_prompts = CustomDashboardPrompts.get_prompts()
     website_analyze_prompts = WebsiteAnalyzePrompts.get_prompts()
+    maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
     website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
-    maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
     mobile_app_analyze_prompts = MobileAppAnalyzePrompts.get_prompts()
     mobile_app_catalog_prompts = MobileAppCatalogPrompts.get_prompts()
     mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
@@ -361,6 +378,10 @@ def get_prompt_categories():
         "events": [
             ("Events Tools", events_prompts),
         ],
+        "infra": [
+            ("Infrastructure Analyze", infra_analyze_prompts),
+            ("Infrastructure Catalog", infra_catalog_prompts),
+        ],
         "website": [
             ("Website Analyze", website_analyze_prompts),
             ("Website Catalog", website_catalog_prompts),
@@ -371,14 +392,14 @@ def get_prompt_categories():
         "settings": [
             ("Custom Dashboard", custom_dashboard_prompts),
         ],
-        "maintenance": [
-            ("Maintenance Window", maintenance_window_prompts),
-        ],
         "mobile_app": [
             ("Mobile App Analyze", mobile_app_analyze_prompts),
             ("Mobile App Catalog", mobile_app_catalog_prompts),
             ("Mobile App Configuration", mobile_app_configuration_prompts),
             ("Mobile App Alerts", mobile_app_alert_prompts),
+        ],
+        "maintenance": [
+            ("Maintenance Window", maintenance_window_prompts),
         ]
     }
 
@@ -424,8 +445,8 @@ def main():
             "--log-level",
             type=str,
             choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-            default="INFO",
-            help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+            default=os.getenv("LOG_LEVEL", "INFO"),
+            help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). Default is read from config file via LOG_LEVEL env var."
         )
         parser.add_argument(
             "--debug",
@@ -436,7 +457,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--list-tools",

@@ -6,17 +6,13 @@ This module provides application settings-specific MCP tools for Instana monitor
 The API endpoints of this group provides a way to create, read, update, delete (CRUD) for various configuration settings.
 """
 
+import copy
 import logging
-import re
 import sys
 import traceback
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from mcp.types import ToolAnnotations
-
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
-from src.prompts import mcp
+from src.core.utils import BaseInstanaClient, decode_response, parse_payload, register_as_tool, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +33,13 @@ try:
         TagFilter,  #type: ignore
         TagFilterExpression,  #type: ignore
     )
+    # TagFilterAllOfValue is not exported from models, import directly
+    from instana_client.models.tag_filter_all_of_value import TagFilterAllOfValue  #type: ignore
 except ImportError as e:
     print(f"Error importing Instana SDK: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
     raise
 
-
-# Helper function for debug printing
-def debug_print(*args, **kwargs):
-    """Print debug information to stderr instead of stdout"""
-    print(*args, file=sys.stderr, **kwargs)
 
 class ApplicationSettingsMCPTools(BaseInstanaClient):
     """Tools for application settings in Instana MCP."""
@@ -69,7 +62,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             # Initialize the Instana SDK's ApplicationSettingsApi with our configured client
             self.settings_api = ApplicationSettingsApi(api_client=api_client)
         except Exception as e:
-            debug_print(f"Error initializing ApplicationSettingsApi: {e}")
+            logger.debug(f"Error initializing ApplicationSettingsApi: {e}")
             traceback.print_exc(file=sys.stderr)
             raise
 
@@ -135,10 +128,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                     return await self._update_service_config(id, payload, ctx)
                 elif operation == "delete":
                     return await self._delete_service_config(id, ctx)
-                elif operation == "order":
-                    return await self._order_service_config(request_body, ctx)
-                elif operation == "replace_all":
-                    return await self._replace_all_service_configs(payload, ctx)
 
             elif resource_subtype == "manual_service":
                 if operation == "get_all":
@@ -149,8 +138,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                     return await self._update_manual_service_config(id, payload, ctx)
                 elif operation == "delete":
                     return await self._delete_manual_service_config(id, ctx)
-                elif operation == "replace_all":
-                    return await self._replace_all_manual_service_config(payload, ctx)
 
             return {"error": f"Operation '{operation}' not supported for resource_subtype '{resource_subtype}'"}
 
@@ -158,12 +145,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             logger.error(f"Error executing {operation} on {resource_subtype}: {e}", exc_info=True)
             return {"error": f"Error executing {operation} on {resource_subtype}: {e!s}"}
 
-    # Individual operation functions
-
-    # @register_as_tool(
-    #     title="Get All Applications Configs",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_applications_configs(self,
                                            ctx=None,
@@ -176,15 +157,15 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             ctx: The MCP context (optional)
 
         Returns:
-            Dictionary containing endpoints data or error information
+            List of application perspective configs or error information
         """
         try:
-            debug_print("Fetching all applications and their settings")
+            logger.debug("Fetching all applications and their settings")
             # Use raw JSON response to avoid Pydantic validation issues
             result = api_client.get_application_configs_without_preload_content()
             import json
             try:
-                response_text = result.data.decode('utf-8')
+                response_text = decode_response(result)
                 json_data = json.loads(response_text)
                 # Convert to List[Dict[str, Any]] format
                 if isinstance(json_data, list):
@@ -192,140 +173,158 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 else:
                     # If it's a single object, wrap it in a list
                     result_dict = [json_data] if json_data else []
-                debug_print("Successfully retrieved application configs data")
+                logger.debug("Successfully retrieved application configs data")
                 return result_dict
             except (json.JSONDecodeError, AttributeError) as json_err:
                 error_message = f"Failed to parse JSON response: {json_err}"
-                debug_print(error_message)
+                logger.debug(error_message)
                 return [{"error": error_message}]
 
         except Exception as e:
-            debug_print(f"Error in get_application_configs: {e}")
-            traceback.print_exc(file=sys.stderr)
+            logger.error(f"Error in get_application_configs: {e}", exc_info=True)
             return [{"error": f"Failed to get all applications: {e!s}"}]
+
+    def _convert_tag_filter_expression(self, tag_expr: dict):
+        """
+        Recursively convert a tagFilterExpression dict into the appropriate
+        SDK model objects (TagFilterExpression / TagFilter).
+
+        Handles:
+        - EXPRESSION  → TagFilterExpression, with each element converted recursively
+        - TAG_FILTER  → TagFilter, normalising stringValue ↔ value and dropping the
+                        API-only 'key' field that the SDK constructor does not accept
+        - anything else → returned unchanged (defensive pass-through)
+        """
+        if not isinstance(tag_expr, dict):
+            return tag_expr
+
+        expr_type = tag_expr.get('type')
+
+        if expr_type == 'EXPRESSION':
+            converted_elements = [
+                self._convert_tag_filter_expression(e)
+                for e in tag_expr.get('elements', [])
+                if isinstance(e, dict)
+            ]
+            return TagFilterExpression(**{**tag_expr, 'elements': converted_elements})
+
+        if expr_type == 'TAG_FILTER':
+            # Drop 'key' — it is an API response field the SDK constructor rejects
+            tag_filter_dict = {k: v for k, v in tag_expr.items() if k != 'key'}
+            # Normalise stringValue / value so both are always present
+            if 'stringValue' in tag_filter_dict and 'value' not in tag_filter_dict:
+                tag_filter_dict['value'] = TagFilterAllOfValue(tag_filter_dict['stringValue'])
+            elif 'value' in tag_filter_dict and isinstance(tag_filter_dict['value'], str):
+                tag_filter_dict['stringValue'] = tag_filter_dict['value']
+                tag_filter_dict['value'] = TagFilterAllOfValue(tag_filter_dict['value'])
+            return TagFilter(**tag_filter_dict)
+
+        # Unknown type — pass through unchanged
+        return tag_expr
+
+    # --- missing-fields error response (constant — no branching) ---
+    _MISSING_LABEL_ERROR: Dict[str, Any] = {
+        "error": "Missing required fields for application configuration",
+        "missing_fields": ["label"],
+        "required_fields": {
+            "label": "Application perspective name (string, required, 1-128 chars)",
+        },
+        "optional_fields": {
+            "tagFilterExpression": "Tag filter to match services (dict, optional - defaults to empty EXPRESSION)",
+            "scope": "Monitoring scope (string, optional - defaults to 'INCLUDE_ALL_DOWNSTREAM')",
+            "boundaryScope": "Boundary scope (string, optional - defaults to 'ALL')",
+            "accessRules": "Access control rules (list, optional - defaults to READ_WRITE GLOBAL access)"
+        },
+        "scope_options": ["INCLUDE_ALL_DOWNSTREAM", "INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING", "INCLUDE_NO_DOWNSTREAM"],
+        "boundary_scope_options": ["ALL", "INBOUND", "DEFAULT"],
+        "access_rules_options": ["READ_WRITE_GLOBAL", "READ_ONLY_GLOBAL", "CUSTOM"],
+        "elicitation_prompt": (
+            "Please provide the following configuration options:\n"
+            "1. Scope (INCLUDE_ALL_DOWNSTREAM/INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING/INCLUDE_NO_DOWNSTREAM)\n"
+            "2. Boundary Scope (ALL/INBOUND/DEFAULT)\n"
+            "3. Access Rules (READ_WRITE_GLOBAL/READ_ONLY_GLOBAL/CUSTOM)\n"
+            "4. Tag Filter Expression (optional)"
+        ),
+        "example_minimal": {"label": "My Application"},
+        "example_with_options": {
+            "label": "My Application",
+            "scope": "INCLUDE_ALL_DOWNSTREAM",
+            "boundaryScope": "ALL",
+            "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
+            "tagFilterExpression": {
+                "type": "TAG_FILTER",
+                "name": "service.name",
+                "operator": "EQUALS",
+                "entity": "DESTINATION",
+                "stringValue": "my-service"
+            }
+        }
+    }
+
+    def _apply_application_defaults(self, request_body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Apply SDK-required defaults and convert tagFilterExpression in place.
+
+        Returns an error dict if tagFilterExpression conversion fails, else None.
+        """
+        if 'scope' not in request_body:
+            request_body['scope'] = 'INCLUDE_ALL_DOWNSTREAM'
+            logger.debug("Applied default scope: INCLUDE_ALL_DOWNSTREAM")
+
+        if 'boundaryScope' not in request_body:
+            request_body['boundaryScope'] = 'ALL'
+            logger.debug("Applied default boundaryScope: ALL")
+
+        if 'accessRules' not in request_body:
+            request_body['accessRules'] = [
+                {"accessType": "READ_WRITE", "relationType": "GLOBAL", "relatedId": None}
+            ]
+            logger.debug("Applied default accessRules: READ_WRITE GLOBAL")
+
+        # The API requires either tagFilterExpression OR matchSpecification
+        if 'tagFilterExpression' not in request_body and 'matchSpecification' not in request_body:
+            request_body['tagFilterExpression'] = TagFilterExpression(
+                type="EXPRESSION", logicalOperator="AND", elements=[]
+            )
+            logger.debug("Applied default tagFilterExpression: empty EXPRESSION model object")
+        elif isinstance(request_body.get('tagFilterExpression'), dict):
+            try:
+                request_body['tagFilterExpression'] = self._convert_tag_filter_expression(
+                    request_body['tagFilterExpression']
+                )
+            except Exception as e:
+                logger.debug(f"Error converting tagFilterExpression: {e}", exc_info=True)
+                return {"error": f"Invalid tagFilterExpression structure: {e}"}
+
+        return None
 
     def _validate_and_prepare_application_payload(self, payload: Union[Dict[str, Any], str]) -> Dict[str, Any]:
         """
         Validate and prepare application configuration payload with proper defaults.
 
+        Based on SDK NewApplicationConfig model requirements:
+        - label: required (1-128 chars)
+        - scope, boundaryScope, accessRules: required by SDK — defaults applied
+        - tagFilterExpression: optional, converted to SDK model objects
+
         Returns:
             Dict with either 'payload' (validated) or 'error' and 'missing_fields'
         """
-        # Parse the payload if it's a string
-        if isinstance(payload, str):
-            import json
-            try:
-                request_body = json.loads(payload)
-            except json.JSONDecodeError:
-                import ast
-                try:
-                    request_body = ast.literal_eval(payload)
-                except (SyntaxError, ValueError) as e:
-                    return {"error": f"Invalid payload format: {e}"}
+        # Parse / deep-copy — never mutate the caller's object.
+        if isinstance(payload, dict):
+            request_body = copy.deepcopy(payload)
         else:
-            request_body = payload.copy() if payload else {}
+            parsed = parse_payload(payload)
+            if "error" in parsed:
+                return parsed
+            request_body = copy.deepcopy(parsed)
 
-        # Define required fields
-        required_fields = ['label']
-        missing_fields = []
+        if not request_body.get('label'):
+            return self._MISSING_LABEL_ERROR
 
-        # Check for required fields
-        for field in required_fields:
-            if field not in request_body or not request_body[field]:
-                missing_fields.append(field)
-
-        if missing_fields:
-            return {
-                "error": "Missing required fields for application configuration",
-                "missing_fields": missing_fields,
-                "required_fields": {
-                    "label": "Application perspective name (string, required)",
-                },
-                "optional_fields": {
-                    "tagFilterExpression": "Tag filter to match services (dict, optional - defaults to empty EXPRESSION)",
-                    "scope": "Monitoring scope (string, optional - defaults to 'INCLUDE_ALL_DOWNSTREAM')",
-                    "boundaryScope": "Boundary scope (string, optional - defaults to 'ALL')",
-                    "accessRules": "Access control rules (list, optional - defaults to READ_WRITE GLOBAL access)"
-                },
-                "scope_options": ["INCLUDE_ALL_DOWNSTREAM", "INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING", "INCLUDE_NO_DOWNSTREAM"],
-                "boundary_scope_options": ["ALL", "INBOUND", "DEFAULT"],
-                "access_rules_options": ["READ_WRITE_GLOBAL", "READ_ONLY_GLOBAL", "CUSTOM"],
-                "elicitation_prompt": "Please provide the following configuration options:\n1. Scope (INCLUDE_ALL_DOWNSTREAM/INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING/INCLUDE_NO_DOWNSTREAM)\n2. Boundary Scope (ALL/INBOUND/DEFAULT)\n3. Access Rules (READ_WRITE_GLOBAL/READ_ONLY_GLOBAL/CUSTOM)\n4. Tag Filter Expression (optional)",
-                "example_minimal": {
-                    "label": "My Application"
-                },
-                "example_with_options": {
-                    "label": "My Application",
-                    "scope": "INCLUDE_ALL_DOWNSTREAM",
-                    "boundaryScope": "ALL",
-                    "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
-                    "tagFilterExpression": {
-                        "type": "TAG_FILTER",
-                        "name": "service.name",
-                        "operator": "CONTAINS",
-                        "entity": "DESTINATION",
-                        "value": "my-service"
-                    }
-                }
-            }
-
-        # Apply defaults for optional fields only if not provided
-        if 'scope' not in request_body:
-            request_body['scope'] = 'INCLUDE_ALL_DOWNSTREAM'
-            debug_print("Applied default scope: INCLUDE_ALL_DOWNSTREAM")
-
-        if 'boundaryScope' not in request_body:
-            request_body['boundaryScope'] = 'ALL'
-            debug_print("Applied default boundaryScope: ALL")
-
-        if 'accessRules' not in request_body:
-            request_body['accessRules'] = [
-                {
-                    "accessType": "READ_WRITE",
-                    "relationType": "GLOBAL"
-                }
-            ]
-            debug_print("Applied default accessRules: READ_WRITE GLOBAL")
-
-        # If no tagFilterExpression provided, use empty EXPRESSION
-        if 'tagFilterExpression' not in request_body:
-            request_body['tagFilterExpression'] = {
-                "type": "EXPRESSION",
-                "logicalOperator": "AND",
-                "elements": []
-            }
-            debug_print("Applied default tagFilterExpression: empty EXPRESSION")
-
-        # Convert nested tagFilterExpression to model objects if present
-        if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
-            tag_expr = request_body['tagFilterExpression']
-
-            # Handle EXPRESSION type with nested elements
-            if tag_expr.get('type') == 'EXPRESSION' and 'elements' in tag_expr:
-                converted_elements = []
-                for element in tag_expr['elements']:
-                    if isinstance(element, dict):
-                        element_copy = element.copy()
-                        element_copy.pop('value', None)
-                        element_copy.pop('key', None)
-                        converted_elements.append(TagFilter(**element_copy))
-                    else:
-                        converted_elements.append(element)
-                tag_expr['elements'] = converted_elements
-                request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
-
-            # Handle TAG_FILTER type (simple filter)
-            elif tag_expr.get('type') == 'TAG_FILTER':
-                # For TAG_FILTER, ensure both 'value' and 'stringValue' are present
-                # Don't convert to TagFilter model - keep as dict to preserve both fields
-                tag_filter_copy = tag_expr.copy()
-                tag_filter_copy.pop('key', None)
-                if 'stringValue' not in tag_filter_copy and 'value' in tag_expr:
-                    tag_filter_copy['stringValue'] = tag_expr['value']
-                if 'value' not in tag_filter_copy and 'stringValue' in tag_expr:
-                    tag_filter_copy['value'] = tag_expr['stringValue']
-                # Keep as dictionary - don't convert to TagFilter model
-                request_body['tagFilterExpression'] = tag_filter_copy
+        error = self._apply_application_defaults(request_body)
+        if error:
+            return error
 
         return {"payload": request_body}
 
@@ -337,28 +336,29 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         Add a new Application Perspective configuration.
 
-        Required fields:
-        - label: Application perspective name
+        Required fields (per SDK NewApplicationConfig model):
+        - label: Application perspective name (1-128 chars)
+        - accessRules: Access control rules (min 1, max 64 items) - defaults applied
+        - boundaryScope: Boundary scope (ALL/INBOUND/DEFAULT) - defaults applied
+        - scope: Monitoring scope - defaults applied
 
-        Optional fields (with defaults):
+        Optional fields:
         - tagFilterExpression: Tag filter (defaults to empty EXPRESSION)
-        - scope: Monitoring scope (defaults to 'INCLUDE_ALL_DOWNSTREAM')
-        - boundaryScope: Boundary scope (defaults to 'ALL')
-        - accessRules: Access rules (defaults to READ_WRITE GLOBAL)
+        - matchSpecification: Match specification (optional)
         """
         try:
             if not payload:
                 return {
                     "error": "payload is required",
                     "required_fields": {
-                        "label": "Application perspective name (string, required)"
+                        "label": "Application perspective name (string, required, 1-128 chars)"
                     },
                     "example": {
                         "label": "My Application"
                     }
                 }
 
-            # Validate and prepare payload with defaults
+            # Validate and prepare payload with SDK-required defaults
             validation_result = self._validate_and_prepare_application_payload(payload)
 
             if "error" in validation_result:
@@ -367,13 +367,14 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             request_body = validation_result["payload"]
 
             # Debug: Log the request body before creating the config object
-            debug_print(f"DEBUG: request_body before NewApplicationConfig: {request_body}")
+            logger.debug(f"request_body before NewApplicationConfig: {request_body}")
 
+            # Create the NewApplicationConfig object - SDK will handle model conversion
             config_object = NewApplicationConfig(**request_body)
 
             # Debug: Log what the config object looks like after creation
             if hasattr(config_object, 'to_dict'):
-                debug_print(f"DEBUG: config_object.to_dict(): {config_object.to_dict()}")
+                logger.debug(f"config_object.to_dict(): {config_object.to_dict()}")
 
             result = api_client.add_application_config(new_application_config=config_object)
 
@@ -437,50 +438,18 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             if not id or not payload:
                 return {"error": "id and payload are required"}
 
-            # Parse the payload if it's a string
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    try:
-                        request_body = ast.literal_eval(payload)
-                    except (SyntaxError, ValueError) as e:
-                        return {"error": f"Invalid payload format: {e}"}
-            else:
-                request_body = payload
+            # Parse the payload if it's a string, or deep-copy if it's a dict
+            # to avoid mutating the caller's tagFilterExpression in place.
+            parsed = parse_payload(payload)
+            if "error" in parsed:
+                return parsed
+            request_body = copy.deepcopy(parsed)
 
-            # Convert nested tagFilterExpression to model objects if present
+            # Convert nested tagFilterExpression dict to SDK model objects if present
             if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
-                tag_expr = request_body['tagFilterExpression']
-
-                # Handle EXPRESSION type with nested elements
-                if tag_expr.get('type') == 'EXPRESSION' and 'elements' in tag_expr:
-                    converted_elements = []
-                    for element in tag_expr['elements']:
-                        if isinstance(element, dict):
-                            element_copy = element.copy()
-                            element_copy.pop('value', None)
-                            element_copy.pop('key', None)
-                            converted_elements.append(TagFilter(**element_copy))
-                        else:
-                            converted_elements.append(element)
-                    tag_expr['elements'] = converted_elements
-                    request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
-
-                # Handle TAG_FILTER type (simple filter)
-                elif tag_expr.get('type') == 'TAG_FILTER':
-                    # For TAG_FILTER, ensure both 'value' and 'stringValue' are present
-                    # Don't convert to TagFilter model - keep as dict to preserve both fields
-                    tag_filter_copy = tag_expr.copy()
-                    tag_filter_copy.pop('key', None)
-                    if 'stringValue' not in tag_filter_copy and 'value' in tag_expr:
-                        tag_filter_copy['stringValue'] = tag_expr['value']
-                    if 'value' not in tag_filter_copy and 'stringValue' in tag_expr:
-                        tag_filter_copy['value'] = tag_expr['stringValue']
-                    # Keep as dictionary - don't convert to TagFilter model
-                    request_body['tagFilterExpression'] = tag_filter_copy
+                request_body['tagFilterExpression'] = self._convert_tag_filter_expression(
+                    request_body['tagFilterExpression']
+                )
 
             config_object = ApplicationConfig(**request_body)
             result = api_client.put_application_config(id=id, application_config=config_object)
@@ -517,7 +486,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             result = api_client.get_endpoint_configs_without_preload_content()
             import json
-            response_text = result.data.decode('utf-8')
+            response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
         except Exception as e:
@@ -548,18 +517,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                       api_client=None) -> Dict[str, Any]:
         """Create or update endpoint configuration for a service."""
         try:
-            if not payload:
-                return {"error": "payload is required"}
-
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = EndpointConfig(**request_body)
             result = api_client.create_endpoint_config(endpoint_config=config_object)
@@ -578,18 +538,12 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                       api_client=None) -> Dict[str, Any]:
         """Update an endpoint configuration."""
         try:
-            if not id or not payload:
+            if not id:
                 return {"error": "id and payload are required"}
 
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = EndpointConfig(**request_body)
             result = api_client.update_endpoint_config(id=id, endpoint_config=config_object)
@@ -624,7 +578,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             result = api_client.get_service_configs_without_preload_content()
             import json
-            response_text = result.data.decode('utf-8')
+            response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
         except Exception as e:
@@ -655,18 +609,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                   api_client=None) -> Dict[str, Any]:
         """Add a new Service configuration."""
         try:
-            if not payload:
-                return {"error": "payload is required"}
-
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = ServiceConfig(**request_body)
             result = api_client.add_service_config(service_config=config_object)
@@ -685,18 +630,12 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                      api_client=None) -> Dict[str, Any]:
         """Update a Service configuration."""
         try:
-            if not id or not payload:
+            if not id:
                 return {"error": "id and payload are required"}
 
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = ServiceConfig(**request_body)
             result = api_client.update_service_config(id=id, service_config=config_object)
@@ -722,49 +661,6 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             logger.error(f"Error in _delete_service_config: {e}", exc_info=True)
             return {"error": f"Failed to delete service config: {e!s}"}
 
-    @with_header_auth(ApplicationSettingsApi)
-    async def _order_service_config(self,
-                                    request_body: List[str],
-                                    ctx=None,
-                                    api_client=None) -> Dict[str, Any]:
-        """Order Service configurations."""
-        try:
-            if not request_body:
-                return {"error": "request_body is required"}
-            result = api_client.order_service_config(request_body=request_body)
-            return {"success": True, "message": "Service configs ordered successfully", "result": result}
-        except Exception as e:
-            logger.error(f"Error in _order_service_config: {e}", exc_info=True)
-            return {"error": f"Failed to order service configs: {e!s}"}
-
-    @with_header_auth(ApplicationSettingsApi)
-    async def _replace_all_service_configs(self,
-                                           payload: Union[Dict[str, Any], str],
-                                           ctx=None,
-                                           api_client=None) -> Dict[str, Any]:
-        """Replace all Service configurations."""
-        try:
-            if not payload:
-                return {"error": "payload is required"}
-
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
-
-            # Assuming request_body is a list of ServiceConfig objects
-            config_objects = [ServiceConfig(**item) if isinstance(item, dict) else item for item in request_body]
-            result = api_client.replace_all_service_configs(service_config=config_objects)
-            return {"success": True, "message": "All service configs replaced successfully", "result": result}
-        except Exception as e:
-            logger.error(f"Error in _replace_all_service_configs: {e}", exc_info=True)
-            return {"error": f"Failed to replace all service configs: {e!s}"}
-
     # Manual Service Config Operations
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_manual_service_configs(self,
@@ -772,9 +668,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                               api_client=None) -> List[Dict[str, Any]]:
         """Get all Manual Service configurations."""
         try:
-            result = api_client.get_manual_service_configs_without_preload_content()
+            result = api_client.get_all_manual_service_configs_without_preload_content()
             import json
-            response_text = result.data.decode('utf-8')
+            response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
         except Exception as e:
@@ -788,18 +684,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                          api_client=None) -> Dict[str, Any]:
         """Add a new Manual Service configuration."""
         try:
-            if not payload:
-                return {"error": "payload is required"}
-
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = NewManualServiceConfig(**request_body)
             result = api_client.add_manual_service_config(new_manual_service_config=config_object)
@@ -818,18 +705,12 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                             api_client=None) -> Dict[str, Any]:
         """Update a Manual Service configuration."""
         try:
-            if not id or not payload:
+            if not id:
                 return {"error": "id and payload are required"}
 
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
+            request_body = parse_payload(payload)
+            if "error" in request_body:
+                return request_body
 
             config_object = ManualServiceConfig(**request_body)
             result = api_client.update_manual_service_config(id=id, manual_service_config=config_object)
@@ -854,32 +735,3 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error in _delete_manual_service_config: {e}", exc_info=True)
             return {"error": f"Failed to delete manual service config: {e!s}"}
-
-    @with_header_auth(ApplicationSettingsApi)
-    async def _replace_all_manual_service_config(self,
-                                                 payload: Union[Dict[str, Any], str],
-                                                 ctx=None,
-                                                 api_client=None) -> Dict[str, Any]:
-        """Replace all Manual Service configurations."""
-        try:
-            if not payload:
-                return {"error": "payload is required"}
-
-            if isinstance(payload, str):
-                import json
-                try:
-                    request_body = json.loads(payload)
-                except json.JSONDecodeError:
-                    import ast
-                    request_body = ast.literal_eval(payload)
-            else:
-                request_body = payload
-
-            # Assuming request_body is a list of ManualServiceConfig objects
-            config_objects = [ManualServiceConfig(**item) if isinstance(item, dict) else item for item in request_body]
-            result = api_client.replace_all_manual_service_configs(manual_service_config=config_objects)
-            return {"success": True, "message": "All manual service configs replaced successfully", "result": result}
-        except Exception as e:
-            logger.error(f"Error in _replace_all_manual_service_config: {e}", exc_info=True)
-            return {"error": f"Failed to replace all manual service configs: {e!s}"}
-

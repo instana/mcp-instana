@@ -16,7 +16,7 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, with_header_auth
+from src.core.utils import BaseInstanaClient, parse_payload, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -260,33 +260,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             return {"error": f"{param_name} cannot be empty"}
         return None
 
-    def _parse_payload(self, payload: Union[Dict[str, Any], str]) -> Union[Dict[str, Any], Dict[str, Any]]:
-        """
-        Parse payload from string or dict.
-
-        Args:
-            payload: Payload as dict or JSON string
-
-        Returns:
-            Parsed dict if successful, error dict otherwise
-        """
-        if not payload:
-            return {"error": "payload is required"}
-
-        if isinstance(payload, str):
-            try:
-                return json.loads(payload)
-            except json.JSONDecodeError:
-                try:
-                    import ast
-                    return ast.literal_eval(payload)
-                except (ValueError, SyntaxError) as e:
-                    return {"error": f"Invalid payload format: {e!s}"}
-
-        if isinstance(payload, dict):
-            return payload
-
-        return {"error": f"Payload must be dict or JSON string, got {type(payload).__name__}"}
+    # Removed _parse_payload method - now using shared parse_payload from src.core.utils
 
     def _clean_alert_config_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Clean alert config data for LLM consumption."""
@@ -395,10 +369,13 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
                 )
 
             # Create main config object
+            # Note: apdexIds and sloIds are both required by the model, even though they're mutually exclusive
+            # We provide empty list for apdexIds when creating SLO alerts
             config_object = ServiceLevelsAlertConfig(
                 name=request_body["name"],
                 description=request_body["description"],
-                sloIds=request_body["sloIds"],
+                sloIds=request_body.get("sloIds", []),
+                apdexIds=request_body.get("apdexIds", []),  # Required field, use empty list if not provided
                 rule=rule_object,
                 severity=request_body["severity"],
                 alertChannelIds=request_body["alertChannelIds"],
@@ -521,8 +498,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """Create new SLO alert configuration."""
         try:
-            # Parse payload using helper method
-            request_body = self._parse_payload(payload)
+            # Parse payload using shared utility
+            request_body = parse_payload(payload)
 
             # Check if parsing failed (returns error dict)
             if isinstance(request_body, dict) and "error" in request_body:
@@ -573,8 +550,8 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            # Parse payload using helper method
-            request_body = self._parse_payload(payload)
+            # Parse payload using shared utility
+            request_body = parse_payload(payload)
 
             # Check if parsing failed (returns error dict)
             if isinstance(request_body, dict) and "error" in request_body:

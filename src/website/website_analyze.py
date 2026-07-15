@@ -111,6 +111,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 f"beacon_type={beacon_type}, time_frame={time_frame}"
             )
 
+            user_provided_metrics = metrics is not None
+
             # Set default beacon_type if not provided (must be done before elicitation/validation)
             if not beacon_type:
                 beacon_type = "PAGELOAD"
@@ -168,6 +170,41 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                     "elements": []
                 }
                 logger.debug("[get_website_beacon_groups] Applied default tag filter expression: empty EXPRESSION with AND operator")
+
+            # Metric compatibility validation (last pre-flight step before query build)
+            if user_provided_metrics:
+                from src.core.metric_validation import (
+                    fetch_metric_catalog_internal,
+                    validate_beacon_type_known,
+                    validate_metric_compatibility,
+                )
+                from instana_client.api.website_catalog_api import WebsiteCatalogApi
+                from src.core.utils import WEBSITE_BEACON_TYPE_MAP
+
+                beacon_type_error = validate_beacon_type_known(
+                    beacon_type=beacon_type,
+                    beacon_type_map=WEBSITE_BEACON_TYPE_MAP,
+                )
+                if beacon_type_error:
+                    return beacon_type_error
+
+                catalog_result = fetch_metric_catalog_internal(
+                    api_client=api_client,
+                    catalog_api_class=WebsiteCatalogApi,
+                    fetch_method_name="get_website_catalog_metrics_without_preload_content",
+                )
+                if isinstance(catalog_result, dict) and "error" in catalog_result:
+                    return catalog_result
+
+                compatibility_error = validate_metric_compatibility(
+                    metrics=metrics,
+                    beacon_type=beacon_type,
+                    catalog=catalog_result,
+                    beacon_type_map=WEBSITE_BEACON_TYPE_MAP,
+                    catalog_operation="get_metrics",
+                )
+                if compatibility_error:
+                    return compatibility_error
 
             # Build the query parameters for the SDK model
             query_params = {}
@@ -369,6 +406,12 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
             "userIp", "connectionType",
             # Error info
             "errorCount", "errorMessage", "errorType",
+            # Error diagnostic fields (for ERROR beacons)
+            "stackTrace", "parsedStackTrace", "errorId", "stackTraceReadability",
+            # Session and user tracking (all beacon types)
+            "sessionId",
+            # Backend correlation (for PAGELOAD beacons)
+            "backendTraceId",
             # HTTP metrics (if applicable)
             "httpCallStatus", "httpCallMethod", "httpCallUrl",
             # Resource info

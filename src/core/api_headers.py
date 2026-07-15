@@ -19,14 +19,14 @@ class AuthenticationError(Exception):
 def _validate_token_length(token: str, token_type: str) -> None:
     """
     Validate that token length is within reasonable limits.
-
+    
     Prevents potential attacks with excessively long tokens that could
     cause memory issues or be used to inject malicious code.
-
+    
     Args:
         token: The token to validate
         token_type: Description of the token type (for error messages)
-
+        
     Raises:
         ValueError: If token exceeds maximum length
     """
@@ -37,13 +37,13 @@ def _validate_token_length(token: str, token_type: str) -> None:
 def _validate_cookie_name(name: str) -> bool:
     """
     Validate cookie name contains only safe characters.
-
+    
     Prevents cookie injection attacks by ensuring the cookie name
     only contains alphanumeric characters, hyphens, and underscores.
-
+    
     Args:
         name: The cookie name to validate
-
+        
     Returns:
         True if the cookie name is valid, False otherwise
     """
@@ -74,7 +74,7 @@ def build_instana_api_headers(
 
     Returns:
         Dictionary containing the headers needed for Instana API calls
-
+        
     Raises:
         ValueError: If cookie_name is not provided for session-based authentication
         ValueError: If cookie_name contains invalid characters
@@ -85,20 +85,20 @@ def build_instana_api_headers(
     if auth_token and csrf_token and not cookie_name and not jwt_token:
         logger.error("Cookie name is required for session-based authentication")
         raise ValueError("Cookie name must be provided for session-based authentication")
-
+    
     # Priority 1: Use session token (auth_token, csrf_token, and cookie_name) if all provided (UI mode via coordinator)
     if auth_token and csrf_token and cookie_name:
         logger.debug("Authentication method selected: session-based")
-
+        
         # Validate token lengths
         _validate_token_length(auth_token, "Session auth token")
         _validate_token_length(csrf_token, "CSRF token")
-
+        
         # Validate cookie name to prevent cookie injection attacks
         if not _validate_cookie_name(cookie_name):
             logger.error(f"Invalid cookie name format: {cookie_name}")
-            raise ValueError("Cookie name contains invalid characters. Only alphanumeric, hyphens, and underscores are allowed.")
-
+            raise ValueError(f"Cookie name contains invalid characters. Only alphanumeric, hyphens, and underscores are allowed.")
+        
         # Build the headers
         headers = {
             "X-CSRF-TOKEN": csrf_token,
@@ -110,17 +110,17 @@ def build_instana_api_headers(
     # Note: JWT authentication takes priority over API token when both auth_token+csrf_token are provided without cookie_name
     if jwt_token:
         logger.debug("Authentication method selected: jwt-token")
-
+        
         # Validate token length
         _validate_token_length(jwt_token, "JWT token")
-
+        
         # CSRF token is REQUIRED for JWT authentication (treated as UI user for POST/PUT/DELETE)
         if csrf_token is None:
             logger.error("CSRF token is required for JWT authentication")
             raise ValueError("CSRF token must be provided for JWT authentication (required for POST/PUT/DELETE operations)")
-
+        
         _validate_token_length(csrf_token, "CSRF token")
-
+        
         # Build the headers with both Bearer token and CSRF
         headers = {
             "Authorization": f"Bearer {jwt_token}",
@@ -131,14 +131,14 @@ def build_instana_api_headers(
         masked_csrf = f"{csrf_token[:10]}...{csrf_token[-5:]}" if len(csrf_token) > 15 else csrf_token[:5] + "..."
         logger.debug(f"Built JWT auth headers - Authorization: Bearer {masked_jwt}, X-CSRF-TOKEN: {masked_csrf}")
         return headers
-
+    
     # Priority 3: Use API token if provided (direct API mode)
     if api_token:
         logger.debug("Authentication method selected: api-token")
-
+        
         # Validate token length
         _validate_token_length(api_token, "API token")
-
+        
         headers = {
             "Authorization": f"apiToken {api_token}"
         }
@@ -148,15 +148,15 @@ def build_instana_api_headers(
     api_token_env = os.getenv("INSTANA_API_TOKEN")
     if api_token_env:
         logger.debug("Authentication method selected: environment-fallback")
-
+        
         # Validate token length
         _validate_token_length(api_token_env, "Environment API token")
-
+        
         headers = {
             "Authorization": f"apiToken {api_token_env}"
         }
         return headers
-
+        
     # No valid authentication provided
     logger.error("No valid authentication credentials provided")
     raise AuthenticationError(

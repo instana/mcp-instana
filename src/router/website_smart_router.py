@@ -12,7 +12,7 @@ from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_nested_datetime_param
-from src.core.utils import BaseInstanaClient, normalize_beacon_type, register_as_tool
+from src.core.utils import BaseInstanaClient, WEBSITE_BEACON_TYPE_MAP, normalize_beacon_type, register_as_tool
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +53,10 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
-        from src.website.website_alert import WebsiteAlertMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
+        from src.website.website_alert import WebsiteAlertMCPTools
 
         # Initialize the website clients
         self.website_analyze_client = WebsiteAnalyzeMCPTools(read_token, base_url)
@@ -106,7 +106,7 @@ CATALOG (resource_type="catalog"):
 
     get_metrics - Get website metrics catalog with necessary metadata for query planning (metricId, label, description, formatter, aggregations, beaconTypes). Use returned metricId values exactly; they are authoritative over examples. Use params.view="full" to retrieve raw SDK metadata (rarely needed).
     get_tag_catalog - Get valid tag names for beacon_type and use_case
-        Valid beacon_type: "PAGELOAD", "PAGECHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"
+        Valid beacon_type: "PAGELOAD", "PAGE_CHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"
         Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
 
 CONFIGURATION (resource_type="configuration"):
@@ -141,7 +141,7 @@ ALERT (resource_type="alert"):
     find_active_website_alert_configs - Get all alert configurations for a website
         - website_id: Website ID to get alert configs for (required)
         - alert_ids: Optional list of specific alert IDs to filter (optional)
-
+    
     find_website_alert_config - Get a specific alert configuration by ID
         - id: Specific alert configuration ID to retrieve (required)
         - valid_on: Unix timestamp (ms) to retrieve the configuration active at that time (optional, default is latest active version)
@@ -345,16 +345,7 @@ Examples:
             )
 
             # Normalize beacon_type to camelCase format (API expects camelCase)
-            beacon_type_map = {
-                "PAGELOAD": "pageLoad",
-                "PAGECHANGE": "pageChange",
-                "RESOURCELOAD": "resourceLoad",
-                "CUSTOM": "custom",
-                "HTTPREQUEST": "httpRequest",
-                "ERROR": "error"
-            }
-
-            normalized_beacon_type = normalize_beacon_type(beacon_type, beacon_type_map)
+            normalized_beacon_type = normalize_beacon_type(beacon_type, WEBSITE_BEACON_TYPE_MAP)
             if beacon_type != normalized_beacon_type:
                 logger.debug(f"Normalized beacon_type from '{beacon_type}' to '{normalized_beacon_type}'")
                 beacon_type = normalized_beacon_type
@@ -448,7 +439,7 @@ Examples:
             "website_id": website_id if website_id else None,
             "results": result
         }
-
+    
     async def _handle_alert(
         self,
         operation: str,

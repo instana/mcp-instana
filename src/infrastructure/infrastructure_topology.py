@@ -5,7 +5,6 @@ This module provides infrastructure topology-specific MCP tools for Instana moni
 """
 
 import logging
-import sys
 from typing import Any, Dict, Optional
 
 # Import the necessary classes from the SDK
@@ -13,16 +12,12 @@ try:
     from instana_client.api.infrastructure_topology_api import (
         InfrastructureTopologyApi,  #type: ignore
     )
-    from instana_client.api_client import ApiClient  #type: ignore
-    from instana_client.configuration import Configuration  #type: ignore
 
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
     logger.error("Failed to import infrastructure topology API", exc_info=True)
     raise
-
-from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
@@ -113,6 +108,165 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get related hosts: {e!s}"}
 
     # @register_as_tool(...)  # Disabled for future reference
+    def _parse_topology_response(self, response):
+        """Parse topology response and return result dict."""
+        import json
+        try:
+            response_text = response.data.decode('utf-8')
+            result = json.loads(response_text)
+            logger.debug("Successfully parsed topology data as JSON")
+            return result, None
+        except (json.JSONDecodeError, AttributeError) as json_err:
+            error_message = f"Failed to parse JSON response: {json_err}"
+            logger.error(error_message)
+            return None, {"error": error_message}
+
+    def _convert_result_to_dict(self, result):
+        """Convert result to dictionary using various methods."""
+        if hasattr(result, 'to_dict'):
+            try:
+                return result.to_dict()
+            except Exception as e:
+                logger.error(f"to_dict() failed: {e}")
+        
+        if isinstance(result, dict):
+            return result
+        
+        # Try manual extraction
+        if hasattr(result, '__dict__'):
+            return result.__dict__
+        
+        return {"data": str(result)}
+
+    def _analyze_node(self, node, plugin_counts, host_info, kubernetes_resources):
+        """Analyze a single node and update counters."""
+        if not isinstance(node, dict):
+            return None
+        
+        plugin = node.get('plugin', 'unknown')
+        plugin_counts[plugin] = plugin_counts.get(plugin, 0) + 1
+        
+        # Prepare node details
+        node_label = str(node.get('label', 'unknown'))
+        if len(node_label) > 80:
+            node_label = node_label[:77] + "..."
+        
+        node_details = {
+            'plugin': plugin,
+            'label': node_label,
+            'id': str(node.get('id', ''))
+        }
+        
+        # Extract host information
+        if plugin == 'host':
+            label = str(node.get('label', 'unknown'))
+            host_info[label] = str(node.get('id', ''))
+        
+        # Group Kubernetes resources
+        if plugin.startswith('kubernetes'):
+            k8s_type = plugin.replace('kubernetes', '').lower()
+            kubernetes_resources[k8s_type] = kubernetes_resources.get(k8s_type, 0) + 1
+        
+        return node_details
+
+    def _create_topology_summary(self, nodes, edges, sample_nodes, plugin_counts, host_info, kubernetes_resources):
+        """Create comprehensive topology summary."""
+        sample_size = len(sample_nodes)
+        total_size = len(nodes)
+        scaling_factor = total_size / sample_size if sample_size > 0 else 1
+        
+        estimated_plugin_counts = {
+            plugin: int(count * scaling_factor)
+            for plugin, count in plugin_counts.items()
+        }
+        
+        return {
+            'totalNodes': len(nodes),
+            'totalEdges': len(edges),
+            'sampleAnalysis': {
+                'sampleSize': sample_size,
+                'scalingFactor': round(scaling_factor, 2),
+                'note': f'Analysis based on first {sample_size} nodes out of {total_size} total'
+            },
+            'topPluginTypes': dict(sorted(estimated_plugin_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
+            'infrastructureOverview': {
+                'estimatedHosts': int(len(host_info) * scaling_factor),
+                'sampleHosts': list(host_info.keys())[:3],
+                'kubernetesTypes': kubernetes_resources,
+                'estimatedContainers': int((plugin_counts.get('crio', 0) + plugin_counts.get('containerd', 0) + plugin_counts.get('docker', 0)) * scaling_factor),
+                'estimatedProcesses': int(plugin_counts.get('process', 0) * scaling_factor)
+            }
+        }
+
+    def _analyze_edges(self, sample_edges):
+        """Analyze edge types from sample."""
+        edge_types = {}
+        for edge in sample_edges:
+            if isinstance(edge, dict):
+                edge_type = edge.get('type', 'unknown')
+                edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
+        return edge_types if edge_types else None
+
+    def _handle_unexpected_data_format(self, result_dict, nodes):
+        """Handle case where data is in unexpected format."""
+        if not nodes and 'data' in result_dict:
+            logger.debug("No nodes found, checking data field")
+            data_str = str(result_dict.get('data'))
+            data_preview = data_str[:200] + "..." if len(data_str) > 200 else data_str
+            return {
+                "summary": {
+                    "status": "Data retrieved but in unexpected format",
+                    "dataType": type(result_dict.get('data')).__name__,
+                    "dataPreview": data_preview
+                },
+                "rawDataAvailable": True,
+                "note": "Topology data was retrieved but not in the expected nodes/edges format"
+            }
+        return None
+
+    def _process_topology_nodes_and_edges(self, nodes, edges):
+        """Process topology nodes and edges to create summary."""
+        sample_nodes = nodes[:30] if len(nodes) > 30 else nodes
+        sample_edges = edges[:30] if len(edges) > 30 else edges
+
+        plugin_counts = {}
+        host_info = {}
+        kubernetes_resources = {}
+        sample_nodes_details = []
+
+        for node in sample_nodes:
+            node_details = self._analyze_node(node, plugin_counts, host_info, kubernetes_resources)
+            if node_details:
+                sample_nodes_details.append(node_details)
+
+        # Create summary
+        summary = self._create_topology_summary(nodes, edges, sample_nodes, plugin_counts, host_info, kubernetes_resources)
+
+        # Add edge analysis if available
+        if sample_edges:
+            edge_types = self._analyze_edges(sample_edges)
+            if edge_types:
+                summary['connectionAnalysis'] = {
+                    'sampleEdgeTypes': edge_types,
+                    'sampleEdgesAnalyzed': len(sample_edges)
+                }
+
+        return {
+            'summary': summary,
+            'sampleNodes': sample_nodes_details[:8],
+            'status': 'success',
+            'note': 'Topology data processed successfully with sampling to manage size'
+        }
+
+    def _handle_invalid_result_format(self, result_dict):
+        """Handle case where result is not in expected format."""
+        return {
+            "error": "Unexpected data format",
+            "dataType": type(result_dict).__name__,
+            "availableKeys": list(result_dict.keys()) if isinstance(result_dict, dict) else "Not a dictionary",
+            "suggestion": "The topology data may be in a different format than expected"
+        }
+
     @with_header_auth(InfrastructureTopologyApi)
     async def get_topology(self,
                            include_data: Optional[bool] = False,
@@ -147,25 +301,14 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"get_topology called - using include_data={include_data}")
 
-            # Use the API client from the decorator
+            # Get and parse topology data
             try:
-                # Use get_topology_without_preload_content to bypass validation
                 response = api_client.get_topology_without_preload_content(include_data=include_data)
                 logger.debug("SDK call successful using get_topology_without_preload_content")
-
-                # Parse the JSON response manually following the pattern from application_topology.py
-                import json
-                try:
-                    # The result from get_topology_without_preload_content is a response object
-                    # We need to read the response data and parse it as JSON
-                    response_text = response.data.decode('utf-8')
-                    result = json.loads(response_text)
-                    logger.debug("Successfully parsed topology data as JSON")
-                except (json.JSONDecodeError, AttributeError) as json_err:
-                    error_message = f"Failed to parse JSON response: {json_err}"
-                    logger.error(error_message)
-                    return {"error": error_message}
-
+                
+                result, error = self._parse_topology_response(response)
+                if error:
+                    return error
             except Exception as sdk_error:
                 logger.error(f"SDK error: {sdk_error}")
                 return {
@@ -175,33 +318,8 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                     "workaround": "Try again later or check if the include_data parameter affects the response."
                 }
 
-            # Convert the result to a dictionary
-            result_dict = None
-
-            # Try different ways to convert the result
-            if hasattr(result, 'to_dict'):
-                try:
-                    result_dict = result.to_dict()
-                    logger.debug("Successfully converted result using to_dict()")
-                except Exception as e:
-                    logger.error(f"to_dict() failed: {e}")
-
-            if result_dict is None and isinstance(result, dict):
-                result_dict = result
-                logger.debug("Result is already a dictionary")
-
-            if result_dict is None:
-                # Try to extract data from the result object manually
-                try:
-                    if hasattr(result, '__dict__'):
-                        result_dict = result.__dict__
-                        logger.debug("Extracted data using __dict__")
-                    else:
-                        result_dict = {"data": str(result)}
-                        logger.debug("Converted result to string representation")
-                except Exception as e:
-                    logger.error(f"Manual extraction failed: {e}")
-                    result_dict = {"data": str(result)}
+            # Convert result to dictionary
+            result_dict = self._convert_result_to_dict(result)
 
             # Process the result if we have valid data
             if isinstance(result_dict, dict) and ('nodes' in result_dict or 'data' in result_dict):
@@ -211,118 +329,14 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                 logger.debug(f"Processing {len(nodes)} nodes and {len(edges)} edges")
 
                 # If we have no nodes but have data, try to extract from data field
-                if not nodes and 'data' in result_dict:
-                    logger.debug("No nodes found, checking data field")
-                    return {
-                        "summary": {
-                            "status": "Data retrieved but in unexpected format",
-                            "dataType": type(result_dict.get('data')).__name__,
-                            "dataPreview": str(result_dict.get('data'))[:200] + "..." if len(str(result_dict.get('data'))) > 200 else str(result_dict.get('data'))
-                        },
-                        "rawDataAvailable": True,
-                        "note": "Topology data was retrieved but not in the expected nodes/edges format"
-                    }
+                unexpected_format = self._handle_unexpected_data_format(result_dict, nodes)
+                if unexpected_format:
+                    return unexpected_format
 
-                # Take only first 30 nodes for analysis to avoid token limits
-                sample_nodes = nodes[:30] if len(nodes) > 30 else nodes
-                sample_edges = edges[:30] if len(edges) > 30 else edges
-
-                # Count nodes by plugin type from sample
-                plugin_counts = {}
-                host_info = {}
-                kubernetes_resources = {}
-                sample_nodes_details = []
-
-                for node in sample_nodes:
-                    if not isinstance(node, dict):
-                        continue
-
-                    plugin = node.get('plugin', 'unknown')
-                    plugin_counts[plugin] = plugin_counts.get(plugin, 0) + 1
-
-                    # Keep minimal node info for sample
-                    node_label = str(node.get('label', 'unknown'))
-                    if len(node_label) > 40:
-                        node_label = node_label[:37] + "..."
-
-                    node_id = str(node.get('id', ''))
-                    if len(node_id) > 15:
-                        node_id = node_id[:12] + "..."
-
-                    sample_nodes_details.append({
-                        'plugin': plugin,
-                        'label': node_label,
-                        'id': node_id
-                    })
-
-                    # Extract host information
-                    if plugin == 'host':
-                        label = str(node.get('label', 'unknown'))
-                        host_info[label] = str(node.get('id', ''))
-
-                    # Group Kubernetes resources
-                    if plugin.startswith('kubernetes'):
-                        k8s_type = plugin.replace('kubernetes', '').lower()
-                        if k8s_type not in kubernetes_resources:
-                            kubernetes_resources[k8s_type] = 0
-                        kubernetes_resources[k8s_type] += 1
-
-                # Estimate total counts based on sample
-                sample_size = len(sample_nodes)
-                total_size = len(nodes)
-                scaling_factor = total_size / sample_size if sample_size > 0 else 1
-
-                estimated_plugin_counts = {}
-                for plugin, count in plugin_counts.items():
-                    estimated_plugin_counts[plugin] = int(count * scaling_factor)
-
-                # Create comprehensive summary
-                summary = {
-                    'totalNodes': len(nodes),
-                    'totalEdges': len(edges),
-                    'sampleAnalysis': {
-                        'sampleSize': sample_size,
-                        'scalingFactor': round(scaling_factor, 2),
-                        'note': f'Analysis based on first {sample_size} nodes out of {total_size} total'
-                    },
-                    'topPluginTypes': dict(sorted(estimated_plugin_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
-                    'infrastructureOverview': {
-                        'estimatedHosts': int(len(host_info) * scaling_factor),
-                        'sampleHosts': list(host_info.keys())[:3],  # Show first 3 hosts
-                        'kubernetesTypes': kubernetes_resources,
-                        'estimatedContainers': int((plugin_counts.get('crio', 0) + plugin_counts.get('containerd', 0) + plugin_counts.get('docker', 0)) * scaling_factor),
-                        'estimatedProcesses': int(plugin_counts.get('process', 0) * scaling_factor)
-                    }
-                }
-
-                # Add edge analysis from sample if available
-                if sample_edges:
-                    edge_types = {}
-                    for edge in sample_edges:
-                        if isinstance(edge, dict):
-                            edge_type = edge.get('type', 'unknown')
-                            edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
-
-                    if edge_types:
-                        summary['connectionAnalysis'] = {
-                            'sampleEdgeTypes': edge_types,
-                            'sampleEdgesAnalyzed': len(sample_edges)
-                        }
-
-                # Return compact summary
-                return {
-                    'summary': summary,
-                    'sampleNodes': sample_nodes_details[:8],  # Just 8 example nodes
-                    'status': 'success',
-                    'note': 'Topology data processed successfully with sampling to manage size'
-                }
+                # Process nodes and edges
+                return self._process_topology_nodes_and_edges(nodes, edges)
             else:
-                return {
-                    "error": "Unexpected data format",
-                    "dataType": type(result_dict).__name__,
-                    "availableKeys": list(result_dict.keys()) if isinstance(result_dict, dict) else "Not a dictionary",
-                    "suggestion": "The topology data may be in a different format than expected"
-                }
+                return self._handle_invalid_result_format(result_dict)
 
         except Exception as e:
             logger.error(f"Error in get_topology: {e}", exc_info=True)
