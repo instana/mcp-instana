@@ -67,7 +67,6 @@ The test suite is organized as follows:
     - `test_application_alert_config.py` - Tests for application alert configuration tools
     - `test_application_analyze.py` - Tests for application analysis tools
     - `test_application_catalog.py` - Tests for application catalog tools
-    - `test_application_metrics.py` - Tests for application metrics tools
     - `test_application_resources.py` - Tests for application resource tools
     - `test_application_topology.py` - Tests for application topology tools
   - `core/` - Tests for core modules in `src/core/`

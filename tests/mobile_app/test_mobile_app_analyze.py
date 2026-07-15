@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class NullHandler(logging.Handler):
@@ -34,6 +34,7 @@ sys.modules["instana_client.models.cursor_pagination"] = MagicMock()
 sys.modules["instana_client.models.deprecated_tag_filter"] = MagicMock()
 sys.modules["instana_client.configuration"] = MagicMock()
 sys.modules["instana_client.api_client"] = MagicMock()
+sys.modules["instana_client.api.mobile_app_catalog_api"] = MagicMock()
 
 
 class FakeModel:
@@ -58,6 +59,23 @@ class MockResponse:
     def __init__(self, payload, headers=None):
         self.data = payload
         self.headers = headers or {}
+
+
+VALID_MOBILE_CATALOG = [
+    {
+        "metricId": "beaconCount",
+        "label": "Beacon Count",
+        "description": "Number of beacons",
+        "aggregations": ["SUM"],
+        "beaconTypes": ["sessionStart", "viewChange", "httpRequest", "custom", "crash", "perf", "dropBeacon"],
+        "formatter": "number",
+    },
+]
+
+PATCH_CATALOG = patch(
+    "src.core.metric_validation.fetch_metric_catalog_internal",
+    return_value=VALID_MOBILE_CATALOG,
+)
 
 
 class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
@@ -332,7 +350,8 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(result, dict)
 
-    async def test_beacon_groups_success(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_success(self, _mock_fetch):
         payload = {
             "totalHits": 1,
             "items": [
@@ -360,7 +379,8 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(result, dict)
 
-    async def test_beacon_groups_tag_filter_invalid(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_tag_filter_invalid(self, _mock_fetch):
         self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value = MockResponse(
             b'{"items": []}',
             {"Content-Type": "application/json"},
@@ -385,7 +405,8 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
         # depends on your implementation path
         self.assertIsInstance(result, dict)
 
-    async def test_beacon_groups_model_failure(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_model_failure(self, _mock_fetch):
         class FailingModel:
             def __init__(self, **kwargs):
                 raise ValueError("model failure")
@@ -406,15 +427,16 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
         finally:
             sys.modules["instana_client.models.get_mobile_app_beacon_groups"].GetMobileAppBeaconGroups = original
 
-    async def test_beacon_groups_non_200_response(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_non_200_response(self, _mock_fetch):
         self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value = MockResponse(
-            b'{"errors": ["Metric type unknown"]}',
+            b'{"errors": ["Server error"]}',
             {"Content-Type": "application/json"},
         )
         self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value.status = 400
 
         result = await self.client.get_mobile_app_beacon_groups(
-            metrics=[{"metric": "invalidMetric", "aggregation": "SUM"}],
+            metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
             group={"groupByTag": "mobileBeacon.mobileApp.name"},
             beacon_type="SESSION_START",
             api_client=self.mock_api,
@@ -422,7 +444,8 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(result, dict)
 
-    async def test_beacon_groups_group_mapping(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_group_mapping(self, _mock_fetch):
         self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value = MockResponse(
             json.dumps({"items": []}).encode("utf-8"),
             {"Content-Type": "application/json"},
@@ -438,7 +461,8 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
         # ensures internal mapping doesn't crash
         self.assertTrue(True)
 
-    async def test_beacon_groups_pagination_and_order(self):
+    @PATCH_CATALOG
+    async def test_beacon_groups_pagination_and_order(self, _mock_fetch):
         self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value = MockResponse(
             json.dumps({"items": []}).encode("utf-8"),
             {"Content-Type": "application/json"},
@@ -454,6 +478,172 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsInstance(result, dict)
+
+    async def test_filter_fields_default_true_filters_beacons(self):
+        """Test that filter_fields defaults to True and filters out non-essential fields"""
+        payload = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "mobileAppLabel": "TestApp",
+                        "timestamp": 123456789,
+                        "beaconId": "beacon-123",
+                        "sessionId": "session-456",
+                        "view": "HomeScreen",
+                        "platform": "iOS",
+                        "osVersion": "17.0",
+                        # Fields that should be filtered out
+                        "unusedField1": "value1",
+                        "unusedField2": "value2",
+                        "emptyField": "",
+                        "negativeOneField": -1,
+                        "errorCount": 0,  # Should be filtered (0 for error count)
+                    }
+                }
+            ],
+        }
+        self.mock_api.get_mobile_app_beacons_without_preload_content.return_value = MockResponse(
+            json.dumps(payload).encode("utf-8"),
+            {"Content-Type": "application/json"},
+        )
+
+        # Don't specify filter_fields - should default to True
+        result = await self.client.get_all_mobile_app_beacons(
+            beacon_type="SESSION_START",
+            api_client=self.mock_api,
+        )
+
+        self.assertIn("summary", result)
+        self.assertIn("beacons", result)
+        self.assertEqual(len(result["beacons"]), 1)
+
+        beacon = result["beacons"][0]
+        # Essential fields should be present
+        self.assertIn("mobileAppLabel", beacon)
+        self.assertIn("timestamp", beacon)
+        self.assertIn("beaconId", beacon)
+        self.assertIn("sessionId", beacon)
+        self.assertIn("view", beacon)
+        self.assertIn("platform", beacon)
+        self.assertIn("osVersion", beacon)
+
+        # Non-essential fields should be filtered out
+        self.assertNotIn("unusedField1", beacon)
+        self.assertNotIn("unusedField2", beacon)
+        self.assertNotIn("emptyField", beacon)
+        self.assertNotIn("negativeOneField", beacon)
+        self.assertNotIn("errorCount", beacon)  # Filtered because it's 0
+
+    async def test_filter_fields_false_returns_all_fields(self):
+        """Test that filter_fields=False returns all beacon fields unfiltered"""
+        payload = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "mobileAppLabel": "TestApp",
+                        "timestamp": 123456789,
+                        "beaconId": "beacon-123",
+                        "unusedField1": "value1",
+                        "unusedField2": "value2",
+                        "emptyField": "",
+                        "negativeOneField": -1,
+                        "errorCount": 0,
+                    }
+                }
+            ],
+        }
+        self.mock_api.get_mobile_app_beacons_without_preload_content.return_value = MockResponse(
+            json.dumps(payload).encode("utf-8"),
+            {"Content-Type": "application/json"},
+        )
+
+        result = await self.client.get_all_mobile_app_beacons(
+            beacon_type="SESSION_START",
+            filter_fields=False,  # Explicitly disable filtering
+            api_client=self.mock_api,
+        )
+
+        self.assertIn("summary", result)
+        self.assertIn("beacons", result)
+        self.assertEqual(len(result["beacons"]), 1)
+
+        beacon = result["beacons"][0]
+        # ALL fields should be present when filter_fields=False
+        self.assertIn("mobileAppLabel", beacon)
+        self.assertIn("timestamp", beacon)
+        self.assertIn("beaconId", beacon)
+        self.assertIn("unusedField1", beacon)
+        self.assertIn("unusedField2", beacon)
+        self.assertIn("emptyField", beacon)
+        self.assertIn("negativeOneField", beacon)
+        self.assertIn("errorCount", beacon)
+
+    async def test_filter_fields_true_explicitly_filters_beacons(self):
+        """filter_fields=True explicitly must behave the same as the default — filtering happens."""
+        payload = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "mobileAppLabel": "TestApp",
+                        "timestamp": 123456789,
+                        "unusedField1": "value1",
+                        "errorCount": 0,
+                    }
+                }
+            ],
+        }
+        self.mock_api.get_mobile_app_beacons_without_preload_content.return_value = MockResponse(
+            json.dumps(payload).encode("utf-8"),
+            {"Content-Type": "application/json"},
+        )
+
+        result = await self.client.get_all_mobile_app_beacons(
+            beacon_type="SESSION_START",
+            filter_fields=True,
+            api_client=self.mock_api,
+        )
+
+        beacon = result["beacons"][0]
+        self.assertIn("mobileAppLabel", beacon)
+        self.assertIn("timestamp", beacon)
+        self.assertNotIn("unusedField1", beacon)
+        self.assertNotIn("errorCount", beacon)  # 0 → skipped by _should_skip_field_value
+
+    async def test_filter_fields_none_behaves_like_true(self):
+        """filter_fields=None must default to True — non-essential fields must still be filtered out."""
+        payload = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "mobileAppLabel": "TestApp",
+                        "timestamp": 123456789,
+                        "unusedField1": "value1",
+                        "errorCount": 0,
+                    }
+                }
+            ],
+        }
+        self.mock_api.get_mobile_app_beacons_without_preload_content.return_value = MockResponse(
+            json.dumps(payload).encode("utf-8"),
+            {"Content-Type": "application/json"},
+        )
+
+        result = await self.client.get_all_mobile_app_beacons(
+            beacon_type="SESSION_START",
+            filter_fields=None,  # None must be normalised to True
+            api_client=self.mock_api,
+        )
+
+        beacon = result["beacons"][0]
+        self.assertIn("mobileAppLabel", beacon)
+        self.assertIn("timestamp", beacon)
+        # These must be absent — proving filtering ran, not skipped due to None being falsy
+        self.assertNotIn("unusedField1", beacon)
+        self.assertNotIn("errorCount", beacon)  # 0 → skipped by _should_skip_field_value
 
 
 if __name__ == "__main__":

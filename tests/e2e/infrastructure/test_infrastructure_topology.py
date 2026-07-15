@@ -602,7 +602,7 @@ class TestInfrastructureTopologyE2E:
         nodes = [
             {
                 "id": "node-with-very-long-id-that-needs-truncation",
-                "label": "This is a very long label that should be truncated in the sample nodes output",
+                "label": "This is a very long label that should be truncated in the sample nodes output because it exceeds 80 characters",
                 "plugin": "host"
             }
         ]
@@ -633,14 +633,14 @@ class TestInfrastructureTopologyE2E:
         assert "sampleNodes" in result
         assert len(result["sampleNodes"]) == 1
 
-        # Verify that the label was truncated
+        # Verify that the label was truncated (implementation truncates at 80 chars to 77 + "...")
         sample_node = result["sampleNodes"][0]
-        assert len(sample_node["label"]) <= 40
+        assert len(sample_node["label"]) <= 80
         assert "..." in sample_node["label"]
 
-        # Verify that the ID was truncated
-        assert len(sample_node["id"]) <= 15
-        assert "..." in sample_node["id"]
+        # Verify that the ID was NOT truncated (implementation keeps full IDs for lookups - line 250)
+        assert sample_node["id"] == "node-with-very-long-id-that-needs-truncation"
+        assert "..." not in sample_node["id"]  # IDs are never truncated
 
         # Verify the API was called
         mock_api_client.get_topology_without_preload_content.assert_called_once()

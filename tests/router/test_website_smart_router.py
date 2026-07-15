@@ -588,7 +588,7 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
 
         self.mock_catalog_client.get_website_tag_catalog = mock_get_tag_catalog
 
-        beacon_types = ["PAGELOAD", "PAGECHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"]
+        beacon_types = ["PAGELOAD", "PAGE_CHANGE", "RESOURCELOAD", "CUSTOM", "HTTPREQUEST", "ERROR"]
 
         for beacon_type in beacon_types:
             result = asyncio.run(self.router.manage_websites(

@@ -11,7 +11,10 @@ from typing import Any, Dict, List, Optional, Union
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.timestamp_utils import convert_datetime_param, convert_nested_datetime_param
+from src.core.timestamp_utils import (
+    convert_datetime_param,
+    convert_nested_datetime_param,
+)
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -66,16 +69,16 @@ CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER:
     1. FIRST: Call get_metric_catalog to get valid metrics
        - resource_type="catalog", operation="get_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and data sources
-    
+
     2. SECOND: Call get_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_tag_catalog"
        - params: {"use_case": "GROUPING", "data_source": "CALLS"}
-    
+
     3. THIRD: Use ONLY the tag names and metrics returned from catalog operations
        - Metric names must match those from get_metric_catalog
        - Tag names must match those from get_tag_catalog
        - NEVER guess or invent tag names or metric names
-    
+
     4. FOURTH: Call metrics operations with validated tag names and metrics
        - Example invalid: "calls.error.count" (not in catalog)
        - Example valid: "calls" with aggregation "SUM"
@@ -94,22 +97,22 @@ METRICS (resource_type="metrics"):
     tag_filter_expression: CRITICAL - Entity field is REQUIRED for ALL tag filters
 
     ENTITY FIELD VALUES:
-    
+
     "SOURCE" or "DESTINATION" → Tag identifies an infrastructure/service component
       (what/where: hosts, services, containers, databases, endpoints)
       (catalog hint: canApplyToSource/canApplyToDestination = true)
-    
+
     "NOT_APPLICABLE" → Tag describes call behavior or metadata
       (how/what happened: call metrics, trace properties, geo data, business context)
       (catalog hint: canApplyToSource/canApplyToDestination = false)
-    
+
     Never omit entity field or set to null - it is MANDATORY.
-    
+
     Examples:
       * Entity component: {"type": "TAG_FILTER", "name": "service.name", "entity": "DESTINATION", ...}
       * Call metadata: {"type": "TAG_FILTER", "name": "call.latency", "entity": "NOT_APPLICABLE", ...}
       * Geographic: {"type": "TAG_FILTER", "name": "geo.country", "entity": "NOT_APPLICABLE", ...}
-    
+
 
 ALERT_CONFIG (resource_type="alert_config"):
     operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
@@ -131,19 +134,19 @@ SETTINGS (resource_type="settings"):
 RESOURCES (resource_type="resources"):
     operations: get_applications, get_services, get_application_services, get_application_endpoints
     params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope, include_snapshot_ids}
-   
+
     get_applications - Get application perspectives
         params: {name_filter, application_boundary_scope}
         Returns: Paginated list of applications with their configurations and metadata
-    
+
     get_services - Get all services for application monitoring
         params: {name_filter, include_snapshot_ids}
         Returns: Paginated list of services across all applications
-    
+
     get_application_services - Get services for a specific application perspective
         params: {application_id, service_id, name_filter, application_boundary_scope, include_snapshot_ids}
         Returns: Paginated services filtered by application context
-    
+
     get_application_endpoints - Get endpoints for an application service
         params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope}
         Returns: Paginated endpoints with type and technology metadata
@@ -158,29 +161,19 @@ CATALOG (resource_type="catalog"):
         Valid data_source: "CALLS", "TRACES"
 
 ANALYZE (resource_type="analyze"):
-    operations: get_all_traces, get_trace_details, get_trace_groups
+    operations: get_all_traces, get_trace_details
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
         - to: Unix timestamp in milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
         - If timezone not specified in datetime string, defaults to UTC
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
-    
+
     get_all_traces - params: {payload}
         payload: {timeFrame, includeInternal, includeSynthetic, tagFilterExpression, pagination, order}
         timeFrame.to: Unix timestamp (ms) OR datetime string with timezone
-    
+
     get_trace_details - params: {id, retrievalSize, offset, ingestionTime}
         Returns: items, itemCount, canLoadMore, cursor for pagination
-    
-    get_trace_groups - params: {payload}
-        payload: {group, metrics, timeFrame, tagFilterExpression, pagination, order, includeInternal, includeSynthetic}
-        NOTE: 'group' and 'metrics' are mandatory payload fields.
-        The 'group' object must include 'groupbyTag' and 'groupbyTagEntity'.
-        Supported groupbyTag values are 'trace.endpoint.name' and 'trace.service.name'.
-        Allowed groupbyTagEntity values are 'NOT_APPLICABLE', 'DESTINATION', and 'SOURCE'.
-        
-        CRITICAL: The "calls" metric is NOT supported for trace operations. Use "traces" or other trace-specific metrics.
-        Use get_metric_catalog first to look up valid metric names and aggregations as described in the critical workflow.
 
 Args:
     resource_type: "metrics", "alert_config", "global_alert_config", "settings", "catalog", "resources", or "analyze"
@@ -195,10 +188,10 @@ Examples:
     # CATALOG operations
     resource_type="catalog", operation="get_metric_catalog"
     resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS", "var_from": 1710658800000}
-    
+
     # METRICS operations
     resource_type="metrics", operation="get_grouped_calls_metrics", params={"metrics": [{"metric": "calls", "aggregation": "SUM"}, {"metric": "latency", "aggregation": "MEAN"}], "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"}, "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}, "time_frame": {"to": 1710658800000, "windowSize": 3600000}, "order": {"by": "calls", "direction": "DESC"}, "pagination": {"page": 1, "pageSize": 50}, "include_internal": False, "include_synthetic": False}
-    
+
     # ALERT_CONFIG operations
     resource_type="alert_config", operation="find_active", params={"application_name": "All Services", "alert_ids": ["alert-1", "alert-2"]}
     resource_type="alert_config", operation="find_versions", params={"application_id": "app-123", "id": "alert-456"}
@@ -210,7 +203,7 @@ Examples:
     resource_type="alert_config", operation="disable", params={"application_id": "app-123", "id": "alert-456"}
     resource_type="alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-456", "created": 1710658800000}
     resource_type="alert_config", operation="update_baseline", params={"application_id": "app-123", "id": "alert-456"}
-    
+
     # GLOBAL_ALERT_CONFIG operations
     resource_type="global_alert_config", operation="find_active", params={"application_name": "All Services"}
     resource_type="global_alert_config", operation="find_versions", params={"application_id": "app-123", "id": "alert-789"}
@@ -221,7 +214,7 @@ Examples:
     resource_type="global_alert_config", operation="enable", params={"application_id": "app-123", "id": "alert-789"}
     resource_type="global_alert_config", operation="disable", params={"application_id": "app-123", "id": "alert-789"}
     resource_type="global_alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-789", "created": 1710658800000}
-    
+
     # SETTINGS operations
     resource_type="settings", operation="get_all", params={"resource_subtype": "application"}
     resource_type="settings", operation="get", params={"resource_subtype": "application", "application_name": "My App"}
@@ -229,17 +222,16 @@ Examples:
     resource_type="settings", operation="update", params={"resource_subtype": "application", "id": "config-123", "payload": {"label": "Updated App"}}
     resource_type="settings", operation="delete", params={"resource_subtype": "application", "id": "config-123"}
     resource_type="settings", operation="order", params={"resource_subtype": "application", "request_body": ["config-1", "config-2", "config-3"]}
-    
+
     # RESOURCES operations
     resource_type="resources", operation="get_applications", params={"name_filter": "My App"}
     resource_type="resources", operation="get_services", params={"name_filter": "My Service", "include_snapshot_ids": True}
     resource_type="resources", operation="get_application_services", params={"application_id": "app-123", "service_id": "svc-456", "name_filter": "API"}
     resource_type="resources", operation="get_application_endpoints", params={"application_id": "app-123", "service_id": "svc-456", "endpoint_id": "ep-789", "name_filter": "/api/users", "types": ["HTTP"], "technologies": ["Java"]}
-    
+
     # ANALYZE operations
     resource_type="analyze", operation="get_all_traces", params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "includeInternal": False, "includeSynthetic": False, "pagination": {"retrievalSize": 200}}}
-    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}
-    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"}, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}"""
+    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}"""
     )
     async def manage_applications(
         self,
@@ -498,10 +490,10 @@ Examples:
         for config in all_configs_result:
             if not isinstance(config, dict):
                 continue
-            
+
             config_label = config.get('label', '')
             config_id = config.get('id', '')
-            
+
             if config_label.lower() == application_name.lower() and config_id:
                 logger.info(f"Found application config '{config_label}' with ID: {config_id}")
                 return config_id, None
@@ -653,7 +645,7 @@ Examples:
         self, operation: str, params: Dict[str, Any], ctx
     ) -> Dict[str, Any]:
         """Handle Application Analyze operations."""
-        valid_operations = ["get_all_traces", "get_trace_details", "get_trace_groups"]
+        valid_operations = ["get_all_traces", "get_trace_details"]
 
         if operation not in valid_operations:
             return {

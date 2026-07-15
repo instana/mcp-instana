@@ -80,8 +80,17 @@ sys.modules['instana_client.configuration'].Configuration = mock_configuration
 sys.modules['instana_client.api_client'].ApiClient = mock_api_client
 sys.modules['instana_client.api.infrastructure_topology_api'].InfrastructureTopologyApi = mock_topology_api
 
+# Mock fastmcp and mcp modules before importing src.core.utils
+sys.modules['fastmcp'] = MagicMock()
+sys.modules['mcp'] = MagicMock()
+sys.modules['mcp.types'] = MagicMock()
+
+# Import src.core.utils first to ensure it's available for patching
+import src.core.utils
+
+
 def create_infrastructure_topology_client(read_token: str, base_url: str):
-    with patch('src.core.utils.with_header_auth', mock_with_header_auth):
+    with patch.object(src.core.utils, 'with_header_auth', mock_with_header_auth):
         module = importlib.import_module('src.infrastructure.infrastructure_topology')
         module = importlib.reload(module)
         return module.InfrastructureTopologyMCPTools(
@@ -426,7 +435,7 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         self.assertIn("summary", result)
 
     def test_get_topology_with_long_labels(self):
-        """Test get_topology with long node labels (truncation)"""
+        """Test get_topology with long node labels (truncation at 80 chars)"""
         long_label = "A" * 100
         mock_result = {
             "nodes": [{"id": "n1", "plugin": "host", "label": long_label}],
@@ -440,12 +449,12 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_topology())
 
         self.assertIn("summary", result)
-        # Check that label was truncated in sample nodes
+        # Check that label was truncated in sample nodes (at 80 chars, not 40)
         if result.get("sampleNodes"):
-            self.assertLessEqual(len(result["sampleNodes"][0]["label"]), 40)
+            self.assertLessEqual(len(result["sampleNodes"][0]["label"]), 80)
 
     def test_get_topology_with_long_ids(self):
-        """Test get_topology with long node IDs (truncation)"""
+        """Test get_topology with long node IDs (no truncation - full IDs preserved)"""
         long_id = "A" * 100
         mock_result = {
             "nodes": [{"id": long_id, "plugin": "host", "label": "Host"}],
@@ -459,6 +468,9 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_topology())
 
         self.assertIn("summary", result)
+        # Verify that full IDs are preserved (not truncated) for lookups
+        if result.get("sampleNodes"):
+            self.assertEqual(result["sampleNodes"][0]["id"], long_id)
 
 
 if __name__ == '__main__':

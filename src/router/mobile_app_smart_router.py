@@ -12,7 +12,12 @@ from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_nested_datetime_param
-from src.core.utils import BaseInstanaClient, MOBILE_BEACON_TYPE_MAP, normalize_beacon_type, register_as_tool
+from src.core.utils import (
+    MOBILE_BEACON_TYPE_MAP,
+    BaseInstanaClient,
+    normalize_beacon_type,
+    register_as_tool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +60,15 @@ class MobileAppSmartRouterMCPTool(BaseInstanaClient):
         """Initialize the Mobile App Smart Router MCP Tool."""
         super().__init__(read_token=read_token, base_url=base_url)
 
+        from src.mobile_app.mobile_app_alert import MobileAppAlertMCPTools
         from src.mobile_app.mobile_app_analyze import MobileAppAnalyzeMCPTools
         from src.mobile_app.mobile_app_catalog import MobileAppCatalogMCPTools
-        from src.mobile_app.mobile_app_configuration import MobileAppConfigurationMCPTools
-        from src.mobile_app.mobile_app_alert import MobileAppAlertMCPTools
-        from src.mobile_app.mobile_app_session_replay import MobileAppSessionReplayMCPTools
+        from src.mobile_app.mobile_app_configuration import (
+            MobileAppConfigurationMCPTools,
+        )
+        from src.mobile_app.mobile_app_session_replay import (
+            MobileAppSessionReplayMCPTools,
+        )
 
         self.mobile_app_analyze_client = MobileAppAnalyzeMCPTools(read_token, base_url)
         self.mobile_app_catalog_client = MobileAppCatalogMCPTools(read_token, base_url)
@@ -91,26 +100,26 @@ ANALYZE WORKFLOW:
     1. FIRST: Call get_mobile_app_metric_catalog to get valid metrics
        - resource_type="catalog", operation="get_mobile_app_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and beacon types
-    
+
     2. SECOND: Call get_mobile_app_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_mobile_app_tag_catalog"
        - params: {"beacon_type": "SESSION_START", "use_case": "FILTERING"}
-    
+
     3. THIRD: Use ONLY the tag names and metrics returned from catalog operations
        - Tag names MUST start with "mobileBeacon." (e.g., "mobileBeacon.mobileApp.name")
        - Metric names must match those from get_mobile_app_metric_catalog
        - NEVER guess or invent tag names or metric names
-    
+
     4. FOURTH: Call analyze operations with validated tag names and metrics
        - ALWAYS include "entity": "NOT_APPLICABLE" in EVERY TAG_FILTER
-    
+
     Default beacon_type: "SESSION_START" | Default use_case for get_all_mobile_app_beacons: "FILTERING"
 
 ANALYZE (resource_type="analyze"):
-    operations: 
+    operations:
         - get_all_mobile_app_beacons
             params: {time_frame, beacon_type, pagination, tag_filter_expression (optional), filter_fields (optional)}
-    
+
         - get_mobile_app_beacon_groups
             params: {time_frame, beacon_type, fill_time_series, pagination, tag_filter_expression (optional), metrics (optional), group (optional), order (optional)}
 
@@ -127,7 +136,7 @@ ANALYZE (resource_type="analyze"):
         - This applies to ALL tags: mobileBeacon.mobileApp.*, mobileBeacon.view.*, mobileBeacon.device.*, mobileBeacon.geo.*, etc.
         - The entity field is MANDATORY - never omit it or set it to null
         - Tag names MUST start with "mobileBeacon." - get valid names from get_mobile_app_tag_catalog first
-        
+
         Examples:
           * {"type": "TAG_FILTER", "name": "mobileBeacon.mobileApp.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Robot Shop"}
           * {"type": "TAG_FILTER", "name": "mobileBeacon.view.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Products"}
@@ -137,7 +146,7 @@ ANALYZE (resource_type="analyze"):
         - Controls which fields are included in each returned beacon.
         - True / None / omitted — essential fields only
         -  False — all fields returned by the REST endpoint (unfiltered, larger payload)
-        
+
     get_all_mobile_app_beacons - Use for individual beacon data (e.g., "list all session start beacons")
     get_mobile_app_beacon_groups - Use for grouped/aggregated beacon metrics (e.g., "beacon count per mobile app")
 
@@ -146,12 +155,12 @@ CATALOG (resource_type="catalog"):
     params: {beacon_type, use_case}
 
     get_mobile_app_metric_catalog - Get mobile app metrics catalog with necessary metadata for query planning (metricId, label, description, formatter, aggregations, beaconTypes). Use params.view="full" to retrieve raw SDK metadata (rarely needed).
-    
+
     get_mobile_app_tag_catalog - MUST CALL THIS FIRST before using any tag names
         Returns: List of valid tag names that start with "mobileBeacon."
         Valid beacon_type: "SESSION_START", "VIEW_CHANGE", "HTTP_REQUEST", "CUSTOM", "CRASH", "PERF", "DROP_BEACON"
         Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
-        
+
         Example call:
         resource_type="catalog", operation="get_mobile_app_tag_catalog",
         params={"beacon_type": "SESSION_START", "use_case": "FILTERING"}
@@ -192,7 +201,7 @@ ALERT (resource_type="alert"):
     find_active_mobile_app_alert_configs - Get all alert configurations for a mobile app
         - mobile_app_id: Mobile app ID to get alert configs for (required)
         - alert_ids: Optional list of specific alert IDs to filter (optional)
-    
+
     find_mobile_app_alert_config - Get a specific alert configuration by ID
         - id: Specific alert config ID to retrieve (required)
         - valid_on: Unix timestamp to retrieve config valid at that time (optional, defaults to latest active version)
@@ -347,7 +356,7 @@ Returns:
             "to",
             default_timezone="UTC"
         )
-        
+
         if "error" in conversion_result:
             return {
                 "error": conversion_result["error"],
@@ -356,7 +365,7 @@ Returns:
                 "original_params": params,
                 "hint": "Provide time_frame.to as Unix timestamp (ms) or datetime string with timezone (e.g., '10 March 2026, 2:00 PM|IST')"
             }
-        
+
         # Update time_frame with converted value if conversion occurred
         if conversion_result["converted"]:
             time_frame = conversion_result["params"][PARAM_TIME_FRAME]
@@ -469,7 +478,7 @@ Returns:
             "operation": operation,
             "results": result
         }
-    
+
     async def _handle_configuration(
         self,
         operation: str,
@@ -543,7 +552,7 @@ Returns:
             "config_id": config_id if config_id else None,
             "results": result
         }
-    
+
     async def _handle_alert(
         self,
         operation: str,

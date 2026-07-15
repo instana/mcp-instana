@@ -89,7 +89,6 @@ class TestMobileAppCatalogMCPTools(unittest.TestCase):
         )
         self.assertEqual(result["error"], "use_case parameter is required")
 
-    @unittest.skip("Test has isolation issues in full suite - passes individually")
     def test_get_mobile_app_tag_catalog_http_error_with_details(self):
         response = MockResponse(b'{"message":"boom"}', status=500, headers={"Content-Type": "application/json"})
         self.mock_api_client.get_mobile_app_tag_catalog_without_preload_content.return_value = response
@@ -106,7 +105,6 @@ class TestMobileAppCatalogMCPTools(unittest.TestCase):
         self.assertEqual(result["status_code"], 500)
         self.assertIn("details", result)
 
-    @unittest.skip("Test has isolation issues in full suite - passes individually")
     def test_get_mobile_app_tag_catalog_http_error_without_details(self):
         class BrokenDecodeResponse(MockResponse):
             @property

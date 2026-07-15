@@ -95,7 +95,7 @@ class TestMCPServer(unittest.TestCase):
         for attr in [
             'smart_router_client', 'smart_router_custom_dashboard_client',
             'smart_router_events_client', 'smart_router_website_client',
-            'smart_router_automation_client', 'infra_analyze_new_client']:
+            'smart_router_automation_client']:
             self.assertIsNone(getattr(state, attr))
 
     @patch('src.core.server.get_enabled_client_configs')
@@ -127,7 +127,6 @@ class TestMCPServer(unittest.TestCase):
         token = "test_token"
         base_url = "https://test.instana.io"
         state = create_clients(token, base_url, "events")
-        self.assertIsNone(state.infra_analyze_new_client)
         self.assertEqual(state.smart_router_events_client, mock_events_client)
         mock_events_class.assert_called_with(read_token=token, base_url=base_url)
 
@@ -520,7 +519,6 @@ class TestMCPServerAsync(unittest.TestCase):
                 mock_logger.error.assert_called_with("Error during lifespan", exc_info=True)
                 self.assertIsInstance(state, MCPState)
                 self.assertIsNone(state.smart_router_client)
-                self.assertIsNone(state.infra_analyze_new_client)
         asyncio.run(test_lifespan())
 
     def test_execute_tool_success(self):

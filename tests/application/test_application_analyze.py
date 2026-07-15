@@ -32,6 +32,7 @@ sys.modules['instana_client.api'] = MagicMock()
 sys.modules['instana_client.api.application_analyze_api'] = MagicMock()
 sys.modules['instana_client.models'] = MagicMock()
 sys.modules['instana_client.models.get_call_groups'] = MagicMock()
+sys.modules['instana_client.models.get_trace_groups'] = MagicMock()
 sys.modules['instana_client.models.get_traces'] = MagicMock()
 sys.modules['instana_client.configuration'] = MagicMock()
 sys.modules['instana_client.api_client'] = MagicMock()
@@ -40,16 +41,19 @@ mock_configuration = MagicMock()
 mock_api_client = MagicMock()
 mock_analyze_api = MagicMock()
 mock_get_call_groups = MagicMock()
+mock_get_trace_groups = MagicMock()
 mock_get_traces = MagicMock()
 
 mock_analyze_api.__name__ = "ApplicationAnalyzeApi"
 mock_get_call_groups.__name__ = "GetCallGroups"
+mock_get_trace_groups.__name__ = "GetTraceGroups"
 mock_get_traces.__name__ = "GetTraces"
 
 sys.modules['instana_client.configuration'].Configuration = mock_configuration
 sys.modules['instana_client.api_client'].ApiClient = mock_api_client
 sys.modules['instana_client.api.application_analyze_api'].ApplicationAnalyzeApi = mock_analyze_api
 sys.modules['instana_client.models.get_call_groups'].GetCallGroups = mock_get_call_groups
+sys.modules['instana_client.models.get_trace_groups'].GetTraceGroups = mock_get_trace_groups
 sys.modules['instana_client.models.get_traces'].GetTraces = mock_get_traces
 
 from src.application.application_analyze import ApplicationAnalyzeMCPTools
@@ -63,12 +67,14 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         mock_api_client.reset_mock()
         mock_analyze_api.reset_mock()
         mock_get_call_groups.reset_mock()
+        mock_get_trace_groups.reset_mock()
         mock_get_traces.reset_mock()
 
         mock_configuration.side_effect = None
         mock_api_client.side_effect = None
         mock_analyze_api.side_effect = None
         mock_get_call_groups.side_effect = None
+        mock_get_trace_groups.side_effect = None
         mock_get_traces.side_effect = None
 
         mock_configuration.return_value = MagicMock()
@@ -233,6 +239,64 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
             self.assertIn("items", result)
             mock_get_details.assert_called_once()
+
+    def test_execute_analyze_operation_get_trace_groups_with_payload(self):
+        """Test execute_analyze_operation with get_trace_groups payload"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+
+        api_client_instance = MagicMock()
+        mock_api_client.return_value = api_client_instance
+
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        with patch.object(client, 'get_trace_groups') as mock_get_trace_groups_method:
+            mock_get_trace_groups_method.return_value = {"items": [{"group": "svc-a"}], "itemCount": 1}
+
+            result = asyncio.run(client.execute_analyze_operation(
+                operation="get_trace_groups",
+                params={"payload": {"group": {"groupbyTag": "trace.service.name"}}}
+            ))
+
+            self.assertIn("items", result)
+            mock_get_trace_groups_method.assert_called_once()
+
+    def test_execute_analyze_operation_get_trace_groups_without_params(self):
+        """Test execute_analyze_operation with get_trace_groups and no params"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+
+        api_client_instance = MagicMock()
+        mock_api_client.return_value = api_client_instance
+
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        with patch.object(client, 'get_trace_groups') as mock_get_trace_groups_method:
+            mock_get_trace_groups_method.return_value = {"items": [], "itemCount": 0}
+
+            result = asyncio.run(client.execute_analyze_operation(
+                operation="get_trace_groups",
+                params=None
+            ))
+
+            self.assertIn("items", result)
+            mock_get_trace_groups_method.assert_called_once()
 
     def test_execute_analyze_operation_invalid_operation(self):
         """Test execute_analyze_operation with invalid operation"""
@@ -812,6 +876,120 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         ))
 
         self.assertIn("error", result)
+
+    def test_sanitize_service_data_none_technologies(self):
+        """Test _sanitize_service_data replaces None technologies with list"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+        mock_api_client.return_value = MagicMock()
+        mock_analyze_api.return_value = MagicMock()
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        raw = {
+            "service": {"name": "svc-a", "technologies": None},
+            "items": [{"service": {"technologies": None}}],
+        }
+        sanitized = client._sanitize_service_data(raw)
+
+        self.assertEqual(sanitized["service"]["technologies"], [])
+        self.assertEqual(sanitized["items"][0]["service"]["technologies"], [])
+
+    def test_get_trace_groups_success_with_cursor(self):
+        """Test get_trace_groups with successful response and cursor"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+
+        api_client_instance = MagicMock()
+        mock_api_client.return_value = api_client_instance
+
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        mock_result = MagicMock()
+        mock_result.data = json.dumps({
+            "items": [
+                {
+                    "group": "service-a",
+                    "cursor": {"ingestionTime": 1710000000, "offset": 4},
+                    "service": {"technologies": None}
+                }
+            ],
+            "canLoadMore": True,
+            "totalHits": 10
+        }).encode("utf-8")
+        analyze_api_instance.get_trace_groups_without_preload_content = MagicMock(return_value=mock_result)
+
+        result = asyncio.run(client.get_trace_groups(
+            payload={"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"}},
+            api_client=analyze_api_instance
+        ))
+
+        self.assertIn("items", result)
+        self.assertEqual(result["itemCount"], 1)
+        self.assertTrue(result["canLoadMore"])
+        self.assertEqual(result["ingestionTime"], 1710000000)
+        self.assertEqual(result["offset"], 4)
+
+    def test_get_trace_groups_invalid_payload_string(self):
+        """Test get_trace_groups with invalid string payload"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+        mock_api_client.return_value = MagicMock()
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        result = asyncio.run(client.get_trace_groups(
+            payload="invalid{json",
+            api_client=analyze_api_instance
+        ))
+
+        self.assertIn("error", result)
+        self.assertIn("Invalid payload format", result["error"])
+
+    def test_get_trace_groups_exception(self):
+        """Test get_trace_groups exception handling"""
+        configuration_instance = MagicMock()
+        configuration_instance.api_key = {}
+        configuration_instance.api_key_prefix = {}
+        mock_configuration.return_value = configuration_instance
+        mock_api_client.return_value = MagicMock()
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+
+        client = ApplicationAnalyzeMCPTools(
+            read_token=self.read_token,
+            base_url=self.base_url
+        )
+
+        analyze_api_instance.get_trace_groups_without_preload_content = MagicMock(side_effect=Exception("groups api error"))
+
+        result = asyncio.run(client.get_trace_groups(
+            payload={"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"}},
+            api_client=analyze_api_instance
+        ))
+
+        self.assertIn("error", result)
+        self.assertIn("Failed to get trace groups", result["error"])
 
 
 if __name__ == '__main__':

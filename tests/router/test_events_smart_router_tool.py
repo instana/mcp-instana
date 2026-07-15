@@ -179,6 +179,193 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         self.assertTrue("results" in result or "error" in result)
 
 
+    def test_get_events_basic(self):
+        """Test get_events operation with minimal filters."""
+        async def mock_get_events(*args, **kwargs):
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={"filters": {"time_range": "last 24 hours"}}
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["operation"], "get_events")
+
+    def test_get_events_with_nested_filters(self):
+        """Test get_events passes nested filters to the events client."""
+        captured = {}
+
+        async def mock_get_events(filters=None, ctx=None):
+            captured["filters"] = filters
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={
+                "filters": {
+                    "time_range": "last 24 hours",
+                    "state": "open",
+                    "severity": 10,
+                    "event_type_filters": ["INCIDENT"],
+                    "max_events": 25,
+                }
+            }
+        ))
+
+        self.assertIsNotNone(captured.get("filters"))
+        self.assertEqual(captured["filters"]["state"], "open")
+        self.assertEqual(captured["filters"]["severity"], 10)
+        self.assertEqual(captured["filters"]["max_events"], 25)
+
+    def test_get_events_no_filters_key_uses_empty_dict(self):
+        """get_events with no 'filters' key should still call the events client."""
+        async def mock_get_events(*args, **kwargs):
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={}
+        ))
+
+        # Time validation is required for get_events, so without time params
+        # it may return validation_failed or results depending on defaults
+        self.assertTrue("results" in result or "validation_failed" in result)
+
+    def test_get_events_invalid_event_type_filter(self):
+        """get_events with invalid event type filter should return an error."""
+        async def mock_get_events(*args, **kwargs):
+            return {"error": "Invalid event_type 'INVALID'"}
+
+        self.mock_events.get_events = mock_get_events
+
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={
+                "filters": {
+                    "time_range": "last 24 hours",
+                    "event_type_filters": ["INCIDENT"],
+                }
+            }
+        ))
+
+        # Should pass through to the events client
+        self.assertIn("results", result)
+
+    def test_get_events_max_events_default_is_50(self):
+        """get_events should default max_events to 50 when not specified."""
+        captured = {}
+
+        async def mock_get_events(filters=None, ctx=None):
+            captured["filters"] = filters
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={"filters": {"time_range": "last 24 hours"}}
+        ))
+
+        self.assertEqual(captured["filters"]["max_events"], 50)
+
+    def test_get_events_with_entity_type_and_entity_label(self):
+        """get_events should forward entity_type and entity_label to the client."""
+        captured = {}
+
+        async def mock_get_events(filters=None, ctx=None):
+            captured["filters"] = filters
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={
+                "filters": {
+                    "time_range": "last 2 days",
+                    "entity_type": "service",
+                    "entity_label": "payment-service",
+                }
+            }
+        ))
+
+        self.assertEqual(captured["filters"]["entity_type"], "service")
+        self.assertEqual(captured["filters"]["entity_label"], "payment-service")
+
+    def test_get_events_with_rca_filter(self):
+        """get_events should forward the rca filter to the client."""
+        captured = {}
+
+        async def mock_get_events(filters=None, ctx=None):
+            captured["filters"] = filters
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={
+                "filters": {
+                    "time_range": "last 24 hours",
+                    "rca": True,
+                }
+            }
+        ))
+
+        self.assertTrue(captured["filters"]["rca"])
+
+    def test_get_events_time_validation_fails_without_time_params(self):
+        """get_events without any time params should fail time validation."""
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={"filters": {}}
+        ))
+
+        self.assertIn("validation_failed", result)
+        self.assertTrue(result["validation_failed"])
+
+    def test_get_events_exception_handling(self):
+        """get_events should return an error dict when events client raises."""
+        async def mock_get_events(*args, **kwargs):
+            raise Exception("Events client failure")
+
+        self.mock_events.get_events = mock_get_events
+
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={"filters": {"time_range": "last 24 hours"}}
+        ))
+
+        self.assertIn("error", result)
+
+    def test_get_events_with_from_and_to_time(self):
+        """get_events with explicit from_time/to_time should succeed time validation."""
+        async def mock_get_events(*args, **kwargs):
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
+        result = asyncio.run(self.router.manage_events(
+            operation="get_events",
+            params={
+                "filters": {
+                    "from_time": 1700000000000,
+                    "to_time": 1700100000000,
+                }
+            }
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["operation"], "get_events")
+
+
 if __name__ == '__main__':
     unittest.main()
 

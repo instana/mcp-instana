@@ -165,11 +165,11 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                             'title': bound_method._mcp_title,
                             'annotations': bound_method._mcp_annotations
                         }
-                        
+
                         # Add description if available
                         if hasattr(bound_method, '_mcp_description') and bound_method._mcp_description:
                             tool_kwargs['description'] = bound_method._mcp_description
-                        
+
                         server.tool(**tool_kwargs)(bound_method)
 
                         tools_registered += 1
@@ -259,13 +259,13 @@ def get_client_categories():
         from src.router.infrastructure_smart_router_tool import (
             InfrastructureSmartRouterMCPTool,
         )
+        from src.router.maintenance_window_smart_router import (
+            MaintenanceWindowSmartRouterMCPTool,
+        )
         from src.router.mobile_app_smart_router import MobileAppSmartRouterMCPTool
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
-        from src.router.maintenance_window_smart_router import (
-            MaintenanceWindowSmartRouterMCPTool,
-        )
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -327,21 +327,23 @@ def get_prompt_categories():
         from src.prompts.infrastructure.infrastructure_catalog import (
             InfrastructureCatalogPrompts,
         )
+        from src.prompts.maintenance_window.maintenance_window_prompts import (
+            MaintenanceWindowPrompts,
+        )
+        from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
+        from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
+        from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
+        from src.prompts.mobile_app.mobile_app_configuration import (
+            MobileAppConfigurationPrompts,
+        )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
+        from src.prompts.website.website_alert import WebsiteAlertPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
         from src.prompts.website.website_configuration import (
             WebsiteConfigurationPrompts,
         )
-        from src.prompts.maintenance_window.maintenance_window_prompts import (
-            MaintenanceWindowPrompts,
-        )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
-        from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
-        from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
-        from src.prompts.mobile_app.mobile_app_configuration import MobileAppConfigurationPrompts
-        from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
-        from src.prompts.website.website_alert import WebsiteAlertPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}

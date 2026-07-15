@@ -1510,6 +1510,671 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             self.assertIn("from_time", result)
             self.assertIn("to_time", result)
 
+    def test_extract_event_filters_returns_only_allowed_keys(self):
+        """_extract_event_filters should whitelist keys and apply defaults."""
+        raw = {
+            "query": "my-query",
+            "entity_type": "service",
+            "severity": 10,
+            "unknown_key": "should_be_dropped",
+        }
+        result = self.client._extract_event_filters(raw)
+
+        self.assertEqual(result["query"], "my-query")
+        self.assertEqual(result["entity_type"], "service")
+        self.assertEqual(result["severity"], 10)
+        self.assertNotIn("unknown_key", result)
+
+    def test_extract_event_filters_default_max_events(self):
+        """_extract_event_filters should default max_events to 50."""
+        result = self.client._extract_event_filters({})
+        self.assertEqual(result["max_events"], 50)
+
+    def test_extract_event_filters_all_fields_none_by_default(self):
+        """Non-max_events fields default to None when not supplied."""
+        result = self.client._extract_event_filters({})
+        for key in ("query", "from_time", "to_time", "entity_type", "entity_name",
+                    "entity_label", "state", "problem", "severity",
+                    "event_specification_id", "rca", "time_range",
+                    "filter_event_updates", "exclude_triggered_before",
+                    "event_type_filters"):
+            self.assertIsNone(result[key])
+
+    def test_extract_event_filters_custom_max_events(self):
+        """_extract_event_filters should respect a provided max_events."""
+        result = self.client._extract_event_filters({"max_events": 100})
+        self.assertEqual(result["max_events"], 100)
+
+    def test_validate_event_type_filters_none_passes(self):
+        """None / empty list should pass validation silently."""
+        self.client._validate_event_type_filters(None)
+        self.client._validate_event_type_filters([])
+
+    def test_validate_event_type_filters_valid_types(self):
+        """Valid event types should pass without exception."""
+        self.client._validate_event_type_filters(["INCIDENT", "ISSUE", "CHANGE"])
+
+    def test_validate_event_type_filters_case_insensitive(self):
+        """Lowercase valid types should also pass."""
+        self.client._validate_event_type_filters(["incident", "issue"])
+
+    def test_validate_event_type_filters_invalid_type_raises(self):
+        """An invalid event type should raise ValueError."""
+        with self.assertRaises(ValueError):
+            self.client._validate_event_type_filters(["INVALID_TYPE"])
+
+    def test_validate_event_type_filters_non_list_raises(self):
+        """Passing a non-list should raise TypeError."""
+        with self.assertRaises(TypeError):
+            self.client._validate_event_type_filters("INCIDENT")
+
+    def test_validate_event_type_filters_non_string_element_raises(self):
+        """A list with non-string elements should raise TypeError."""
+        with self.assertRaises(TypeError):
+            self.client._validate_event_type_filters([123])
+
+    def test_parse_events_response_success(self):
+        """Should parse a 200 JSON list response."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[{"eventId": "e1"}, {"eventId": "e2"}]'
+
+        result = self.client._parse_events_response(mock_response)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["eventId"], "e1")
+
+    def test_parse_events_response_non_200_raises(self):
+        """Non-200 status should raise ValueError."""
+        mock_response = MagicMock()
+        mock_response.status = 500
+
+        with self.assertRaises(ValueError):
+            self.client._parse_events_response(mock_response)
+
+    def test_parse_events_response_non_list_returns_empty(self):
+        """If JSON body is not a list, return empty list."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'{"key": "value"}'
+
+        result = self.client._parse_events_response(mock_response)
+
+        self.assertEqual(result, [])
+
+    def test_matches_entity_type_case_insensitive(self):
+        """Entity type matching should be case-insensitive."""
+        event = {"entityType": "SERVICE"}
+        self.assertTrue(self.client._matches_entity_type(event, "service"))
+        self.assertFalse(self.client._matches_entity_type(event, "host"))
+
+    def test_matches_state(self):
+        """State matching should be case-insensitive."""
+        event = {"state": "Open"}
+        self.assertTrue(self.client._matches_state(event, "open"))
+        self.assertFalse(self.client._matches_state(event, "closed"))
+
+    def test_matches_problem_substring(self):
+        """Problem matching should be a substring search in problem or detail."""
+        event = {"problem": "CPU usage high", "detail": "some detail"}
+        self.assertTrue(self.client._matches_problem(event, "CPU"))
+        self.assertTrue(self.client._matches_problem(event, "some"))
+        self.assertFalse(self.client._matches_problem(event, "memory"))
+
+    def test_matches_severity_valid(self):
+        """Severity matching should be exact."""
+        event = {"severity": 10}
+        self.assertTrue(self.client._matches_severity(event, 10))
+        self.assertFalse(self.client._matches_severity(event, 5))
+
+    def test_matches_severity_invalid_raises(self):
+        """Invalid severity value should raise ValueError."""
+        event = {"severity": 99}
+        with self.assertRaises(ValueError):
+            self.client._matches_severity(event, 99)
+
+    def test_matches_entity_name_partial(self):
+        """Entity name matching should support partial/substring matching."""
+        event = {"entityName": "Kubernetes Pod"}
+        self.assertTrue(self.client._matches_entity_name(event, "kubernetes"))
+        self.assertFalse(self.client._matches_entity_name(event, "host"))
+
+    def test_matches_entity_label_partial(self):
+        """Entity label matching should support partial/substring matching."""
+        event = {"entityLabel": "pod/my-deployment-abc"}
+        self.assertTrue(self.client._matches_entity_label(event, "my-deployment"))
+        self.assertFalse(self.client._matches_entity_label(event, "other-pod"))
+
+    def test_matches_event_specification_id_exact(self):
+        """Event specification ID matching should be exact."""
+        event = {"eventSpecificationId": "spec-001"}
+        self.assertTrue(self.client._matches_event_specification_id(event, "spec-001"))
+        self.assertFalse(self.client._matches_event_specification_id(event, "spec-002"))
+
+    def test_matches_query_substring_in_str(self):
+        """Query matching should search the entire event string."""
+        event = {"eventId": "abc", "problem": "memory leak"}
+        self.assertTrue(self.client._matches_query(event, "memory"))
+        self.assertFalse(self.client._matches_query(event, "cpu"))
+
+    def test_matches_rca_true(self):
+        """rca=True should match events where probableCause.found is True."""
+        event = {"probableCause": {"found": True}}
+        self.assertTrue(self.client._matches_rca(event, True))
+        self.assertFalse(self.client._matches_rca(event, False))
+
+    def test_matches_rca_false(self):
+        """rca=False should match events where probableCause.found is False."""
+        event = {"probableCause": {"found": False}}
+        self.assertTrue(self.client._matches_rca(event, False))
+        self.assertFalse(self.client._matches_rca(event, True))
+
+    def test_matches_rca_missing_probable_cause(self):
+        """rca=False should match events with no probableCause key."""
+        event = {}
+        self.assertTrue(self.client._matches_rca(event, False))
+        self.assertFalse(self.client._matches_rca(event, True))
+
+    def test_apply_event_filters_no_filters_returns_all(self):
+        """When no filters are specified, all events should be returned unchanged."""
+        events = [{"eventId": "e1"}, {"eventId": "e2"}]
+        f = {
+            "entity_type": None, "state": None, "entity_name": None,
+            "entity_label": None, "problem": None, "severity": None,
+            "query": None, "rca": None, "event_specification_id": None,
+        }
+        result = self.client._apply_event_filters(events, f)
+        self.assertEqual(len(result), 2)
+
+    def test_apply_event_filters_by_state(self):
+        """Should filter events by state."""
+        events = [
+            {"state": "open", "eventId": "e1"},
+            {"state": "closed", "eventId": "e2"},
+        ]
+        f = {
+            "entity_type": None, "state": "open", "entity_name": None,
+            "entity_label": None, "problem": None, "severity": None,
+            "query": None, "rca": None, "event_specification_id": None,
+        }
+        result = self.client._apply_event_filters(events, f)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["eventId"], "e1")
+
+    def test_apply_event_filters_non_dict_event_excluded(self):
+        """Non-dict events should be excluded by _event_matches_filters."""
+        events = [{"eventId": "e1"}, "not-a-dict"]
+        f = {
+            "entity_type": None, "state": "open", "entity_name": None,
+            "entity_label": None, "problem": None, "severity": None,
+            "query": None, "rca": None, "event_specification_id": None,
+        }
+        result = self.client._apply_event_filters(events, f)
+        self.assertEqual(len(result), 0)
+
+    def test_event_matches_filters_severity_none_skips_check(self):
+        """severity=None should not filter any events."""
+        event = {"severity": 10, "state": "open"}
+        f = {
+            "entity_type": None, "state": None, "entity_name": None,
+            "entity_label": None, "problem": None, "severity": None,
+            "query": None, "rca": None, "event_specification_id": None,
+        }
+        self.assertTrue(self.client._event_matches_filters(event, f))
+
+    def test_event_matches_filters_rca_none_skips_check(self):
+        """rca=None should not filter any events."""
+        event = {"probableCause": {"found": True}}
+        f = {
+            "entity_type": None, "state": None, "entity_name": None,
+            "entity_label": None, "problem": None, "severity": None,
+            "query": None, "rca": None, "event_specification_id": None,
+        }
+        self.assertTrue(self.client._event_matches_filters(event, f))
+
+    def test_event_matches_filters_multiple_criteria(self):
+        """Multiple filter criteria should all be applied (AND logic)."""
+        event = {
+            "entityType": "service",
+            "state": "open",
+            "severity": 10,
+        }
+        f = {
+            "entity_type": "service",
+            "state": "open",
+            "severity": 10,
+            "entity_name": None, "entity_label": None,
+            "problem": None, "query": None, "rca": None,
+            "event_specification_id": None,
+        }
+        self.assertTrue(self.client._event_matches_filters(event, f))
+
+        # If severity doesn't match, the whole event should fail
+        f_wrong_severity = {**f, "severity": 5}
+        self.assertFalse(self.client._event_matches_filters(event, f_wrong_severity))
+
+    def test_optimize_and_limit_truncates_to_max(self):
+        """Events list should be truncated to max_events."""
+        events = [{"eventId": f"e{i}", "type": "incident", "start": 1000000 + i}
+                  for i in range(10)]
+        result = self.client._optimize_and_limit(events, max_events=3)
+        self.assertEqual(len(result), 3)
+
+    def test_optimize_and_limit_all_events_if_under_max(self):
+        """All events should be returned when count < max_events."""
+        events = [{"eventId": "e1", "type": "incident", "start": 1000000}]
+        result = self.client._optimize_and_limit(events, max_events=50)
+        self.assertEqual(len(result), 1)
+
+    def test_optimize_and_limit_empty_list(self):
+        """An empty list should return an empty list."""
+        result = self.client._optimize_and_limit([], max_events=50)
+        self.assertEqual(result, [])
+
+    def test_fetch_events_api_passes_params(self):
+        """_fetch_events_api should pass all parameters to the API client."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[]'
+        self.events_api.get_events_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client._fetch_events_api(
+            api_client=self.events_api,
+            api_params={"var_from": 100, "to": 200},
+            filter_event_updates=True,
+            exclude_triggered_before=False,
+            event_type_filters=["INCIDENT"],
+        ))
+
+        self.events_api.get_events_without_preload_content.assert_called_once_with(
+            var_from=100, to=200,
+            filter_event_updates=True,
+            exclude_triggered_before=False,
+            event_type_filters=["INCIDENT"],
+        )
+        self.assertEqual(result, mock_response)
+
+    def test_fetch_events_api_with_none_event_type_filters(self):
+        """event_type_filters=None should be forwarded as None."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[]'
+        self.events_api.get_events_without_preload_content.return_value = mock_response
+
+        asyncio.run(self.client._fetch_events_api(
+            api_client=self.events_api,
+            api_params={"var_from": 100, "to": 200},
+            filter_event_updates=None,
+            exclude_triggered_before=None,
+            event_type_filters=None,
+        ))
+
+        call_kwargs = self.events_api.get_events_without_preload_content.call_args[1]
+        self.assertIsNone(call_kwargs["event_type_filters"])
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_success_with_no_filters(self, mock_datetime):
+        """get_events with empty filters should return events from API."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[{"eventId": "e1", "type": "incident", "state": "open", "start": 1699900000000}]'
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={}))
+
+        self.assertIn("events", result)
+        self.assertIn("events_returned", result)
+        self.assertIn("total_events", result)
+        self.assertEqual(result["total_events"], 1)
+        self.assertEqual(result["events_returned"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_with_invalid_event_type_filter(self, mock_datetime):
+        """get_events with invalid event_type_filters should return an error."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        result = asyncio.run(self.client.get_events(filters={
+            "event_type_filters": ["INVALID"]
+        }))
+
+        self.assertIn("error", result)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_state_filter(self, mock_datetime):
+        """get_events should apply state filter correctly."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "state": "open", "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "state": "closed", "type": "incident", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"state": "open"}))
+
+        self.assertEqual(result["total_events"], 1)
+        self.assertEqual(result["events_returned"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_rca_filter(self, mock_datetime):
+        """get_events should filter events by RCA availability."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "probableCause": {"found": true}, "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "probableCause": {"found": false}, "type": "incident", "start": 1699900000000},
+            {"eventId": "e3", "type": "incident", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result_with_rca = asyncio.run(self.client.get_events(filters={"rca": True}))
+        self.assertEqual(result_with_rca["total_events"], 1)
+
+        result_without_rca = asyncio.run(self.client.get_events(filters={"rca": False}))
+        self.assertEqual(result_without_rca["total_events"], 2)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_severity_filter(self, mock_datetime):
+        """get_events should filter by severity."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "severity": 10, "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "severity": 5, "type": "issue", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"severity": 10}))
+
+        self.assertEqual(result["total_events"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_api_error_returns_error(self, mock_datetime):
+        """get_events should return error dict on API failure."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        self.events_api.get_events_without_preload_content = AsyncMock(side_effect=Exception("API failure"))
+
+        result = asyncio.run(self.client.get_events(filters={}))
+
+        self.assertIn("error", result)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_none_filters_treated_as_empty(self, mock_datetime):
+        """get_events with filters=None should behave the same as filters={}."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[]'
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters=None))
+
+        self.assertIn("events", result)
+        self.assertEqual(result["events_returned"], 0)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_max_events_limit(self, mock_datetime):
+        """get_events should limit the returned events to max_events."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        events_data = [{"eventId": f"e{i}", "type": "incident", "start": 1699900000000 + i}
+                       for i in range(10)]
+        import json as _json
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = _json.dumps(events_data).encode()
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"max_events": 3}))
+
+        self.assertEqual(result["events_returned"], 3)
+        self.assertEqual(result["total_events"], 10)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_problem_filter(self, mock_datetime):
+        """get_events should filter events by problem text."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "problem": "memory usage high", "type": "issue", "start": 1699900000000},
+            {"eventId": "e2", "problem": "cpu spike", "type": "issue", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"problem": "memory"}))
+
+        self.assertEqual(result["total_events"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_entity_name_filter(self, mock_datetime):
+        """get_events should filter by entity name (partial match)."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "entityName": "Kubernetes Pod", "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "entityName": "Process", "type": "incident", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"entity_name": "kubernetes"}))
+
+        self.assertEqual(result["total_events"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_entity_label_filter(self, mock_datetime):
+        """get_events should filter by entity label (partial match)."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "entityLabel": "pod/payment-service-abc", "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "entityLabel": "pod/other-service-xyz", "type": "incident", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_events(filters={"entity_label": "payment-service"}))
+
+        self.assertEqual(result["total_events"], 1)
+
+    @patch('src.event.events_tools.datetime')
+    def test_get_events_applies_event_specification_id_filter(self, mock_datetime):
+        """get_events should filter by event specification ID (combined with another filter to bypass early return)."""
+        mock_now = MagicMock()
+        mock_now.timestamp = MagicMock(return_value=1700000000)
+        mock_datetime.now = MagicMock(return_value=mock_now)
+        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'''[
+            {"eventId": "e1", "eventSpecificationId": "spec-001", "state": "open", "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "eventSpecificationId": "spec-002", "state": "open", "type": "incident", "start": 1699900000000}
+        ]'''
+        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+
+        # Also provide state filter to ensure _apply_event_filters doesn't short-circuit
+        result = asyncio.run(self.client.get_events(filters={
+            "event_specification_id": "spec-001",
+            "state": "open",
+        }))
+
+        self.assertEqual(result["total_events"], 1)
+
+    def test_get_events_by_ids_batch_success(self):
+        """get_events_by_ids should return events when batch API succeeds."""
+        mock_event = {"eventId": "e1", "type": "incident", "state": "open", "start": 1699900000000}
+        self.events_api.get_events_by_ids.return_value = [mock_event]
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertIn("events", result)
+        self.assertEqual(result["events_count"], 1)
+        self.assertEqual(result["successful_retrievals"], 1)
+        self.assertEqual(result["failed_retrievals"], 0)
+
+    def test_get_events_by_ids_with_to_dict(self):
+        """get_events_by_ids should call to_dict() on event objects."""
+        mock_obj = MagicMock()
+        mock_obj.to_dict.return_value = {"eventId": "e1", "type": "incident", "start": 1699900000000}
+        self.events_api.get_events_by_ids.return_value = [mock_obj]
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        mock_obj.to_dict.assert_called_once()
+        self.assertEqual(result["events_count"], 1)
+
+    def test_get_events_by_ids_empty_list(self):
+        """get_events_by_ids with empty list should return an error."""
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=[]))
+
+        self.assertIn("error", result)
+        self.assertIn("No event IDs provided", result["error"])
+
+    def test_get_events_by_ids_comma_separated_string(self):
+        """get_events_by_ids should accept comma-separated string of IDs."""
+        mock_events = [
+            {"eventId": "e1", "type": "incident", "start": 1699900000000},
+            {"eventId": "e2", "type": "incident", "start": 1699900000000},
+        ]
+        self.events_api.get_events_by_ids.return_value = mock_events
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids="e1, e2"))
+
+        self.assertEqual(result["events_count"], 2)
+
+    def test_get_events_by_ids_list_string_format(self):
+        """get_events_by_ids should parse Python list string format."""
+        mock_events = [
+            {"eventId": "e1", "type": "incident", "start": 1699900000000},
+        ]
+        self.events_api.get_events_by_ids.return_value = mock_events
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids='["e1"]'))
+
+        self.assertEqual(result["events_count"], 1)
+
+    def test_get_events_by_ids_invalid_list_string(self):
+        """get_events_by_ids with invalid list string should return an error."""
+        # '[invalid]' starts and ends with brackets but is not valid Python literal syntax
+        result = asyncio.run(self.client.get_events_by_ids(event_ids='[invalid]'))
+
+        self.assertIn("error", result)
+
+    def test_get_events_by_ids_batch_fallback_on_failure(self):
+        """get_events_by_ids should fall back to individual requests when batch API fails."""
+        # Batch API raises an exception
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+
+        # Individual fallback API returns success
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[{"eventId": "e1", "type": "incident", "start": 1699900000000}]'
+        self.events_api.get_events_by_ids_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertEqual(result["successful_retrievals"], 1)
+        self.assertEqual(result["failed_retrievals"], 0)
+
+    def test_get_events_by_ids_fallback_http_error(self):
+        """get_events_by_ids fallback should record failure on non-200 status."""
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+
+        mock_response = MagicMock()
+        mock_response.status = 404
+        self.events_api.get_events_by_ids_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertEqual(result["failed_retrievals"], 1)
+        self.assertEqual(result["successful_retrievals"], 0)
+
+    def test_get_events_by_ids_fallback_json_error(self):
+        """get_events_by_ids fallback should handle JSON parse errors."""
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'not-json'
+        self.events_api.get_events_by_ids_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertEqual(result["failed_retrievals"], 1)
+
+    def test_get_events_by_ids_fallback_empty_response(self):
+        """get_events_by_ids fallback should handle empty list response."""
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'[]'
+        self.events_api.get_events_by_ids_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        # An empty list response means no event data was returned
+        self.assertEqual(result["failed_retrievals"], 1)
+        self.assertEqual(result["successful_retrievals"], 0)
+
+    def test_get_events_by_ids_fallback_individual_exception(self):
+        """get_events_by_ids fallback should handle per-event exceptions."""
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+        self.events_api.get_events_by_ids_without_preload_content.side_effect = Exception("Individual failure")
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertEqual(result["failed_retrievals"], 1)
+
+
 if __name__ == '__main__':
     unittest.main()
 

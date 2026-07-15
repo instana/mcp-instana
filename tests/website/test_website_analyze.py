@@ -93,6 +93,7 @@ sys.modules['instana_client.models.tag_filter_expression_element'] = mock_tag_fi
 sys.modules['instana_client.models.cursor_pagination'] = mock_cursor_pagination
 sys.modules['instana_client.models.get_website_beacons'] = mock_get_website_beacons
 sys.modules['instana_client.models.deprecated_tag_filter'] = mock_deprecated_tag_filter
+sys.modules['instana_client.api.website_catalog_api'] = MagicMock()
 
 # Patch the decorator and base class in the real src.core.utils module
 from src.core import utils as real_utils
@@ -108,6 +109,28 @@ from src.website.website_analyze import (
     DEFAULT_GROUP_BY_TAG_ENTITY,
     WebsiteAnalyzeMCPTools,
     clean_nan_values,
+)
+
+VALID_WEBSITE_CATALOG = [
+    {
+        "metricId": "beaconCount",
+        "label": "Beacon Count",
+        "aggregations": ["SUM"],
+        "beaconTypes": ["pageLoad", "pageChange", "httpRequest", "error", "custom", "resourceLoad"],
+        "formatter": "number",
+    },
+    {
+        "metricId": "onLoadTime",
+        "label": "On Load Time",
+        "aggregations": ["MEAN", "P50", "P90", "P95", "P99", "MAX", "MIN", "SUM"],
+        "beaconTypes": ["pageLoad"],
+        "formatter": "millis",
+    },
+]
+
+PATCH_CATALOG = patch(
+    "src.core.metric_validation.fetch_metric_catalog_internal",
+    return_value=VALID_WEBSITE_CATALOG,
 )
 
 
@@ -248,7 +271,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertEqual(self.tools_instance.read_token, "test_token")
         self.assertEqual(self.tools_instance.base_url, "https://test.instana.io")
 
-    def test_get_beacon_groups_with_all_params(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_with_all_params(self, _mock_catalog):
         """Test get_website_beacon_groups with all parameters"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
         group = {"groupByTag": "beacon.page.name"}
@@ -279,7 +303,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertIn("items", result)
         self.mock_api_client.get_beacon_groups_without_preload_content.assert_called_once()
 
-    def test_get_beacon_groups_with_defaults(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_with_defaults(self, _mock_catalog):
         """Test get_website_beacon_groups applies defaults"""
         mock_response = Mock()
         mock_response.status = 200
@@ -295,7 +320,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("items", result)
 
-    def test_get_beacon_groups_http_error(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_http_error(self, _mock_catalog):
         """Test get_website_beacon_groups with HTTP error"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
         group = {"groupByTag": "beacon.page.name"}
@@ -315,17 +341,12 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("HTTP 500", result["error"])
 
-    def test_get_beacon_groups_invalid_metric_error(self):
-        """Test get_website_beacon_groups with invalid metric error"""
+    @PATCH_CATALOG
+    def test_get_beacon_groups_invalid_metric_error(self, _mock_catalog):
+        """Test get_website_beacon_groups with invalid metric — now caught
+        by pre-flight catalog validation before reaching the API."""
         metrics = [{"metric": "invalidMetric", "aggregation": "SUM"}]
         group = {"groupByTag": "beacon.page.name"}
-
-        mock_response = Mock()
-        mock_response.status = 400
-        mock_response.data = json.dumps({
-            "errors": ["Metric type unknown: invalidMetric"]
-        }).encode('utf-8')
-        self.mock_api_client.get_beacon_groups_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.tools_instance.get_website_beacon_groups(
             metrics=metrics,
@@ -335,9 +356,11 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         ))
 
         self.assertIn("elicitation_needed", result)
-        self.assertIn("Invalid metric detected", result["reason"])
+        self.assertIn("invalid", result["reason"].lower())
+        self.mock_api_client.get_beacon_groups_without_preload_content.assert_not_called()
 
-    def test_get_beacon_groups_api_exception(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_api_exception(self, _mock_catalog):
         """Test get_website_beacon_groups when API raises exception"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
         group = {"groupByTag": "beacon.page.name"}
@@ -353,7 +376,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
 
-    def test_get_beacon_groups_invalid_tag_filter(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_invalid_tag_filter(self, _mock_catalog):
         """Test get_website_beacon_groups with invalid tag filter expression"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
         group = {"groupByTag": "beacon.page.name"}
@@ -676,7 +700,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertIn("beacons", result)
         self.assertEqual(len(result["beacons"]), 0)
 
-    def test_get_beacon_groups_with_groupby_tag_lowercase(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_with_groupby_tag_lowercase(self, _mock_catalog):
         """Test get_website_beacon_groups with lowercase groupbyTag"""
         group = {"groupbyTag": "beacon.page.name"}
 
@@ -694,7 +719,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("items", result)
 
-    def test_get_beacon_groups_with_groupby_tag_entity(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_with_groupby_tag_entity(self, _mock_catalog):
         """Test get_website_beacon_groups with groupByTagEntity"""
         group = {
             "groupByTag": "beacon.page.name",
@@ -715,7 +741,8 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("items", result)
 
-    def test_get_beacon_groups_nan_error(self):
+    @PATCH_CATALOG
+    def test_get_beacon_groups_nan_error(self, _mock_catalog):
         """Test get_website_beacon_groups with NaN error in response"""
         mock_response = Mock()
         mock_response.status = 200
@@ -782,6 +809,109 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         # After summarization, non-dict responses are wrapped
         self.assertIn("summary", result)
+
+    def test_error_beacon_includes_stack_trace_fields(self):
+        """Test that ERROR beacons include stackTrace, parsedStackTrace, errorId, stackTraceReadability, and sessionId"""
+        # Create mock response with ERROR beacon data including all stack trace related fields
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "websiteLabel": "Test Site",
+                        "timestamp": 1234567890,
+                        "beaconType": "ERROR",
+                        "stackTrace": "Error: Something went wrong\n    at function1 (file.js:10:5)\n    at function2 (app.js:25:10)",
+                        "parsedStackTrace": [
+                            {
+                                "file": "file.js",
+                            },
+                            {
+                                "file": "app.js",
+                            }
+                        ],
+                        "errorId": "error-123-456",
+                        "stackTraceReadability": "READABLE",
+                        "sessionId": "session-abc-def",
+                        "errorMessage": "Something went wrong",
+                        "page": "/checkout"
+                    }
+                }
+            ]
+        }).encode('utf-8')
+        self.mock_api_client.get_beacons_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.tools_instance.get_website_beacons(
+            beacon_type="ERROR",
+            time_frame={"windowSize": 3600000},
+            api_client=self.mock_api_client
+        ))
+
+        # Verify all stack trace related fields are present and not empty
+        self.assertIn("beacons", result)
+        beacon = result["beacons"][0]
+
+        self.assertIn("stackTrace", beacon)
+        self.assertIn("parsedStackTrace", beacon)
+        self.assertIn("errorId", beacon)
+        self.assertIn("stackTraceReadability", beacon)
+        self.assertIn("sessionId", beacon)
+
+        self.assertIsNotNone(beacon["stackTrace"])
+        self.assertIsNotNone(beacon["parsedStackTrace"])
+        self.assertIsNotNone(beacon["errorId"])
+        self.assertIsNotNone(beacon["stackTraceReadability"])
+        self.assertIsNotNone(beacon["sessionId"])
+
+    def test_pageload_beacon_includes_back_trace_fields(self):
+        """Test that PAGELOAD beacons include backendTraceId and sessionId fields"""
+        # Create mock response with PAGELOAD beacon data including backendTraceId
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "websiteLabel": "Test Site",
+                        "timestamp": 1234567890,
+                        "beaconType": "PAGELOAD",
+                        "page": "/home",
+                        "backendTraceId": "trace-abc-123-xyz",
+                        "sessionId": "session-xyz-789",
+                        "duration": 1500,
+                        "onLoadTime": 1200
+                    }
+                }
+            ]
+        }).encode('utf-8')
+
+        self.mock_api_client.get_beacons_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.tools_instance.get_website_beacons(
+            beacon_type="PAGELOAD",
+            time_frame={"windowSize": 3600000},
+            api_client=self.mock_api_client
+        ))
+
+        # Verify backendTraceId and sessionId fields are present
+        self.assertIn("beacons", result)
+        beacon = result["beacons"][0]
+
+        self.assertIn("backendTraceId", beacon)
+        self.assertIn("sessionId", beacon)
+
+        self.assertIsNotNone(beacon["backendTraceId"])
+        self.assertIsNotNone(beacon["sessionId"])
+
+        # Verify stack ERROR beacon stack trace fields are not present
+        self.assertNotIn("stackTrace", beacon)
+        self.assertNotIn("parsedStackTrace", beacon)
+        self.assertNotIn("errorId", beacon)
+        self.assertNotIn("stackTraceReadability", beacon)
+
 
 
 class TestConstants(unittest.TestCase):

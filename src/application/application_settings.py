@@ -12,7 +12,13 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional, Union
 
-from src.core.utils import BaseInstanaClient, decode_response, parse_payload, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    decode_response,
+    parse_payload,
+    register_as_tool,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +39,11 @@ try:
         TagFilter,  #type: ignore
         TagFilterExpression,  #type: ignore
     )
+
     # TagFilterAllOfValue is not exported from models, import directly
-    from instana_client.models.tag_filter_all_of_value import TagFilterAllOfValue  #type: ignore
+    from instana_client.models.tag_filter_all_of_value import (
+        TagFilterAllOfValue,  #type: ignore
+    )
 except ImportError as e:
     print(f"Error importing Instana SDK: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)

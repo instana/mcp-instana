@@ -135,7 +135,7 @@ class TestEventsPrompts(unittest.TestCase):
         for name, prompt_func in prompts:
             if name == "get_event":
                 result = prompt_func(event_id="test")
-            elif name == "get_kubernetes_info_events" or name == "get_agent_monitoring_events" or (name in ('get_events_by_severity_and_state', 'get_events_by_entity_and_problem')) or name == "get_events_by_entity_type_and_event_type":
+            elif name in {"get_kubernetes_info_events", "get_agent_monitoring_events", "get_events_by_severity_and_state", "get_events_by_entity_and_problem", "get_events_by_entity_type_and_event_type"}:
                 result = prompt_func()
             elif name == "get_events_by_ids":
                 result = prompt_func(event_ids=["test"])

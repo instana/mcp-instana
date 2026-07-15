@@ -40,17 +40,26 @@ def mock_with_header_auth(api_class, allow_mock=False):
     return decorator
 
 
-# Patch the with_header_auth decorator and the client imports
-with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-    # Mock the client classes at their import location
-    with patch('src.application.application_call_group.ApplicationCallGroupMCPTools', create=True) as MockCallGroup, \
-         patch('src.application.application_alert_config.ApplicationAlertMCPTools', create=True) as MockAlert, \
-         patch('src.application.application_global_alert_config.ApplicationGlobalAlertMCPTools', create=True) as MockGlobalAlert, \
-         patch('src.application.application_resources.ApplicationResourcesMCPTools', create=True) as MockResources, \
-         patch('src.application.application_settings.ApplicationSettingsMCPTools', create=True) as MockSettings, \
-         patch('src.application.application_catalog.ApplicationCatalogMCPTools', create=True) as MockCatalog:
+def _build_mock_module(class_name: str) -> ModuleType:
+    module = ModuleType(class_name)
+    setattr(module, class_name, MagicMock())
+    return module
 
-        # Import the router class
+
+mocked_application_modules = {
+    "src.application.application_call_group": _build_mock_module("ApplicationCallGroupMCPTools"),
+    "src.application.application_alert_config": _build_mock_module("ApplicationAlertMCPTools"),
+    "src.application.application_global_alert_config": _build_mock_module("ApplicationGlobalAlertMCPTools"),
+    "src.application.application_resources": _build_mock_module("ApplicationResourcesMCPTools"),
+    "src.application.application_settings": _build_mock_module("ApplicationSettingsMCPTools"),
+    "src.application.application_catalog": _build_mock_module("ApplicationCatalogMCPTools"),
+    "src.application.application_analyze": _build_mock_module("ApplicationAnalyzeMCPTools"),
+}
+
+
+# Patch the with_header_auth decorator and client imports
+with patch.dict(sys.modules, mocked_application_modules):
+    with patch('src.core.utils.with_header_auth', mock_with_header_auth):
         from src.router.application_smart_router_tool import (
             ApplicationSmartRouterMCPTool,
         )
@@ -68,28 +77,23 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         self.mock_resources = MagicMock()
         self.mock_settings = MagicMock()
         self.mock_catalog = MagicMock()
+        self.mock_analyze = MagicMock()
 
-        # Patch the client classes at import time
-        with patch('src.application.application_call_group.ApplicationCallGroupMCPTools', return_value=self.mock_call_group, create=True), \
-             patch('src.application.application_alert_config.ApplicationAlertMCPTools', return_value=self.mock_alert, create=True), \
-             patch('src.application.application_global_alert_config.ApplicationGlobalAlertMCPTools', return_value=self.mock_global_alert, create=True), \
-             patch('src.application.application_resources.ApplicationResourcesMCPTools', return_value=self.mock_resources, create=True), \
-             patch('src.application.application_settings.ApplicationSettingsMCPTools', return_value=self.mock_settings, create=True), \
-             patch('src.application.application_catalog.ApplicationCatalogMCPTools', return_value=self.mock_catalog, create=True):
-
+        with patch.dict(sys.modules, mocked_application_modules):
             # Create router instance
             self.router = ApplicationSmartRouterMCPTool(
                 read_token="test_token",
                 base_url="https://test.instana.com"
             )
 
-            # Manually set the clients on the router
-            self.router.app_call_group_client = self.mock_call_group
-            self.router.app_alert_config_client = self.mock_alert
-            self.router.app_global_alert_config_client = self.mock_global_alert
-            self.router.app_resources_client = self.mock_resources
-            self.router.app_settings_client = self.mock_settings
-            self.router.app_catalog_client = self.mock_catalog
+        # Manually set the clients on the router
+        self.router.app_call_group_client = self.mock_call_group
+        self.router.app_alert_config_client = self.mock_alert
+        self.router.app_global_alert_config_client = self.mock_global_alert
+        self.router.app_resources_client = self.mock_resources
+        self.router.app_settings_client = self.mock_settings
+        self.router.app_catalog_client = self.mock_catalog
+        self.router.app_analyze_client = self.mock_analyze
 
     def test_init(self):
         """Test router initialization"""
@@ -244,9 +248,15 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         self.assertIn("results", result)
 
     def test_metrics_invalid_operation_direct_handler(self):
+        async def mock_get_metrics(*args, **kwargs):
+            return {"items": []}
+
+        self.mock_call_group.get_grouped_calls_metrics = mock_get_metrics
         result = asyncio.run(self.router._handle_metrics("wrong", {}, None))
-        self.assertIn("error", result)
-        self.assertIn("Only 'application' is supported", result["error"])
+
+        self.assertIn("results", result)
+        self.assertEqual(result["resource_type"], "metrics")
+        self.assertEqual(result["operation"], "wrong")
 
     def test_metrics_handler_wraps_client_result(self):
         async def mock_get_metrics(*args, **kwargs):
@@ -270,6 +280,32 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
             operation="invalid_catalog_op",
             params={}
         ))
+        self.assertIn("error", result)
+
+    def test_resources_get_applications(self):
+        async def mock_get_apps(*args, **kwargs):
+            return {"items": []}
+
+        # Router now delegates to execute_resources_operation dispatcher
+        self.mock_resources.execute_resources_operation = mock_get_apps
+
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="resources",
+            operation="get_applications",
+            params={}
+        ))
+
+        self.assertIn("results", result)
+        self.assertEqual(result["resource_type"], "resources")
+        self.assertEqual(result["operation"], "get_applications")
+
+    def test_resources_invalid_operation(self):
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="resources",
+            operation="invalid_operation",
+            params={}
+        ))
+
         self.assertIn("error", result)
 
     def test_settings_missing_resource_subtype(self):
@@ -331,7 +367,7 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         ))
 
         self.assertIn("error", result)
-        self.assertIn("No application perspective found", result["error"])
+        self.assertIn("No application perspective found with name 'MyApp'", result["error"])
 
 
     def test_settings_resolve_application_name_success(self):
@@ -386,7 +422,7 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         ))
 
         self.assertIn("error", result)
-        self.assertIn("Failed to retrieve application perspectives", result["error"])
+        self.assertIn("Failed to retrieve application perspectives for name resolution", result["error"])
 
     def test_alert_config_resolve_application_name_error(self):
         """Test alert_config when application name resolution fails"""
@@ -635,8 +671,7 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         ))
 
         self.assertEqual(result["resource_type"], "metrics")
-        self.assertIn("query", result)
-        self.assertEqual(result["query"], "test query")
+        self.assertIn("results", result)
 
     def test_manage_applications_with_none_params(self):
         """Test manage_applications initializes params when None"""
@@ -647,6 +682,68 @@ class TestApplicationSmartRouterMCPTool(unittest.TestCase):
         ))
 
         self.assertIn("error", result)
+
+    def test_analyze_invalid_operation(self):
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="analyze",
+            operation="invalid_operation",
+            params={}
+        ))
+        self.assertIn("error", result)
+        self.assertIn("Invalid operation", result["error"])
+
+    def test_analyze_timeframe_conversion_error(self):
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="analyze",
+            operation="get_all_traces",
+            params={"payload": {"timeFrame": {"to": "not-a-date", "windowSize": 3600000}}}
+        ))
+        self.assertIn("error", result)
+        self.assertEqual(result["resource_type"], "analyze")
+
+    def test_analyze_ingestion_time_conversion_error(self):
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="analyze",
+            operation="get_trace_details",
+            params={"id": "trace-1", "ingestionTime": "bad-date-time"}
+        ))
+        self.assertIn("error", result)
+        self.assertEqual(result["resource_type"], "analyze")
+
+    def test_analyze_routes_get_trace_groups(self):
+        async def mock_execute(*args, **kwargs):
+            return {"items": [{"group": "service-a"}], "itemCount": 1}
+
+        self.mock_analyze.execute_analyze_operation = mock_execute
+
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="analyze",
+            operation="get_trace_groups",
+            params={"payload": {"timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}
+        ))
+
+        self.assertEqual(result["resource_type"], "analyze")
+        self.assertEqual(result["operation"], "get_trace_groups")
+        self.assertIn("results", result)
+
+    def test_analyze_converts_ingestion_time_datetime_and_routes(self):
+        captured = {}
+
+        async def mock_execute(*args, **kwargs):
+            captured.update(kwargs.get("params", {}))
+            return {"items": []}
+
+        self.mock_analyze.execute_analyze_operation = mock_execute
+
+        result = asyncio.run(self.router.manage_applications(
+            resource_type="analyze",
+            operation="get_trace_details",
+            params={"id": "trace-1", "ingestionTime": "19 March 2026, 2:47 PM|IST"}
+        ))
+
+        self.assertEqual(result["resource_type"], "analyze")
+        self.assertIn("results", result)
+        self.assertIsInstance(captured.get("ingestionTime"), int)
 
 
 if __name__ == '__main__':

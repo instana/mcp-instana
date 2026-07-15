@@ -8,8 +8,8 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, Optional
 
-from mcp.types import ToolAnnotations
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
@@ -212,13 +212,13 @@ Examples:
                 [PARAM_FROM_TIME, PARAM_TO_TIME],
                 default_timezone="UTC"
             )
-            
+
             if "error" in conversion_result:
                 return {
                     "error": conversion_result["error"],
                     "operation": operation
                 }
-            
+
             # Update the converted values
             from_time = conversion_result["params"][PARAM_FROM_TIME]
             to_time = conversion_result["params"][PARAM_TO_TIME]

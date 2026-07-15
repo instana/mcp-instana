@@ -199,7 +199,7 @@ class TestActionCatalogPrompts(unittest.TestCase):
                 result = prompt_func()
             elif name == "get_action_details":
                 result = prompt_func(action_id="test")
-            elif name in ('get_action_types', 'get_action_tags', 'get_action_matches_by_id_and_time_window'):
+            elif name in {"get_action_types", "get_action_tags", "get_action_matches_by_id_and_time_window"}:
                 result = prompt_func()
 
             self.assertIsInstance(result, str)

@@ -141,7 +141,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
                  "\n".join([f"- {p['name']}: {p['description']}" for p in missing_params])
             }
 
-        return None   
+        return None
 
     def _execute_action_beacons_call(
         self,
@@ -174,7 +174,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
                 cursor=cursor,
                 page_size=page_size
             )
-        
+
             # Check if the response was successful
             if response.status != 200:
                 return self.handle_api_error_response(response, "get mobile app session replay action beacons", logger)
@@ -233,7 +233,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
 
             # STEP 2: Validate pagination parameters
             validation = self._validate_action_beacon_pagination_params(cursor, page_size)
-            
+
             if validation:
                 return validation
 
@@ -241,7 +241,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
             if cursor is None:
                 cursor = 0 # Set cursor to 0 to start at first beacon by default
                 logger.debug("[get_session_replay_action_beacons] Default cursor applied since cursor not provided")
-            
+
             if page_size is None:
                 page_size = 100 # Set page_size to 100 by default
                 logger.debug("[get_session_replay_action_beacons] Default page_size applied since page_size not provided")

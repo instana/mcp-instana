@@ -88,7 +88,7 @@ class TestMobileAppConfigurationPrompts(unittest.TestCase):
             if name == "get_all_mobile_apps":
                 result = prompt_func()
 
-            elif name == "get_mobile_app_by_id" or name == "get_mobile_app_geo_location_configuration" or (name in ('get_mobile_app_geo_mapping_rules', 'get_mobile_app_ip_masking_configuration')) or name == "get_all_mobile_app_source_map_upload_configurations":
+            elif name in {"get_mobile_app_by_id", "get_mobile_app_geo_location_configuration", "get_mobile_app_geo_mapping_rules", "get_mobile_app_ip_masking_configuration", "get_all_mobile_app_source_map_upload_configurations"}:
                 result = prompt_func(mobile_app_id="test")
 
             elif name == "get_mobile_app_source_map_upload_configuration_by_id":

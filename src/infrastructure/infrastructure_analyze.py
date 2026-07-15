@@ -32,7 +32,14 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, decode_response, parse_payload, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    decode_response,
+    parse_payload,
+    register_as_tool,
+    with_header_auth,
+)
+
 
 # Helper function for debug printing
 def debug_print(*args, **kwargs):
@@ -49,24 +56,24 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
     def _normalize_tag_filter_expression(self, filter_expr: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize tagFilterExpression to the correct format required by the API.
-        
+
         The Infrastructure Analyze API requires:
         1. Filters must be wrapped in an EXPRESSION envelope with elements array
         2. Value fields must use stringValue/numberValue/booleanValue (not just 'value')
-        
+
         This method handles both formats:
         - Simple TAG_FILTER format (converts to EXPRESSION)
         - Already correct EXPRESSION format (validates and fixes value fields)
-        
+
         Args:
             filter_expr: The tagFilterExpression from the payload
-            
+
         Returns:
             Normalized tagFilterExpression in correct format
         """
         if not filter_expr or not isinstance(filter_expr, dict):
             return filter_expr
-        
+
         # If it's already an EXPRESSION, validate and fix value fields in elements
         if filter_expr.get("type") == "EXPRESSION":
             if "elements" in filter_expr and isinstance(filter_expr["elements"], list):
@@ -87,7 +94,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                         fixed_elements.append(fixed_element)
                 filter_expr["elements"] = fixed_elements
             return filter_expr
-        
+
         # If it's a simple TAG_FILTER, wrap it in an EXPRESSION
         if filter_expr.get("type") == "TAG_FILTER":
             # Fix the value field
@@ -101,14 +108,14 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                     fixed_filter["numberValue"] = value
                 else:
                     fixed_filter["stringValue"] = str(value)
-            
+
             # Wrap in EXPRESSION
             return {
                 "type": "EXPRESSION",
                 "logicalOperator": "AND",
                 "elements": [fixed_filter]
             }
-        
+
         # Return as-is if we don't recognize the format
         return filter_expr
 

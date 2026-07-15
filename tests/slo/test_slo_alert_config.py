@@ -13,6 +13,8 @@ import unittest
 from functools import wraps
 from unittest.mock import MagicMock, patch
 
+from src.core.utils import parse_payload
+
 
 # Create a null handler that will discard all log messages
 class NullHandler(logging.Handler):
@@ -143,19 +145,19 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
     def test_parse_payload_dict(self):
         """Test payload parsing with dict input."""
         payload = {"name": "Test Alert"}
-        result = self.client._parse_payload(payload)
+        result = parse_payload(payload)
         self.assertEqual(result, payload)
 
     def test_parse_payload_json_string(self):
         """Test payload parsing with JSON string."""
         payload = '{"name": "Test Alert"}'
-        result = self.client._parse_payload(payload)
+        result = parse_payload(payload)
         self.assertEqual(result, {"name": "Test Alert"})
 
     def test_parse_payload_invalid_json(self):
         """Test payload parsing with invalid JSON."""
         payload = '{invalid json}'
-        result = self.client._parse_payload(payload)
+        result = parse_payload(payload)
         self.assertIn("error", result)
 
     def test_validate_alert_config_payload_missing_name(self):
@@ -485,19 +487,19 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
 
     def test_parse_payload_none(self):
         """Test payload parsing with None."""
-        result = self.client._parse_payload(None)
+        result = parse_payload(None)
         self.assertIn("error", result)
         self.assertIn("required", result["error"])
 
     def test_parse_payload_python_literal(self):
         """Test payload parsing with Python literal string."""
         payload = "{'name': 'Test Alert'}"
-        result = self.client._parse_payload(payload)
+        result = parse_payload(payload)
         self.assertEqual(result, {"name": "Test Alert"})
 
     def test_parse_payload_invalid_type(self):
         """Test payload parsing with invalid type."""
-        result = self.client._parse_payload(123)
+        result = parse_payload(123)
         self.assertIn("error", result)
 
     def test_validate_alert_config_missing_description(self):

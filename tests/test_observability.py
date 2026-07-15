@@ -150,7 +150,7 @@ class TestObservabilityModule:
 
         class FakeTraceloop:
             @staticmethod
-            def init(_app_name=None, **_kwargs):
+            def init(_app_name):
                 return None
 
         def fake_workflow(name=None):

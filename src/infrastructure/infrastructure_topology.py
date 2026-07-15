@@ -128,45 +128,45 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                 return result.to_dict()
             except Exception as e:
                 logger.error(f"to_dict() failed: {e}")
-        
+
         if isinstance(result, dict):
             return result
-        
+
         # Try manual extraction
         if hasattr(result, '__dict__'):
             return result.__dict__
-        
+
         return {"data": str(result)}
 
     def _analyze_node(self, node, plugin_counts, host_info, kubernetes_resources):
         """Analyze a single node and update counters."""
         if not isinstance(node, dict):
             return None
-        
+
         plugin = node.get('plugin', 'unknown')
         plugin_counts[plugin] = plugin_counts.get(plugin, 0) + 1
-        
+
         # Prepare node details
         node_label = str(node.get('label', 'unknown'))
         if len(node_label) > 80:
             node_label = node_label[:77] + "..."
-        
+
         node_details = {
             'plugin': plugin,
             'label': node_label,
             'id': str(node.get('id', ''))
         }
-        
+
         # Extract host information
         if plugin == 'host':
             label = str(node.get('label', 'unknown'))
             host_info[label] = str(node.get('id', ''))
-        
+
         # Group Kubernetes resources
         if plugin.startswith('kubernetes'):
             k8s_type = plugin.replace('kubernetes', '').lower()
             kubernetes_resources[k8s_type] = kubernetes_resources.get(k8s_type, 0) + 1
-        
+
         return node_details
 
     def _create_topology_summary(self, nodes, edges, sample_nodes, plugin_counts, host_info, kubernetes_resources):
@@ -174,12 +174,12 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
         sample_size = len(sample_nodes)
         total_size = len(nodes)
         scaling_factor = total_size / sample_size if sample_size > 0 else 1
-        
+
         estimated_plugin_counts = {
             plugin: int(count * scaling_factor)
             for plugin, count in plugin_counts.items()
         }
-        
+
         return {
             'totalNodes': len(nodes),
             'totalEdges': len(edges),
@@ -305,7 +305,7 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
             try:
                 response = api_client.get_topology_without_preload_content(include_data=include_data)
                 logger.debug("SDK call successful using get_topology_without_preload_content")
-                
+
                 result, error = self._parse_topology_response(response)
                 if error:
                     return error

@@ -58,9 +58,15 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
-        from src.infrastructure.infrastructure_analyze import InfrastructureAnalyzeMCPTools
-        from src.infrastructure.infrastructure_catalog import InfrastructureCatalogMCPTools
-        from src.infrastructure.infrastructure_resources import InfrastructureResourcesMCPTools
+        from src.infrastructure.infrastructure_analyze import (
+            InfrastructureAnalyzeMCPTools,
+        )
+        from src.infrastructure.infrastructure_catalog import (
+            InfrastructureCatalogMCPTools,
+        )
+        from src.infrastructure.infrastructure_resources import (
+            InfrastructureResourcesMCPTools,
+        )
 
         # Initialize the infrastructure clients
         self.infrastructure_analyze_client = InfrastructureAnalyzeMCPTools(read_token, base_url)
@@ -83,20 +89,20 @@ RECOMMENDED WORKFLOW FOR ANALYZE:
     1. FIRST: Call get_plugins to discover available entity types
        - Returns list of plugins with their IDs - these IDs are required for subsequent calls
        - Example: [{"id": "plugin_name1", ...}, {"id": "plugin_name2", ...}]
-    
+
     2. SECOND: Call get_plugin_schema with a VALID plugin ID from step 1
        - Combines get_metrics + get_tag_catalog into ONE efficient call
        - IMPORTANT: Plugin ID must be from get_plugins - invalid IDs return HTTP 400
        - Returns: {"metrics": ["memory.usage", ...], "tags": ["host.name", ...]}
-    
+
     3. THIRD: Use the discovered entity types, metrics, and tags in analyze operations
        - Build queries with proper type, metrics, and tagFilterExpression
        - The router auto-normalizes tagFilterExpression format to prevent HTTP 422 errors
-    
+
 ANALYZE (resource_type="analyze"):
     operations: get_entities, get_entity_groups
     params: {payload}
-    
+
     IMPORTANT AUTO-ROUTING: The router automatically detects the correct endpoint based on payload:
     - If payload contains "groupBy" → automatically routes to get_entity_groups endpoint
     - If payload does NOT contain "groupBy" → automatically routes to get_entities endpoint
@@ -139,7 +145,7 @@ CATALOG (resource_type="catalog"):
     get_plugins - Get all available entity types (plugins) in your Instana installation
         Returns: List of plugin IDs that can be used as entity types
         This is the FIRST step - discover what entity types are available in your environment
-    
+
     get_plugin_schema - Get complete schema (metrics + tags) for a plugin in ONE call (RECOMMENDED)
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform")
         - filter (optional): "builtin" or "custom" to filter metric types
@@ -151,13 +157,13 @@ CATALOG (resource_type="catalog"):
             "summary": {"total_metrics": 50, "total_tags": 25}
         }
         This COMBINES get_metrics and get_tag_catalog into a single call
-    
+
     get_metrics - Get infrastructure metrics catalog for a specific plugin
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform")
         - filter (optional): "builtin" or "custom" to filter metric types
         Returns: List of metric names available for the plugin
         Use returned metric names exactly in analyze operations
-    
+
     get_tag_catalog - Get valid tag names for a specific plugin
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "kubernetesPod")
         Returns: Available tag names for filtering and grouping
@@ -166,14 +172,14 @@ CATALOG (resource_type="catalog"):
 RESOURCES (resource_type="resources"):
     operations: get_snapshot, get_snapshots
     params: {snapshot_id, to_time, window_size, query, from_time, size, plugin, offline, detailed}
-    
+
     get_snapshot - Get detailed information for a specific snapshot ID
         - snapshot_id (required): The snapshot ID to retrieve details for
         - to_time (optional): End timestamp in milliseconds
         - window_size (optional): Window size in milliseconds
         Returns: Complete snapshot details including configuration, metrics, and state
         Use this when you have a specific snapshot ID and need its full details
-    
+
     get_snapshots - Search and discover multiple snapshots matching criteria
         - query (optional): Search query string to filter snapshots
         - from_time (optional): Start timestamp in milliseconds (default: 1 hour ago)
@@ -289,7 +295,7 @@ Examples:
         # If groupBy is present, use get_entity_groups, otherwise use get_entities
         has_group_by = bool(payload.get("groupBy"))
         actual_operation = "get_entity_groups" if has_group_by else "get_entities"
-        
+
         # Warn if user specified wrong operation
         if operation != actual_operation:
             logger.warning(
@@ -346,13 +352,13 @@ Examples:
         elif operation == "get_metrics":
             plugin = params.get(PARAM_PLUGIN)
             filter_type = params.get(PARAM_FILTER)
-            
+
             if not plugin:
                 return {
                     "error": "Missing required parameter 'plugin' for get_metrics operation",
                     "hint": HINT_GET_PLUGINS_FIRST
                 }
-            
+
             logger.debug(f"Routing to Infrastructure Catalog Metrics | plugin={plugin}, filter={filter_type}")
             result = await self.infrastructure_catalog_client.get_infrastructure_catalog_metrics(
                 plugin=plugin,
@@ -362,13 +368,13 @@ Examples:
 
         elif operation == "get_tag_catalog":
             plugin = params.get(PARAM_PLUGIN)
-            
+
             if not plugin:
                 return {
                     "error": "Missing required parameter 'plugin' for get_tag_catalog operation",
                     "hint": HINT_GET_PLUGINS_FIRST
                 }
-            
+
             logger.debug(f"Routing to Infrastructure Tag Catalog | plugin={plugin}")
             result = await self.infrastructure_catalog_client.get_tag_catalog(
                 plugin=plugin,
@@ -378,13 +384,13 @@ Examples:
         elif operation == "get_plugin_schema":
             plugin = params.get(PARAM_PLUGIN)
             filter_type = params.get(PARAM_FILTER)
-            
+
             if not plugin:
                 return {
                     "error": "Missing required parameter 'plugin' for get_plugin_schema operation",
                     "hint": HINT_GET_PLUGINS_FIRST
                 }
-            
+
             logger.debug(f"Routing to Infrastructure Plugin Schema | plugin={plugin}, filter={filter_type}")
             result = await self.infrastructure_catalog_client.get_plugin_schema(
                 plugin=plugin,
@@ -419,13 +425,13 @@ Examples:
             snapshot_id = params.get(PARAM_SNAPSHOT_ID)
             to_time = params.get(PARAM_TO_TIME)
             window_size = params.get(PARAM_WINDOW_SIZE)
-            
+
             if not snapshot_id:
                 return {
                     "error": "Missing required parameter 'snapshot_id' for get_snapshot operation",
                     "hint": "Provide the snapshot ID to retrieve its details"
                 }
-            
+
             logger.debug(f"Routing to Infrastructure Get Snapshot | snapshot_id={snapshot_id}")
             result = await self.infrastructure_resources_client.get_snapshot(
                 snapshot_id=snapshot_id,
@@ -442,7 +448,7 @@ Examples:
             plugin = params.get(PARAM_PLUGIN)
             offline = params.get(PARAM_OFFLINE, False)
             detailed = params.get(PARAM_DETAILED, False)
-            
+
             logger.debug(f"Routing to Infrastructure Get Snapshots | query={query}, plugin={plugin}, size={size}")
             result = await self.infrastructure_resources_client.get_snapshots(
                 query=query,

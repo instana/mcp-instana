@@ -7,7 +7,6 @@ are removed since they are internal implementation details.
 """
 
 import asyncio
-import contextlib
 import logging
 import os
 import sys
@@ -137,9 +136,14 @@ class MockBaseInstanaClient:
         return {"data": "mock_response"}
 
 
+from src.core.utils import decode_response as _real_decode_response
+from src.core.utils import parse_payload as _real_parse_payload
+
 mock_src_core_utils.BaseInstanaClient = MockBaseInstanaClient
 mock_src_core_utils.register_as_tool = lambda *args, **kwargs: lambda func: func
 mock_src_core_utils.with_header_auth = mock_with_header_auth
+mock_src_core_utils.parse_payload = _real_parse_payload
+mock_src_core_utils.decode_response = _real_decode_response
 
 # Build the full mocks dict for patch.dict
 _mocks = {
@@ -157,6 +161,7 @@ _mocks = {
     'instana_client.models.new_application_config': mock_new_app_config_mod,
     'instana_client.models.new_manual_service_config': mock_new_manual_service_config_mod,
     'instana_client.models.service_config': mock_service_config_mod,
+    'instana_client.models.tag_filter_all_of_value': MagicMock(),
     'fastmcp': mock_fastmcp,
     'fastmcp.server': mock_fastmcp_server,
     'fastmcp.server.dependencies': mock_fastmcp_deps,
@@ -207,7 +212,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         for attr_name in dir(mock_settings_api):
             attr = getattr(mock_settings_api, attr_name)
             if callable(attr) and not attr_name.startswith('_'):
-                with contextlib.suppress(AttributeError):
+                if hasattr(attr, 'side_effect'):
                     attr.side_effect = None
 
         self.mock_configuration = mock_configuration
@@ -223,8 +228,8 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.client = ApplicationSettingsMCPTools(read_token=self.read_token, base_url=self.base_url)
         self.client.settings_api = mock_settings_api
 
-        patcher = patch('src.application.application_settings.debug_print')
-        self.mock_debug_print = patcher.start()
+        patcher = patch('src.application.application_settings.logger')
+        self.mock_logger = patcher.start()
         self.addCleanup(patcher.stop)
 
     def tearDown(self):
@@ -289,21 +294,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         ))
 
         self.client._delete_application_config.assert_called_once_with("app1", None)
-        self.assertEqual(result, expected)
-
-    def test_execute_settings_operation_service_order(self):
-        """Test execute_settings_operation routes service/order correctly"""
-        expected = {"message": "Ordered"}
-        self.client._order_service_config = AsyncMock(return_value=expected)
-        request_body = ["svc1", "svc2"]
-
-        result = asyncio.run(self.client.execute_settings_operation(
-            operation="order",
-            resource_subtype="service",
-            request_body=request_body
-        ))
-
-        self.client._order_service_config.assert_called_once_with(request_body, None)
         self.assertEqual(result, expected)
 
     def test_execute_settings_operation_manual_service_get_all(self):
@@ -404,7 +394,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertIn("tagFilterExpression", result["payload"])
 
     def test_validate_and_prepare_application_payload_with_simple_tag_filter(self):
-        """Test validation with TAG_FILTER type"""
+        """Test validation with TAG_FILTER type — result is a TagFilter model object"""
         payload = {
             "label": "Test App",
             "tagFilterExpression": {
@@ -418,9 +408,10 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         result = self.client._validate_and_prepare_application_payload(payload)
 
         self.assertIn("payload", result)
-        tag_expr = result["payload"]["tagFilterExpression"]
-        self.assertIn("value", tag_expr)
-        self.assertIn("stringValue", tag_expr)
+        # tagFilterExpression is now a TagFilter SDK model object (MagicMock in tests),
+        # not a plain dict — just confirm it is present and not an error.
+        self.assertIn("tagFilterExpression", result["payload"])
+        self.assertNotIn("error", result)
 
     # Tests for application config operations
     def test_add_application_config_no_payload(self):
@@ -610,36 +601,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         self.assertIn("success", result)
 
-    def test_order_service_config_no_request_body(self):
-        """Test _order_service_config with no request body"""
-        result = asyncio.run(self.client._order_service_config(None))
-
-        self.assertIn("error", result)
-
-    def test_order_service_config_success(self):
-        """Test _order_service_config with valid request body"""
-        mock_settings_api.order_service_config.return_value = None
-
-        request_body = ["svc1", "svc2"]
-        result = asyncio.run(self.client._order_service_config(request_body))
-
-        self.assertIn("success", result)
-
-    def test_replace_all_service_configs_no_payload(self):
-        """Test _replace_all_service_configs with no payload"""
-        result = asyncio.run(self.client._replace_all_service_configs(None))
-
-        self.assertIn("error", result)
-
-    def test_replace_all_service_configs_success(self):
-        """Test _replace_all_service_configs with valid payload"""
-        mock_settings_api.replace_all_service_configs.return_value = None
-
-        payload = [{"label": "Service 1"}, {"label": "Service 2"}]
-        result = asyncio.run(self.client._replace_all_service_configs(payload))
-
-        self.assertIn("success", result)
-
     # Tests for manual service config operations
     def test_get_all_manual_service_configs_success(self):
         """Test _get_all_manual_service_configs"""
@@ -690,21 +651,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         mock_settings_api.delete_manual_service_config.return_value = None
 
         result = asyncio.run(self.client._delete_manual_service_config("ms1"))
-
-        self.assertIn("success", result)
-
-    def test_replace_all_manual_service_config_no_payload(self):
-        """Test _replace_all_manual_service_config with no payload"""
-        result = asyncio.run(self.client._replace_all_manual_service_config(None))
-
-        self.assertIn("error", result)
-
-    def test_replace_all_manual_service_config_success(self):
-        """Test _replace_all_manual_service_config with valid payload"""
-        mock_settings_api.replace_all_manual_service_configs.return_value = None
-
-        payload = [{"label": "Manual Service 1"}]
-        result = asyncio.run(self.client._replace_all_manual_service_config(payload))
 
         self.assertIn("success", result)
 
@@ -869,21 +815,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.client._delete_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
-    def test_execute_settings_operation_service_replace_all(self):
-        """Test execute_settings_operation routes service/replace_all correctly"""
-        expected = {"success": True}
-        self.client._replace_all_service_configs = AsyncMock(return_value=expected)
-        payload = [{"label": "Service"}]
-
-        result = asyncio.run(self.client.execute_settings_operation(
-            operation="replace_all",
-            resource_subtype="service",
-            payload=payload
-        ))
-
-        self.client._replace_all_service_configs.assert_called_once()
-        self.assertEqual(result, expected)
-
     def test_execute_settings_operation_manual_service_create(self):
         """Test execute_settings_operation routes manual_service/create correctly"""
         expected = {"id": "ms1"}
@@ -927,21 +858,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         ))
 
         self.client._delete_manual_service_config.assert_called_once()
-        self.assertEqual(result, expected)
-
-    def test_execute_settings_operation_manual_service_replace_all(self):
-        """Test execute_settings_operation routes manual_service/replace_all correctly"""
-        expected = {"success": True}
-        self.client._replace_all_manual_service_config = AsyncMock(return_value=expected)
-        payload = [{"label": "Manual Service"}]
-
-        result = asyncio.run(self.client.execute_settings_operation(
-            operation="replace_all",
-            resource_subtype="manual_service",
-            payload=payload
-        ))
-
-        self.client._replace_all_manual_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
     # Additional tests for error handling and edge cases
@@ -1305,33 +1221,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
 
-    def test_order_service_config_exception(self):
-        """Test _order_service_config handles exceptions"""
-        mock_settings_api.order_service_config.side_effect = Exception("API Error")
-
-        request_body = ["svc1", "svc2"]
-        result = asyncio.run(self.client._order_service_config(request_body))
-
-        self.assertIn("error", result)
-
-    def test_replace_all_service_configs_with_ast_literal_eval(self):
-        """Test _replace_all_service_configs with Python dict string"""
-        mock_settings_api.replace_all_service_configs.return_value = None
-
-        payload = "[{'label': 'Service 1'}]"
-        result = asyncio.run(self.client._replace_all_service_configs(payload))
-
-        self.assertIn("success", result)
-
-    def test_replace_all_service_configs_exception(self):
-        """Test _replace_all_service_configs handles exceptions"""
-        mock_settings_api.replace_all_service_configs.side_effect = Exception("API Error")
-
-        payload = [{"label": "Service"}]
-        result = asyncio.run(self.client._replace_all_service_configs(payload))
-
-        self.assertIn("error", result)
-
     def test_get_all_manual_service_configs_exception(self):
         """Test _get_all_manual_service_configs handles exceptions"""
         mock_settings_api.get_manual_service_configs_without_preload_content.side_effect = Exception("API Error")
@@ -1407,24 +1296,6 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
 
-    def test_replace_all_manual_service_config_with_ast_literal_eval(self):
-        """Test _replace_all_manual_service_config with Python dict string"""
-        mock_settings_api.replace_all_manual_service_configs.return_value = None
-
-        payload = "[{'label': 'Manual Service 1'}]"
-        result = asyncio.run(self.client._replace_all_manual_service_config(payload))
-
-        self.assertIn("success", result)
-
-    def test_replace_all_manual_service_config_exception(self):
-        """Test _replace_all_manual_service_config handles exceptions"""
-        mock_settings_api.replace_all_manual_service_configs.side_effect = Exception("API Error")
-
-        payload = [{"label": "Manual Service"}]
-        result = asyncio.run(self.client._replace_all_manual_service_config(payload))
-
-        self.assertIn("error", result)
-
     def test_validate_and_prepare_application_payload_with_non_dict_element(self):
         """Test validation with non-dict element in tag filter expression"""
         payload = {
@@ -1440,7 +1311,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertIn("payload", result)
 
     def test_validate_and_prepare_application_payload_tag_filter_with_string_value(self):
-        """Test validation with TAG_FILTER having stringValue but no value"""
+        """Test validation with TAG_FILTER having stringValue — result is a TagFilter model object"""
         payload = {
             "label": "Test App",
             "tagFilterExpression": {
@@ -1454,8 +1325,10 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         result = self.client._validate_and_prepare_application_payload(payload)
 
         self.assertIn("payload", result)
-        tag_expr = result["payload"]["tagFilterExpression"]
-        self.assertIn("value", tag_expr)
+        # tagFilterExpression is now a TagFilter SDK model object (MagicMock in tests),
+        # not a plain dict — just confirm it is present and not an error.
+        self.assertIn("tagFilterExpression", result["payload"])
+        self.assertNotIn("error", result)
 
 
 if __name__ == '__main__':

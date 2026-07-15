@@ -30,25 +30,10 @@ class ApplicationAnalyzePrompts:
         - Ingestion time: {ingestion_time if ingestion_time is not None else 'None'}
         """
 
-    @auto_register_prompt
-    @staticmethod
-    def get_trace_groups(payload: Optional[dict] = None) -> str:
-        """Retrieve grouped trace metrics from the application analyze API.
-
-        CRITICAL:
-        - payload.group and payload.metrics are required for group queries.
-        - Use trace metrics (for example: "traces"), not call metrics.
-        """
-        return f"""
-        Get grouped application traces with:
-        - Payload: {payload if payload is not None else 'None'}
-        """
-
     @classmethod
     def get_prompts(cls):
         """Return all prompts defined in this class"""
         return [
             ("get_all_traces", cls.get_all_traces),
             ("get_trace_details", cls.get_trace_details),
-            ("get_trace_groups", cls.get_trace_groups),
         ]

@@ -393,7 +393,7 @@ class TestCustomDashboardPrompts(unittest.TestCase):
                 result = prompt_func(title="Test")
             elif name == "get_dashboard_list":
                 result = prompt_func()
-            elif name == "get_dashboard_details" or name == "update_dashboard" or (name in ('delete_dashboard', 'get_shareable_users')) or name == "get_shareable_api_tokens":
+            elif name in {"get_dashboard_details", "update_dashboard", "delete_dashboard", "get_shareable_users", "get_shareable_api_tokens"}:
                 result = prompt_func(dashboard_id="test")
             elif name == "create_metric_widget":
                 result = prompt_func(title="Test", metric_name="test.metric")

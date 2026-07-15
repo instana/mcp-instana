@@ -173,12 +173,13 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
             # Metric compatibility validation (last pre-flight step before query build)
             if user_provided_metrics:
+                from instana_client.api.website_catalog_api import WebsiteCatalogApi
+
                 from src.core.metric_validation import (
                     fetch_metric_catalog_internal,
                     validate_beacon_type_known,
                     validate_metric_compatibility,
                 )
-                from instana_client.api.website_catalog_api import WebsiteCatalogApi
                 from src.core.utils import WEBSITE_BEACON_TYPE_MAP
 
                 beacon_type_error = validate_beacon_type_known(

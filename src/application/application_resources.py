@@ -4,8 +4,8 @@ Application Resources MCP Tools Module
 This module provides application resources-specific MCP tools for Instana monitoring.
 """
 
-import logging
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -180,7 +180,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """
         Get endpoints for an application service.
-        
+
         Returns paginated results automatically from the API.
         """
         try:
@@ -223,11 +223,11 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         """Sanitize technologies field in items to ensure it's always a list."""
         if not isinstance(result_dict, dict) or 'items' not in result_dict:
             return
-        
+
         items = result_dict.get('items', [])
         if not isinstance(items, list):
             return
-        
+
         for item in items:
             if isinstance(item, dict) and item.get('technologies') is None:
                 item['technologies'] = []
@@ -245,7 +245,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """
         Get services for an application perspective.
-        
+
         Returns paginated results automatically from the API.
         """
         try:
@@ -288,7 +288,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """
         Get application perspectives.
-        
+
         Returns paginated results automatically from the API.
         """
         try:
@@ -323,7 +323,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """
         Get services for application monitoring.
-        
+
         Returns paginated results automatically from the API.
         """
         try:
