@@ -796,7 +796,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             # Create an ApplicationAlertConfig object from the request body
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig.model_validate(request_body)
+                config_object = ApplicationAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")
@@ -951,7 +951,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             # Create an ApplicationAlertConfig object from the request body
             try:
                 logger.debug(f"Creating ApplicationAlertConfig with params: {request_body}")
-                config_object = ApplicationAlertConfig.model_validate(request_body)
+                config_object = ApplicationAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")

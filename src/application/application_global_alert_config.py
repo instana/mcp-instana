@@ -744,7 +744,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             # Create an GlobalApplicationsAlertConfig object from the request body
             try:
                 logger.debug(f"Creating GlobalApplicationsAlertConfig with params: {request_body}")
-                config_object = GlobalApplicationsAlertConfig.model_validate(request_body)
+                config_object = GlobalApplicationsAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating GlobalApplicationsAlertConfig: {e}")
@@ -904,7 +904,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             # Create an GlobalApplicationsAlertConfig object from the request body
             try:
                 logger.debug(f"Creating GlobalApplicationsAlertConfig with params: {request_body}")
-                config_object = GlobalApplicationsAlertConfig.model_validate(request_body)
+                config_object = GlobalApplicationsAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
                 logger.debug(f"Error creating ApplicationAlertConfig: {e}")

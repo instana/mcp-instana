@@ -98,6 +98,9 @@ sys.modules['instana_client.api.website_catalog_api'] = MagicMock()
 # Patch the decorator and base class in the real src.core.utils module
 from src.core import utils as real_utils
 
+_orig_with_header_auth = real_utils.with_header_auth
+_orig_base_instana_client = real_utils.BaseInstanaClient
+
 real_utils.with_header_auth = mock_with_header_auth
 real_utils.BaseInstanaClient = MockBaseInstanaClient
 
@@ -110,6 +113,10 @@ from src.website.website_analyze import (
     WebsiteAnalyzeMCPTools,
     clean_nan_values,
 )
+
+# Restore real utils so subsequent test modules are not affected
+real_utils.with_header_auth = _orig_with_header_auth
+real_utils.BaseInstanaClient = _orig_base_instana_client
 
 VALID_WEBSITE_CATALOG = [
     {

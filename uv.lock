@@ -1599,7 +1599,7 @@ wheels = [
 
 [[package]]
 name = "mcp-instana"
-version = "1.0.0"
+version = "0.9.9"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
