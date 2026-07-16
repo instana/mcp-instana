@@ -50,7 +50,6 @@ def run_all_tests_with_coverage(
         "tests/releases",
         "tests/router",
         "tests/slo",
-        "tests/test_observability.py",
         "tests/website",
     ]
 

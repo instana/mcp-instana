@@ -759,8 +759,7 @@ class TestMCPServerIntegrationE2E:
                                 with suppress(SystemExit):
                                     main()
 
-                                # Combined-suite execution currently exits through the generic error path
-                                mock_exit.assert_called_with(1)
+                                mock_exit.assert_called_with(0)
 
     @pytest.mark.asyncio
     @pytest.mark.mocked

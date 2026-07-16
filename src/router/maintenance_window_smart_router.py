@@ -225,136 +225,113 @@ Examples:
         self,
         resource_type: Optional[str] = "window",
         operation: Optional[str] = "list_scheduled",
-        # ALL PARAMETERS ARE FLAT STRINGS for WatsonX Orchestrate compatibility
-        application_id: Optional[str] = None,
-        application_ids: Optional[str] = None,
-        imap_code: Optional[str] = None,
-        imap_codes: Optional[str] = None,
-        window_id: Optional[str] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        duration_minutes: Optional[str] = None,
-        duration_hours: Optional[str] = None,
-        duration_days: Optional[str] = None,
-        reason: Optional[str] = None,
-        template: Optional[str] = None,
-        change_request_id: Optional[str] = None,
-        affected_services: Optional[str] = None,
-        notification_channels: Optional[str] = None,
-        completion_notes: Optional[str] = None,
-        use_tag_filter_expression: Optional[str] = None,
-        tag_name: Optional[str] = None,
-        rrule: Optional[str] = None,
-        until_date: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
         ctx=None
     ) -> Dict[str, Any]:
         """Unified Instana maintenance window manager for lifecycle management."""
         try:
-            # Log all incoming parameters for debugging
-            logger.info("=== Maintenance Window Router Called ===")
-            logger.info(f"resource_type={resource_type}, operation={operation}")
-            logger.info(f"window_id={window_id}")
-            logger.info(f"imap_code={imap_code}, application_id={application_id}")
-            logger.info(f"start_time={start_time}, duration_minutes={duration_minutes}")
-            logger.info(f"duration_hours={duration_hours}, duration_days={duration_days}")
-            logger.info(f"template={template}, reason={reason}")
+            # Initialize params if not provided
+            if params is None:
+                params = {}
 
             # Apply defaults for optional params (WatsonX may omit them entirely)
-            if not resource_type:
-                resource_type = RESOURCE_TYPE_WINDOW
-            if not operation:
-                operation = OP_LIST_SCHEDULED
+            resource_type = resource_type or RESOURCE_TYPE_WINDOW
+            operation = operation or OP_LIST_SCHEDULED
+
+            # Log all incoming parameters for debugging
+            self._log_incoming_request(resource_type, operation, params)
 
             logger.info(f"After defaults: resource_type={resource_type}, operation={operation}")
 
-            # Build params dict from flat string parameters
-            params = {}
-            if application_id is not None:
-                params[PARAM_APPLICATION_ID] = application_id
-            if application_ids is not None:
-                params[PARAM_APPLICATION_IDS] = application_ids
-            if imap_code is not None:
-                params[PARAM_IMAP_CODE] = imap_code
-            if imap_codes is not None:
-                params[PARAM_IMAP_CODES] = imap_codes
-            if window_id is not None:
-                params[PARAM_WINDOW_ID] = window_id
-            if start_time is not None:
-                params[PARAM_START_TIME] = start_time
-            if end_time is not None:
-                params[PARAM_END_TIME] = end_time
-            if duration_minutes is not None:
-                params[PARAM_DURATION_MINUTES] = duration_minutes
-            if duration_hours is not None:
-                params[PARAM_DURATION_HOURS] = duration_hours
-            if duration_days is not None:
-                params[PARAM_DURATION_DAYS] = duration_days
-            if reason is not None:
-                params[PARAM_REASON] = reason
-            if template is not None:
-                params[PARAM_TEMPLATE] = template
-            if change_request_id is not None:
-                params[PARAM_CHANGE_REQUEST_ID] = change_request_id
-            if affected_services is not None:
-                params[PARAM_AFFECTED_SERVICES] = affected_services
-            if notification_channels is not None:
-                params[PARAM_NOTIFICATION_CHANNELS] = notification_channels
-            if completion_notes is not None:
-                params[PARAM_COMPLETION_NOTES] = completion_notes
-            if use_tag_filter_expression is not None:
-                params[PARAM_USE_TAG_FILTER_EXPRESSION] = use_tag_filter_expression
-            if tag_name is not None:
-                params[PARAM_TAG_NAME] = tag_name
-            if rrule is not None:
-                params[PARAM_RRULE] = rrule
-            if until_date is not None:
-                params[PARAM_UNTIL_DATE] = until_date
-
-            # Normalise resource_type — accept common aliases WatsonX may produce
-            # from cached or inferred tool schemas
-            WINDOW_ALIASES = {"window", "maintenance", "maintenance_window", "windows"}
-            TEMPLATES_ALIASES = {"templates", "template"}
-
-            if resource_type in WINDOW_ALIASES:
-                resource_type = RESOURCE_TYPE_WINDOW
-            elif resource_type in TEMPLATES_ALIASES:
-                resource_type = RESOURCE_TYPE_TEMPLATES
-
-            # Validate resource_type
-            if resource_type not in VALID_RESOURCE_TYPES:
-                return {
-                    "error": f"Invalid resource_type '{resource_type}'. Must be one of: {VALID_RESOURCE_TYPES}",
-                    "suggestion": "Use 'window' for maintenance window lifecycle operations, or 'templates' to retrieve available templates"
-                }
+            # Normalise and validate resource_type
+            resource_type = self._normalize_resource_type(resource_type)
+            validation_error = self._validate_resource_type(resource_type)
+            if validation_error:
+                return validation_error
 
             # Route to the appropriate resource handler
-            if resource_type == RESOURCE_TYPE_WINDOW:
-                return await self._handle_window(operation, params, ctx)
-            elif resource_type == RESOURCE_TYPE_TEMPLATES:
-                return await self._handle_templates(operation, params, ctx)
-            else:
-                return {
-                    "error": f"Unsupported resource_type: {resource_type}",
-                    "supported_types": VALID_RESOURCE_TYPES
-                }
+            return await self._route_to_handler(resource_type, operation, params, ctx)
 
         except Exception as e:
-            logger.error("=== ERROR in Maintenance Window Router ===")
-            logger.error(f"Error: {e}", exc_info=True)
-            logger.error(f"resource_type={resource_type}, operation={operation}")
-            logger.error(f"imap_code={imap_code}, application_id={application_id}")
+            return self._handle_error(e, resource_type, operation, params or {})
+
+    def _log_incoming_request(
+        self,
+        resource_type: str,
+        operation: str,
+        params: Dict[str, Any]
+    ) -> None:
+        """Log incoming request parameters for debugging."""
+        logger.info("=== Maintenance Window Router Called ===")
+        logger.info(f"resource_type={resource_type}, operation={operation}")
+        logger.info(f"window_id={params.get(PARAM_WINDOW_ID)}")
+        logger.info(f"imap_code={params.get(PARAM_IMAP_CODE)}, application_id={params.get(PARAM_APPLICATION_ID)}")
+        logger.info(f"start_time={params.get(PARAM_START_TIME)}, duration_minutes={params.get(PARAM_DURATION_MINUTES)}")
+        logger.info(f"duration_hours={params.get(PARAM_DURATION_HOURS)}, duration_days={params.get(PARAM_DURATION_DAYS)}")
+        logger.info(f"template={params.get(PARAM_TEMPLATE)}, reason={params.get(PARAM_REASON)}")
+
+    def _normalize_resource_type(self, resource_type: str) -> str:
+        """Normalize resource_type to handle common aliases."""
+        WINDOW_ALIASES = {"window", "maintenance", "maintenance_window", "windows"}
+        TEMPLATES_ALIASES = {"templates", "template"}
+
+        if resource_type in WINDOW_ALIASES:
+            return RESOURCE_TYPE_WINDOW
+        elif resource_type in TEMPLATES_ALIASES:
+            return RESOURCE_TYPE_TEMPLATES
+        return resource_type
+
+    def _validate_resource_type(self, resource_type: str) -> Optional[Dict[str, Any]]:
+        """Validate resource_type and return error if invalid."""
+        if resource_type not in VALID_RESOURCE_TYPES:
             return {
-                "error": f"Maintenance window router error: {e!s}",
-                "error_type": type(e).__name__,
-                "resource_type": resource_type,
-                "operation": operation,
-                "parameters": {
-                    "imap_code": imap_code,
-                    "application_id": application_id,
-                    "start_time": start_time,
-                    "duration_minutes": duration_minutes
-                }
+                "error": f"Invalid resource_type '{resource_type}'. Must be one of: {VALID_RESOURCE_TYPES}",
+                "suggestion": "Use 'window' for maintenance window lifecycle operations, or 'templates' to retrieve available templates"
             }
+        return None
+
+    async def _route_to_handler(
+        self,
+        resource_type: str,
+        operation: str,
+        params: Dict[str, Any],
+        ctx
+    ) -> Dict[str, Any]:
+        """Route request to appropriate resource handler."""
+        if resource_type == RESOURCE_TYPE_WINDOW:
+            return await self._handle_window(operation, params, ctx)
+        elif resource_type == RESOURCE_TYPE_TEMPLATES:
+            return await self._handle_templates(operation, ctx)
+        else:
+            return {
+                "error": f"Unsupported resource_type: {resource_type}",
+                "supported_types": VALID_RESOURCE_TYPES
+            }
+
+    def _handle_error(
+        self,
+        error: Exception,
+        resource_type: str,
+        operation: str,
+        params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Handle and log errors."""
+        logger.error("=== ERROR in Maintenance Window Router ===")
+        logger.error(f"Error: {error}", exc_info=True)
+        logger.error(f"resource_type={resource_type}, operation={operation}")
+        logger.error(f"imap_code={params.get(PARAM_IMAP_CODE)}, application_id={params.get(PARAM_APPLICATION_ID)}")
+        return {
+            "error": f"Maintenance window router error: {error!s}",
+            "error_type": type(error).__name__,
+            "resource_type": resource_type,
+            "operation": operation,
+            "parameters": {
+                "imap_code": params.get(PARAM_IMAP_CODE),
+                "application_id": params.get(PARAM_APPLICATION_ID),
+                "start_time": params.get(PARAM_START_TIME),
+                "duration_minutes": params.get(PARAM_DURATION_MINUTES)
+            }
+        }
 
     async def _handle_window(
         self,
@@ -385,28 +362,33 @@ Examples:
 
         logger.info(f"Routing to Maintenance Window client for operation: {operation}")
 
+        # Build the params dictionary with parsed values
+        operation_params = {
+            PARAM_APPLICATION_ID: params.get(PARAM_APPLICATION_ID),
+            PARAM_APPLICATION_IDS: application_ids,
+            PARAM_IMAP_CODE: params.get(PARAM_IMAP_CODE),
+            PARAM_IMAP_CODES: imap_codes,
+            PARAM_WINDOW_ID: params.get(PARAM_WINDOW_ID),
+            PARAM_START_TIME: params.get(PARAM_START_TIME),
+            PARAM_END_TIME: params.get(PARAM_END_TIME),
+            PARAM_DURATION_MINUTES: params.get(PARAM_DURATION_MINUTES),
+            PARAM_DURATION_HOURS: params.get(PARAM_DURATION_HOURS),
+            PARAM_DURATION_DAYS: params.get(PARAM_DURATION_DAYS),
+            PARAM_REASON: params.get(PARAM_REASON),
+            PARAM_TEMPLATE: params.get(PARAM_TEMPLATE),
+            PARAM_CHANGE_REQUEST_ID: params.get(PARAM_CHANGE_REQUEST_ID),
+            PARAM_AFFECTED_SERVICES: affected_services,
+            PARAM_NOTIFICATION_CHANNELS: notification_channels,
+            PARAM_COMPLETION_NOTES: params.get(PARAM_COMPLETION_NOTES),
+            PARAM_USE_TAG_FILTER_EXPRESSION: use_tag_filter,
+            PARAM_TAG_NAME: params.get(PARAM_TAG_NAME),
+            PARAM_RRULE: params.get(PARAM_RRULE),
+            PARAM_UNTIL_DATE: params.get(PARAM_UNTIL_DATE),
+        }
+
         result = await self.maintenance_window_client.execute_maintenance_operation(
             operation=operation,
-            application_id=params.get(PARAM_APPLICATION_ID),
-            application_ids=application_ids,
-            imap_code=params.get(PARAM_IMAP_CODE),
-            imap_codes=imap_codes,
-            window_id=params.get(PARAM_WINDOW_ID),
-            start_time=params.get(PARAM_START_TIME),
-            end_time=params.get(PARAM_END_TIME),
-            duration_minutes=params.get(PARAM_DURATION_MINUTES),
-            duration_hours=params.get(PARAM_DURATION_HOURS),
-            duration_days=params.get(PARAM_DURATION_DAYS),
-            reason=params.get(PARAM_REASON),
-            template=params.get(PARAM_TEMPLATE),
-            change_request_id=params.get(PARAM_CHANGE_REQUEST_ID),
-            affected_services=affected_services,
-            notification_channels=notification_channels,
-            completion_notes=params.get(PARAM_COMPLETION_NOTES),
-            use_tag_filter_expression=use_tag_filter,
-            tag_name=params.get(PARAM_TAG_NAME),
-            rrule=params.get(PARAM_RRULE),
-            until_date=params.get(PARAM_UNTIL_DATE),
+            params=operation_params,
             ctx=ctx
         )
 
@@ -419,7 +401,6 @@ Examples:
     async def _handle_templates(
         self,
         operation: str,
-        params: Dict[str, Any],
         ctx
     ) -> Dict[str, Any]:
         """Handle maintenance window template retrieval."""
@@ -434,6 +415,7 @@ Examples:
 
         result = await self.maintenance_window_client.execute_maintenance_operation(
             operation="get_templates",
+            params={},
             ctx=ctx
         )
 
@@ -465,7 +447,7 @@ Examples:
         if value_str.startswith("["):
             try:
                 return json.loads(value_str)
-            except (json.JSONDecodeError, ValueError):
+            except json.JSONDecodeError:
                 pass
         # Fall back to comma-separated
         return [item.strip() for item in value_str.split(",") if item.strip()]

@@ -161,7 +161,7 @@ CATALOG (resource_type="catalog"):
         Valid data_source: "CALLS", "TRACES"
 
 ANALYZE (resource_type="analyze"):
-    operations: get_all_traces, get_trace_details
+    operations: get_all_traces, get_trace_details, get_trace_groups
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
         - to: Unix timestamp in milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
@@ -174,6 +174,16 @@ ANALYZE (resource_type="analyze"):
 
     get_trace_details - params: {id, retrievalSize, offset, ingestionTime}
         Returns: items, itemCount, canLoadMore, cursor for pagination
+
+    get_trace_groups - params: {payload}
+        payload: {group, metrics, timeFrame, tagFilterExpression, pagination, order, includeInternal, includeSynthetic}
+        NOTE: 'group' and 'metrics' are mandatory payload fields.
+        The 'group' object must include 'groupbyTag' and 'groupbyTagEntity'.
+        Supported groupbyTag values are 'trace.endpoint.name' and 'trace.service.name'.
+        Allowed groupbyTagEntity values are 'NOT_APPLICABLE', 'DESTINATION', and 'SOURCE'.
+
+        CRITICAL: The "calls" metric is NOT supported for trace operations. Use "traces" or other trace-specific metrics.
+        Use get_metric_catalog first to look up valid metric names and aggregations as described in the critical workflow.
 
 Args:
     resource_type: "metrics", "alert_config", "global_alert_config", "settings", "catalog", "resources", or "analyze"
@@ -231,7 +241,8 @@ Examples:
 
     # ANALYZE operations
     resource_type="analyze", operation="get_all_traces", params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "includeInternal": False, "includeSynthetic": False, "pagination": {"retrievalSize": 200}}}
-    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}"""
+    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}
+    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"}, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}"""
     )
     async def manage_applications(
         self,
@@ -645,7 +656,7 @@ Examples:
         self, operation: str, params: Dict[str, Any], ctx
     ) -> Dict[str, Any]:
         """Handle Application Analyze operations."""
-        valid_operations = ["get_all_traces", "get_trace_details"]
+        valid_operations = ["get_all_traces", "get_trace_details", "get_trace_groups"]
 
         if operation not in valid_operations:
             return {

@@ -1219,7 +1219,7 @@ wheels = [
 
 [[package]]
 name = "instana-client"
-version = "1.0.8"
+version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -1227,9 +1227,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/77/e15fef28ddb9f4bc04f58f343e47e48a0dcef7869a0f59d9dfffcd2e01a2/instana_client-1.0.8.tar.gz", hash = "sha256:d58b429c6610e2e477fe31d5fe06475310f1212029450557e3dd396c62b4753f", size = 581489, upload-time = "2026-05-21T12:11:34.554Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/33/d0850d1878f4bea2b126a62ecf42b7ecf6d7e0613e41e9b3451a82c54bc6/instana_client-1.0.9.tar.gz", hash = "sha256:5b9413af60e6806e9206eb0c25f4e2de4646cb2e0370c8fc9ec1d2fba59d9bc9", size = 588376, upload-time = "2026-07-07T14:45:36.883Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/88/fc2dfb511b2ee7cf2303a8dc7856f972b8f40152e5d384be1d9e085f2c0f/instana_client-1.0.8-py3-none-any.whl", hash = "sha256:1899e6c9b7bca0ca94c889a148056cf683581bcc54fa3c826dd1164a22a6761f", size = 1247086, upload-time = "2026-05-21T12:11:32.467Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/3e/747d1d74260b838b9ea1e791027c15fb2ed48a0e1bb071c14a9b92d1d488/instana_client-1.0.9-py3-none-any.whl", hash = "sha256:4514ef0ca3c60b9c8ad158183bd2390c22f5251a97255f46c7bc7a8d045a1369", size = 1257956, upload-time = "2026-07-07T14:45:35.262Z" },
 ]
 
 [[package]]
@@ -1599,7 +1599,7 @@ wheels = [
 
 [[package]]
 name = "mcp-instana"
-version = "0.9.9"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -1628,7 +1628,7 @@ dev = [
 requires-dist = [
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.10.1" },
     { name = "fastmcp", specifier = "==3.3.0" },
-    { name = "instana-client", specifier = "==1.0.8" },
+    { name = "instana-client", specifier = "==1.0.9" },
     { name = "lazy-imports" },
     { name = "mcp" },
     { name = "pydantic", specifier = "==2.11.7" },

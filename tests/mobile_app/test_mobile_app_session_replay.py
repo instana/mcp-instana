@@ -53,6 +53,7 @@ class MockResponse:
         self.data = payload
         self.headers = headers or {}
         self.status = status
+        self.status_code = status
 
 class TestMobileAppSessionReplayMCPTools(unittest.IsolatedAsyncioTestCase):
     """Test MobileAppSessionReplayMCPTools"""
@@ -237,6 +238,7 @@ class TestMobileAppSessionReplayMCPTools(unittest.IsolatedAsyncioTestCase):
             {"Content-Type": "application/json"},
         )
         self.mock_api.get_action_beacons_without_preload_content.return_value.status = 400
+        self.mock_api.get_action_beacons_without_preload_content.return_value.status_code = 400
 
         result = await self.client.get_session_replay_action_beacons(
             mobile_app_id="test-mobile-app-id",

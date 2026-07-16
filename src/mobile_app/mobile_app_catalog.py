@@ -70,7 +70,18 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
 
             # Check if the response was successful
             if response.status != 200:
-                return self.handle_api_error_response(response, "get mobile app tag catalog", logger)
+                error_message = f"Failed to get mobile app tag catalog: HTTP {response.status}"
+                logger.error(f"[get_mobile_app_tag_catalog] {error_message}")
+                try:
+                    error_body = decode_response(response)
+                    logger.error(f"[get_mobile_app_tag_catalog] API Error Response: {error_body}")
+                    return {
+                        "error": error_message,
+                        "details": error_body,
+                        "status_code": response.status,
+                    }
+                except Exception:
+                    return {"error": error_message, "status_code": response.status}
 
             # Read and parse the response content
             response_text = decode_response(response)

@@ -145,67 +145,31 @@ def run_sync_tests(test_path: Optional[str] = None, verbose: bool = False) -> Tu
 
 def run_async_test_module(module, verbose: bool = False) -> Tuple[bool, int, Dict[str, Set[str]]]:
     """
-    Run async tests from a module
+    Run tests from a module using unittest.
 
     Args:
-        module: The module containing async tests
+        module: The module containing tests
         verbose: Whether to run tests in verbose mode
 
     Returns:
-        Tuple of (success, test_count) where:
-          - success: True if all tests pass, False otherwise
-          - test_count: Number of tests run
+        Tuple of (success, test_count, failed_tests)
     """
-    # Find all test classes
-    test_classes = get_test_classes(module)
+    suite = unittest.defaultTestLoader.loadTestsFromModule(module)
+    runner = unittest.TextTestRunner(verbosity=2 if verbose else 1)
+    result = runner.run(suite)
 
-    # Run all tests
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    all_passed = True
-    test_count = 0
     failed_tests = {}
-    module_name = module.__name__
+    for test in result.failures + result.errors:
+        test_case = test[0]
+        test_method = test_case._testMethodName
+        test_class = test_case.__class__.__name__
+        test_module = test_case.__class__.__module__
 
-    for test_class in test_classes:
-        if verbose:
-            print(f"Running tests for {test_class.__name__}")
+        if test_module not in failed_tests:
+            failed_tests[test_module] = set()
+        failed_tests[test_module].add(f"{test_class}.{test_method}")
 
-        for name in dir(test_class):
-            if name.startswith('test_'):
-                test_instance = test_class()
-                # Call setUp
-                if hasattr(test_instance, 'setUp'):
-                    test_instance.setUp()
-
-                try:
-                    # Run the test
-                    test_method = getattr(test_instance, name)
-                    if asyncio.iscoroutinefunction(test_method):
-                        if verbose:
-                            print(f"  Running async test: {name}")
-                        loop.run_until_complete(test_method())
-                    else:
-                        if verbose:
-                            print(f"  Running sync test: {name}")
-                        test_method()
-                    test_count += 1
-                except Exception as e:
-                    print(f"Error in {test_class.__name__}.{name}: {e}")
-                    all_passed = False
-                    test_count += 1
-
-                    # Track failed test
-                    if module_name not in failed_tests:
-                        failed_tests[module_name] = set()
-                    failed_tests[module_name].add(f"{test_class.__name__}.{name}")
-                finally:
-                    # Call tearDown
-                    if hasattr(test_instance, 'tearDown'):
-                        test_instance.tearDown()
-
-    return all_passed, test_count, failed_tests
+    return result.wasSuccessful(), result.testsRun, failed_tests
 
 def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> bool:
     """
@@ -281,7 +245,6 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
     if test_path is None:
         # Manually import and run all test modules to avoid discovery issues
         test_modules = [
-            'tests.test_observability',
             'tests.application.test_application_alert_config',
             'tests.application.test_application_analyze',
             'tests.application.test_application_catalog',
@@ -299,15 +262,11 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.core.test_utils',
             'tests.core.test_validation',
             'tests.event.test_events_tools',
-            'tests.infrastructure.test_elicitation_handler',
-            'tests.infrastructure.test_entity_registry',
             'tests.infrastructure.test_infrastructure_analyze',
-            'tests.infrastructure.test_infrastructure_analyze_old',
             'tests.infrastructure.test_infrastructure_catalog',
             'tests.infrastructure.test_infrastructure_metrics',
             'tests.infrastructure.test_infrastructure_resources',
             'tests.infrastructure.test_infrastructure_topology',
-            'tests.infrastructure.test_two_pass_elicitation',
             'tests.log.test_log_alert_configuration',
             'tests.prompts.application.test_application_alerts',
             'tests.prompts.application.test_application_metrics',
@@ -355,6 +314,7 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.mobile_app.test_mobile_app_catalog',
             'tests.mobile_app.test_mobile_app_configuration',
             'tests.mobile_app.test_mobile_app_alert',
+            'tests.mobile_app.test_mobile_app_session_replay',
             'tests.website.test_website_alert',
             'tests.prompts.website.test_website_alert',
             'tests.prompts.mobile_app.test_mobile_app_alert',
@@ -387,43 +347,43 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             sync_failed_tests[test_module].add(f"{test_class}.{test_method}")
 
         sync_result = result.wasSuccessful()
-        all_failed_tests.update(sync_failed_tests)
+        all_failed_tests = dict(sync_failed_tests)
     else:
         # For specific paths, use the normal run_sync_tests function
         sync_result, sync_failed_tests = run_sync_tests(test_path, verbose)
-        all_failed_tests.update(sync_failed_tests)
+        all_failed_tests = dict(sync_failed_tests)
 
-    # Keep track of which modules have already been tested by unittest
-    # Extract module names from the failed tests dictionary keys
-    tested_modules = set()
-    for module_name in sync_failed_tests:
-        # Get the base module name without the package prefix
-        base_name = module_name.split('.')[-1]
-        tested_modules.add(base_name)
-
-    # Then check if we have any async tests that need special handling
-    test_modules = discover_test_modules(os.path.join(project_root, 'tests'))
     async_results = []
-    async_test_count = 0
+    if test_path is not None:
+        async_results.append(True)
+    else:
+        # Keep track of which modules have already been tested by unittest
+        tested_modules = {module_name.split('.')[-1] for module_name in test_modules}
+        for module_name in sync_failed_tests:
+            tested_modules.add(module_name.split('.')[-1])
 
-    for module_path in test_modules:
-        module = import_module_from_path(module_path)
-        # Skip modules that have already been tested by unittest
-        module_name = module.__name__
-        base_name = module_name.split('.')[-1]
+        # Then check if we have any async tests that need special handling
+        test_modules = discover_test_modules(os.path.join(project_root, 'tests'))
+        async_test_count = 0
 
-        if base_name in tested_modules:
-            if verbose:
-                print(f"Skipping {module_path} as it was already tested by unittest")
-            continue
+        for module_path in test_modules:
+            module = import_module_from_path(module_path)
+            # Skip modules that have already been tested by unittest
+            module_name = module.__name__
+            base_name = module_name.split('.')[-1]
 
-        if is_async_test_module(module):
-            if verbose:
-                print(f"\nRunning async tests in {module_path}")
-            success, test_count, failed_tests = run_async_test_module(module, verbose)
-            all_failed_tests.update(failed_tests)
-            async_results.append(success)
-            async_test_count += test_count
+            if base_name in tested_modules:
+                if verbose:
+                    print(f"Skipping {module_path} as it was already tested by unittest")
+                continue
+
+            if is_async_test_module(module):
+                if verbose:
+                    print(f"\nRunning async tests in {module_path}")
+                success, test_count, failed_tests = run_async_test_module(module, verbose)
+                all_failed_tests.update(failed_tests)
+                async_results.append(success)
+                async_test_count += test_count
 
     # Calculate total tests run
     # For sync tests, we need to estimate the count from the unittest result

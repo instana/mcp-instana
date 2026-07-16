@@ -20,6 +20,7 @@ try:
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
     from instana_client.models.get_call_groups import GetCallGroups
+    from instana_client.models.get_trace_groups import GetTraceGroups
     from instana_client.models.get_traces import GetTraces
 
 except ImportError:
@@ -88,6 +89,9 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                     ingestion_time=params.get('ingestionTime'),
                     ctx=ctx
                 )
+            elif operation == "get_trace_groups":
+                payload = params.get('payload') if params else None
+                return await self.get_trace_groups(payload, ctx=ctx)
             else:
                 return {"error": f"Operation '{operation}' not supported"}
 
@@ -95,63 +99,6 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             logger.error(f"Error executing {operation}: {e}", exc_info=True)
             return {"error": f"Error executing {operation}: {e!s}"}
 
-    # @register_as_tool(
-    #     title="Get Call Details",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
-    # @with_header_auth(ApplicationAnalyzeApi)
-    # async def get_call_details(
-    #     self,
-    #     trace_id: str,
-    #     call_id: str,
-    #     ctx: Optional[Context] = None,
-    #     api_client=None
-    # ) -> Dict[str, Any]:
-    #     """
-    #     Get details of a specific call in a trace.
-    #     This tool is to retrieve a vast information about a call present in a trace.
-
-    #     Args:
-    #         trace_id (str): The ID of the trace.
-    #         call_id (str): The ID of the call.
-    #         ctx: Optional context for the request.
-
-    #     Returns:
-    #         Dict[str, Any]: Details of the specified call.
-    #     """
-    #     try:
-    #         if not trace_id or not call_id:
-    #             logger.warning("Both trace_id and call_id must be provided")
-    #             return {"error": "Both trace_id and call_id must be provided"}
-
-    #         logger.debug(f"Fetching call details for trace_id={trace_id}, call_id={call_id}")
-    #         result = api_client.get_call_details_without_preload_content(
-    #             trace_id=trace_id,
-    #             call_id=call_id
-    #         )
-
-    #         import json
-
-    #         try:
-    #             response_text = result.data.decode('utf-8')
-    #             result_dict = json.loads(response_text)
-    #             logger.debug("Successfully retrieved call details")
-    #             return result_dict
-
-    #         # Convert the result to a dictionary
-    #         except (json.JSONDecodeError, AttributeError) as json_err:
-    #             error_message = f"Failed to parse JSON response: {json_err}"
-    #             logger.error(error_message)
-    #             return {"error": error_message}
-
-    #     except Exception as e:
-    #         logger.error(f"Error getting call details: {e}", exc_info=True)
-    #         return {"error": f"Failed to get call details: {e!s}"}
-
-    # @register_as_tool(
-    #     title="Get Trace Details",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
     def _validate_trace_details_params(self, id: str, retrieval_size: Optional[int], offset: Optional[int], ingestion_time: Optional[int]) -> Optional[Dict[str, Any]]:
         """Validate parameters for get_trace_details."""
         if not id:
@@ -257,6 +204,46 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 except (SyntaxError, ValueError) as e:
                     return {"error": f"Invalid payload format: {e}"}
 
+    def _build_paginated_response(
+        self,
+        result_dict: Dict[str, Any],
+        include_total_hits: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Build a standardized paginated response with cursor fields.
+
+        Args:
+            result_dict: The API response dictionary
+            include_total_hits: Whether to include totalHits in response
+
+        Returns:
+            Standardized response dictionary with items, itemCount, canLoadMore,
+            and cursor fields if available
+        """
+        items = result_dict.get("items", [])
+        can_load_more = result_dict.get("canLoadMore", False)
+
+        response = {
+            "items": items,
+            "itemCount": len(items),
+            "canLoadMore": can_load_more
+        }
+
+        if include_total_hits:
+            total_hits = result_dict.get("totalHits")
+            if total_hits is not None:
+                response["totalHits"] = total_hits
+
+        # Add cursor fields if more data available
+        if items and can_load_more and "cursor" in items[-1]:
+            cursor = items[-1]["cursor"]
+            if "ingestionTime" in cursor:
+                response["ingestionTime"] = cursor["ingestionTime"]
+            if "offset" in cursor:
+                response["offset"] = cursor["offset"]
+
+        return response
+
 
     def _sanitize_service_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -352,378 +339,63 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             # Sanitize the data to handle None values in Service.technologies
             result_dict = self._sanitize_service_data(result_dict)
 
-            # Extract trace items and metadata
-            items = result_dict.get("items", [])
-            can_load_more = result_dict.get("canLoadMore", False)
-            total_hits = result_dict.get("totalHits")
-
-            # Build response with trace records
-            response = {
-                "items": items,
-                "itemCount": len(items),
-                "canLoadMore": can_load_more,
-                "totalHits": total_hits
-            }
-
-            # Add cursor fields if more data available
-            if items and can_load_more and "cursor" in items[-1]:
-                cursor = items[-1]["cursor"]
-                if "ingestionTime" in cursor:
-                    response["ingestionTime"] = cursor["ingestionTime"]
-                if "offset" in cursor:
-                    response["offset"] = cursor["offset"]
-
-            return response
+            # Build and return standardized response
+            return self._build_paginated_response(result_dict, include_total_hits=True)
 
         except Exception as e:
             logger.error(f"Error in get_traces: {e}", exc_info=True)
             return {"error": f"Failed to get traces: {e!s}"}
 
-    # @register_as_tool(
-    #     title="Get Grouped Trace Metrics",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
-    # @with_header_auth(ApplicationAnalyzeApi)
-    # async def get_grouped_trace_metrics(
-    #     self,
-    #     payload: Optional[Union[Dict[str, Any], str]]=None,
-    #     fill_time_series: Optional[bool] = None,
-    #     api_client: Any = None,
-    #     ctx: Optional[Context] = None
-    # ) -> Dict[str, Any]:
-    #     """
-    #     The API endpoint retrieves metrics for traces that are grouped in the endpoint or service name.
-    #     This tool Get grouped trace metrics (by endpoint or service name).
+    @with_header_auth(ApplicationAnalyzeApi)
+    async def get_trace_groups(
+        self,
+        payload: Optional[Union[Dict[str, Any], str]] = None,
+        api_client: Any = None,
+        ctx: Optional[Context] = None
+    ) -> Dict[str, Any]:
+        """
+        Get grouped trace metrics from Instana API.
 
-    #     Args:
-    #         fillTimeSeries (Optional[bool]): Whether to fill missing data points with zeroes.
-    #         Sample Payload: {
-    #         "group": {
-    #             "groupbyTag": "trace.endpoint.name",
-    #             "groupbyTagEntity": "NOT_APPLICABLE"
-    #         },
-    #         "metrics": [
-    #             {
-    #             "aggregation": "SUM",
-    #             "metric": "latency"
-    #             }
-    #         ],
-    #         "order": {
-    #             "by": "latency",
-    #             "direction": "ASC"
-    #         },
-    #         "pagination": {
-    #             "retrievalSize": 20
-    #         },
-    #         "tagFilterExpression": {
-    #             "type": "EXPRESSION",
-    #             "logicalOperator": "AND",
-    #             "elements": [
-    #             {
-    #                 "type": "TAG_FILTER",
-    #                 "name": "call.type",
-    #                 "operator": "EQUALS",
-    #                 "entity": "NOT_APPLICABLE",
-    #                 "value": "DATABASE"
-    #             },
-    #             {
-    #                 "type": "TAG_FILTER",
-    #                 "name": "service.name",
-    #                 "operator": "EQUALS",
-    #                 "entity": "DESTINATION",
-    #                 "value": "ratings"
-    #             }
-    #             ]
-    #         }
-    #         }
-    #         ctx: Optional execution context.
+        Fetches grouped trace results from the trace groups endpoint.
+        The payload must include the required 'group' and 'metrics' fields.
 
-    #     Returns:
-    #         Dict[str, Any]: Grouped trace metrics result.
-    #     """
-    #     try:
-    #         # Parse the payload if it's a string
-    #         if isinstance(payload, str):
-    #             logger.debug("Payload is a string, attempting to parse")
-    #             try:
-    #                 import json
-    #                 try:
-    #                     parsed_payload = json.loads(payload)
-    #                     logger.debug("Successfully parsed payload as JSON")
-    #                     request_body = parsed_payload
-    #                 except json.JSONDecodeError as e:
-    #                     logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
+        CRITICAL: The "calls" metric is NOT supported for trace operations. Use "traces" or other trace-specific metrics.
+        Use get_metric_catalog first to retrieve valid metric names and aggregations as described in the critical workflow.
 
-    #                     # Try replacing single quotes with double quotes
-    #                     fixed_payload = payload.replace("'", "\"")
-    #                     try:
-    #                         parsed_payload = json.loads(fixed_payload)
-    #                         logger.debug("Successfully parsed fixed JSON")
-    #                         request_body = parsed_payload
-    #                     except json.JSONDecodeError:
-    #                         # Try as Python literal
-    #                         import ast
-    #                         try:
-    #                             parsed_payload = ast.literal_eval(payload)
-    #                             logger.debug("Successfully parsed payload as Python literal")
-    #                             request_body = parsed_payload
-    #                         except (SyntaxError, ValueError) as e2:
-    #                             logger.debug(f"Failed to parse payload string: {e2}")
-    #                             return {"error": f"Invalid payload format: {e2}", "payload": payload}
-    #             except Exception as e:
-    #                 logger.debug(f"Error parsing payload string: {e}")
-    #                 return {"error": f"Failed to parse payload: {e}", "payload": payload}
-    #         else:
-    #             # If payload is already a dictionary, use it directly
-    #             logger.debug("Using provided payload dictionary")
-    #             request_body = payload
+        The required 'group' object must contain:
+            - groupbyTag: the name of the group tag (the supported 'groupbyTag' values are 'trace.endpoint.name' and 'trace.service.name').
+            - groupbyTagEntity: the entity to group by. Allowed values are
+              'NOT_APPLICABLE', 'DESTINATION', and 'SOURCE'.
+                * SOURCE: apply tag filter to the source entity.
+                * DESTINATION: apply tag filter to the destination entity.
+                * NOT_APPLICABLE: use when the tag is independent of source/destination.
+            - groupbyTagSecondLevelKey: optional second-level tag key if present.
 
-    #         # Import the GetTraceGroups class
-    #         try:
-    #             from instana_client.models.get_trace_groups import (
-    #                 GetTraceGroups,
-    #             )
-    #             from instana_client.models.group import Group
-    #             logger.debug("Successfully imported GetTraceGroups")
-    #         except ImportError as e:
-    #             logger.debug(f"Error importing GetTraceGroups: {e}")
-    #             return {"error": f"Failed to import GetTraceGroups: {e!s}"}
+        Args:
+            payload: Request payload for GetTraceGroups API
+            api_client: API client instance
+            ctx: MCP context
 
-    #         # Create an GetTraceGroups object from the request body
-    #         try:
-    #             query_params = {}
-    #             if request_body and "group" in request_body:
-    #                 query_params["group"] = request_body["group"]
-    #             if request_body and "metrics" in request_body:
-    #                 query_params["metrics"] = request_body["metrics"]
-    #             if request_body and "tag_filter_expression" in request_body:
-    #                 query_params["tag_filter_expression"] = request_body["tag_filter_expression"]
-    #             logger.debug(f"Creating GetTraceGroups with params: {query_params}")
-    #             config_object = GetTraceGroups(**query_params)
-    #             logger.debug("Successfully created endpoint config object")
-    #         except Exception as e:
-    #             logger.debug(f"Error creating GetTraceGroups: {e}")
-    #             return {"error": f"Failed to create config object: {e!s}"}
+        Returns:
+            Dict containing items (grouped trace records), itemCount, canLoadMore,
+            totalHits, and cursor fields (ingestionTime, offset) if more data available
+        """
+        try:
+            request_body = self._parse_traces_payload(payload)
+            if "error" in request_body:
+                return request_body
 
-    #         # Call the create_endpoint_config method from the SDK
-    #         logger.debug("Calling create_endpoint_config with config object")
-    #         result = api_client.get_trace_groups(
-    #             get_trace_groups=config_object
-    #         )
-    #         # Convert the result to a dictionary
-    #         if hasattr(result, 'to_dict'):
-    #             result_dict = result.to_dict()
-    #         else:
-    #             # If it's already a dict or another format, use it as is
-    #             result_dict = result or {
-    #                 "success": True,
-    #                 "message": "Grouped trace metrics"
-    #             }
+            config = GetTraceGroups.from_dict(request_body)
+            result = api_client.get_trace_groups_without_preload_content(get_trace_groups=config)
 
-    #         logger.debug(f"Result from get_grouped_trace_metrics: {result_dict}")
-    #         return result_dict
-    #     except Exception as e:
-    #         logger.error(f"Error in get_grouped_trace_metrics: {e}")
-    #         return {"error": f"Failed to get grouped trace metrics: {e!s}"}
+            response_text = result.data.decode('utf-8')
+            result_dict = json.loads(response_text)
+            result_dict = self._sanitize_service_data(result_dict)
 
-    # # @register_as_tool(
-    # #     title="Get Grouped Calls Metrics",
-    # #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # # )
-    # # @with_header_auth(ApplicationAnalyzeApi)
-    # # async def get_grouped_calls_metrics(
-    # #     self,
-    # #     fillTimeSeries: Optional[str] = None,
-    # #     payload: Optional[Union[Dict[str, Any], str]]=None,
-    # #     api_client = None,
-    # #     ctx: Optional[Context] = None
-    # # ) -> Dict[str, Any]:
-    # #     """
-    # #     Get grouped calls metrics.
-    # #     This endpoint retrieves the metrics for calls.
+            # Build and return standardized response
+            return self._build_paginated_response(result_dict, include_total_hits=True)
 
-    # #     Args:
-    # #         fillTimeSeries (Optional[bool]): Whether to fill missing data points with zeroes.
-    # #         Sample payload: {
-    # #         "group": {
-    # #             "groupbyTag": "service.name",
-    # #             "groupbyTagEntity": "DESTINATION"
-    # #         },
-    # #         "metrics": [
-    # #             {
-    # #             "aggregation": "SUM",
-    # #             "metric": "calls"
-    # #             },
-    # #             {
-    # #             "aggregation": "P75",
-    # #             "metric": "latency",
-    # #             "granularity": 360
-    # #             }
-    # #         ],
-    # #         "includeInternal": false,
-    # #         "includeSynthetic": false,
-    # #         "order": {
-    # #             "by": "calls",
-    # #             "direction": "DESC"
-    # #         },
-    # #         "pagination": {
-    # #             "retrievalSize": 20
-    # #         },
-    # #         "tagFilterExpression": {
-    # #             "type": "EXPRESSION",
-    # #             "logicalOperator": "AND",
-    # #             "elements": [
-    # #             {
-    # #                 "type": "TAG_FILTER",
-    # #                 "name": "call.type",
-    # #                 "operator": "EQUALS",
-    # #                 "entity": "NOT_APPLICABLE",
-    # #                 "value": "DATABASE"
-    # #             },
-    # #             {
-    # #                 "type": "TAG_FILTER",
-    # #                 "name": "service.name",
-    # #                 "operator": "EQUALS",
-    # #                 "entity": "DESTINATION",
-    # #                 "value": "ratings"
-    # #             }
-    # #             ]
-    # #         },
-    # #         "timeFrame": {
-    # #             "to": "1688366990000",
-    # #             "windowSize": "600000"
-    # #         }
-    # #         }
-    # #         ctx: Optional execution context.
+        except Exception as e:
+            logger.error(f"Error in get_trace_groups: {e}", exc_info=True)
+            return {"error": f"Failed to get trace groups: {e!s}"}
 
-    # #     Returns:
-    # #         Dict[str, Any]: Grouped trace metrics result.
-    # #     """
-    # #     try:
-    # #         # Parse the payload if it's a string
-    # #         if isinstance(payload, str):
-    # #             logger.debug("Payload is a string, attempting to parse")
-    # #             try:
-    # #                 import json
-    # #                 try:
-    # #                     parsed_payload = json.loads(payload)
-    # #                     logger.debug("Successfully parsed payload as JSON")
-    # #                     request_body = parsed_payload
-    # #                 except json.JSONDecodeError as e:
-    # #                     logger.debug(f"JSON parsing failed: {e}, trying with quotes replaced")
-
-    # #                     # Try replacing single quotes with double quotes
-    # #                     fixed_payload = payload.replace("'", "\"")
-    # #                     try:
-    # #                         parsed_payload = json.loads(fixed_payload)
-    # #                         logger.debug("Successfully parsed fixed JSON")
-    # #                         request_body = parsed_payload
-    # #                     except json.JSONDecodeError:
-    # #                         # Try as Python literal
-    # #                         import ast
-    # #                         try:
-    # #                             parsed_payload = ast.literal_eval(payload)
-    # #                             logger.debug("Successfully parsed payload as Python literal")
-    # #                             request_body = parsed_payload
-    # #                         except (SyntaxError, ValueError) as e2:
-    # #                             logger.debug(f"Failed to parse payload string: {e2}")
-    # #                             return {"error": f"Invalid payload format: {e2}", "payload": payload}
-    # #             except Exception as e:
-    # #                 logger.debug(f"Error parsing payload string: {e}")
-    # #                 return {"error": f"Failed to parse payload: {e}", "payload": payload}
-    # #         else:
-    # #             # If payload is already a dictionary, use it directly
-    # #             logger.debug("Using provided payload dictionary")
-    # #             request_body = payload
-
-    # #         # Import the GetCallGroups class
-    # #         try:
-    # #             from instana_client.models.get_call_groups import (
-    # #                 GetCallGroups,
-    # #             )
-    # #             from instana_client.models.group import Group
-    # #             logger.debug("Successfully imported GetCallGroups")
-    # #         except ImportError as e:
-    # #             logger.debug(f"Error importing GetCallGroups: {e}")
-    # #             return {"error": f"Failed to import GetCallGroups: {e!s}"}
-
-    # #         # Create an GetCallGroups object from the request body
-    # #         try:
-    # #             query_params = {}
-    # #             if request_body and "group" in request_body:
-    # #                 query_params["group"] = request_body["group"]
-    # #             if request_body and "metrics" in request_body:
-    # #                 query_params["metrics"] = request_body["metrics"]
-    # #             logger.debug(f"Creating GetCallGroups with params: {query_params}")
-    # #             config_object = GetCallGroups(**query_params)
-    # #             logger.debug("Successfully created endpoint config object")
-    # #         except Exception as e:
-    # #             logger.error(f"Error creating GetCallGroups: {e}")
-    # #             return {"error": f"Failed to create config object: {e!s}"}
-
-    # #         # Call the get_call_groups method from the SDK
-    # #         logger.debug("Calling get_call_groups with config object")
-    # #         result = api_client.get_call_group(
-    # #             get_call_groups=config_object
-    # #         )
-    # #         # Convert the result to a dictionary
-    # #         if hasattr(result, 'to_dict'):
-    # #             result_dict = result.to_dict()
-    # #         else:
-    # #             # If it's already a dict or another format, use it as is
-    # #             result_dict = result or {
-    # #                 "success": True,
-    # #                 "message": "Get Grouped call"
-    # #             }
-
-    # #         logger.debug(f"Result from get_call_group: {result_dict}")
-    # #         return result_dict
-    # #     except Exception as e:
-    # #         logger.error(f"Error in get_call_group: {e}")
-    # #         return {"error": f"Failed to get grouped call: {e!s}"}
-
-
-    # @register_as_tool(
-    #     title="Get Correlated Traces",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
-    # @with_header_auth(ApplicationAnalyzeApi)
-    # async def get_correlated_traces(
-    #     self,
-    #     correlation_id: str,
-    #     api_client = None,
-    #     ctx: Optional[Context] = None
-    # ) -> Dict[str, Any]:
-    #     """
-    #     Resolve Trace IDs from Monitoring Beacons.
-    #     Resolves backend trace IDs using correlation IDs from website and mobile app monitoring beacons.
-
-    #     Args:
-    #         correlation_id: Here, the `backendTraceId` is typically used which can be obtained from the `Get all beacons` API endpoint for website and mobile app monitoring. For XHR, fetch, or HTTP beacons, the `beaconId` retrieved from the same API endpoint can also serve as the `correlationId`.(required)
-    #         ctx: Optional execution context.
-    #     Returns:
-    #         Dict[str, Any]: Grouped trace metrics result.
-    #     """
-    #     try:
-    #         logger.debug("Calling backend correlation API")
-    #         if not correlation_id:
-    #             error_msg = "Correlation ID must be provided"
-    #             logger.warning(error_msg)
-    #             return {"error": error_msg}
-
-    #         result = api_client.get_correlated_traces(
-    #             correlation_id=correlation_id
-    #         )
-
-    #         result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
-
-    #         logger.debug(f"Result from get_correlated_traces: {result_dict}")
-    #         # If result is a list, convert it to a dictionary
-    #         if isinstance(result_dict, list):
-    #             return {"traces": result_dict}
-    #         # Otherwise ensure we return a dictionary
-    #         return dict(result_dict) if not isinstance(result_dict, dict) else result_dict
-
-    #     except Exception as e:
-    #         logger.error(f"Error in get_correlated_traces: {e}", exc_info=True)
-    #         return {"error": f"Failed to get correlated traces: {e!s}"}
