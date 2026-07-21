@@ -1,4 +1,11 @@
 # Changelog
+### 1.0.0
+- **New Feature:** Introduced `manage_infrastructure` as a unified smart router for infrastructure operations, replacing `analyze_infrastructure`. Consolidates analyze, catalog, and snapshot resource operations into a single tool.
+- **New Feature:** Added Session Replay support in mobile-apps tool.
+- **Enhancement:** Refactored maintenance window tool with improved parameter handling, duration calculation, and recurring window support.
+- **Enhancement:** Added new application prompts for traces and resource operations.
+- **Maintenance:** Removed static schema JSON files — infrastructure schema is now fetched live from the Instana API.
+
 ### 0.9.9
 -  **New Feature:** Introduced maintenance window management functionality with unified smart router for creating, updating, and managing maintenance windows.
 

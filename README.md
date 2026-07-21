@@ -1083,10 +1083,12 @@ Configure port forwarding to expose your local server. Follow the [Ngrok setup d
   - [x] Application Catalog
     - [x] Get application tag catalog
     - [x] Get application metric catalog
-- [x] **Infrastructure Analysis** (`analyze_infrastructure`)
-  - [x] Two-pass elicitation for entity/metric queries
+- [x] **Infrastructure Management** (`manage_infrastructure`)
+  - [x] Unified smart router replacing `analyze_infrastructure` — single tool for analyze, catalog, and resource snapshots
+  - [x] `get_plugin_schema` — fetches metrics **and** tags for a plugin in one API call (replaces two separate calls)
   - [x] Dynamic support for all entity types from Instana API catalog (JVM, Kubernetes, Docker, hosts, databases, message queues, and more)
-  - [x] Automatically synchronized with your Instana installation's available plugins
+  - [x] Static schema files removed — all schema is fetched live from the Instana API
+  - [x] Snapshot resource operations: `get_snapshot`, `get_snapshots`
   - [x] Flexible metric aggregation (max, mean, sum, etc.)
   - [x] Advanced filtering by tags and properties
   - [x] Grouping and ordering capabilities
@@ -1102,6 +1104,11 @@ Configure port forwarding to expose your local server. Follow the [Ngrok setup d
   - [x] Unified parameter validation (time ranges, max_events)
   - [x] Support for natural language time ranges ("last 24 hours", "last 2 days")
   - [x] Event filtering and optimization
+- [x] **Mobile App Monitoring** (`manage_mobile_apps`)
+  - [x] Session Replay — **new** (`resource_type="session_replay"`)
+    - [x] `get_session_replay_action_beacons` — paginated retrieval of action beacons by mobile app ID and session ID
+    - [x] Cursor-based pagination (`cursor`, `page_size`, `hasMore`)
+  - [x] Beacon Analysis, Performance Metrics, Geographic & Device Analysis, Alert Management (existing)
 - [x] **Unified Website Management** (`manage_website_resources`)
   - [x] Website Analyze (resource_type="analyze")
     - [x] Get Website Beacon Groups - grouped/aggregated beacon data (operation="get_beacon_groups")
@@ -1146,13 +1153,13 @@ Configure port forwarding to expose your local server. Follow the [Ngrok setup d
 | `manage_applications`                                         | Application & Infrastructure   | Unified tool for managing application metrics, alert configs, settings, and catalog |
 | `manage_websites`                                             | Website Monitoring             | Unified smart router for website analyze, catalog, configuration, and advanced config operations |
 | `manage_custom_dashboards`                                    | Custom Dashboards              | Unified tool for managing custom dashboard CRUD operations |
-| `analyze_infrastructure`                                      | Infrastructure Analyze         | Two-pass infrastructure analysis with entity/metric elicitation |
+| `manage_infrastructure`                                       | Infrastructure                 | Unified smart router for infrastructure analyze, catalog (`get_plugin_schema`), and snapshot resource operations |
 | `manage_automation`                                           | Automation                     | Unified smart router for automation: browse action catalog and view execution history |
 | `manage_events`                                               | Events                         | Unified smart router for events monitoring: get event by ID, get events by IDs, Kubernetes events, agent monitoring events and all events |
 | `manage_slo`                                                  | SLO Management                 | Unified smart router for SLO configurations, reports, alerts, and correction windows with intelligent timezone handling |
 | `manage_releases`                                             | Release Management             | Unified smart router for release tracking: list releases with pagination and name filtering, get release details, create/update/delete releases with timezone support |
 | `manage_maintenance_windows`                                  | Maintenance Windows            | Unified smart router for maintenance window lifecycle management: create, modify, close, and list maintenance windows with template support and ServiceNow integration |
-| `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, configuration, and alert management |
+| `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, session replay, configuration, and alert management |
 
 👉 **For detailed tool documentation, capabilities, and technical reference, see [Tools & Examples](docs/TOOLS_AND_EXAMPLES.md)**
 
@@ -1173,8 +1180,9 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - Supports dashboard creation, retrieval, updates, and deletion
   - Manages shareable users and API tokens for dashboards
 
-- **`infra`**: Infrastructure analysis tools
-  - `analyze_infrastructure`: Two-pass infrastructure analysis with entity/metric elicitation
+- **`infra`**: Infrastructure management tools
+  - `manage_infrastructure`: Unified smart router for infrastructure analyze, catalog, and snapshot resource operations
+  - `get_plugin_schema` combines `get_metrics` + `get_tag_catalog` into a single API call
   - Dynamically supports all entity types available in your Instana installation (automatically loaded from API catalog)
   - Includes JVM, Kubernetes, Docker, hosts, databases, message queues, and any custom or newly added entity types
   - Flexible metric aggregation, filtering, grouping, and time range queries
@@ -1223,6 +1231,7 @@ The MCP server supports selective tool loading to optimize performance and reduc
 
 - **`mobile_app`**: Mobile application monitoring
   - `manage_mobile_apps`: Unified smart router for mobile app monitoring operations
+  - **Session Replay**: Retrieve paginated session replay action beacons by mobile app ID and session ID (`resource_type="session_replay"`)
   - **Beacon Analysis**: Query mobile app beacon data with grouping and filtering
   - **Performance Metrics**: Track session duration, crash rates, and HTTP request performance
   - **Geographic Analysis**: Analyze user distribution by country, city, and region

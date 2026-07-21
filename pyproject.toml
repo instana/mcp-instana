@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "0.9.9"
+version = "1.0.0"
 description = "MCP server for Instana"
 authors = [
     {name = "Jay Sharma", email = "Jay.Sharma3@ibm.com"},
@@ -32,7 +32,9 @@ dependencies = [
     # Environment loading - imported in src/core/server.py
     "python-dotenv>=1.2.2,<2.0.0",
     # Data validation - imported in src/infrastructure/infrastructure_metrics.py
-    "pydantic==2.11.7",
+    # pydantic>=2.13.4 ships pydantic-core>=2.46.4 which has pre-built cp314 wheels,
+    # avoiding source compilation failures on Python 3.14 (jiter PyUnicode_* API removal).
+    "pydantic==2.13.4",
     "traceloop-sdk>=0.47.5",
 ]
 
@@ -62,12 +64,11 @@ test = "tests.run_all_tests:main"
 test-coverage = "tests.run_all_tests_with_coverage:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src", "schema"]
+packages = ["src"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/",
-    "schema/",
 ]
 
 [tool.ruff]

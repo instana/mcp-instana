@@ -18,11 +18,12 @@
       - [Alert Configuration](#alert-configuration)
       - [Application Settings](#application-settings)
       - [Catalog Operations](#catalog-operations)
-  - [2. Infrastructure Analysis](#2-infrastructure-analysis)
+  - [2. Infrastructure Monitoring](#2-infrastructure-monitoring)
     - [Capabilities](#capabilities-1)
     - [Example Prompts](#example-prompts-1)
-      - [Pass 1 - Intent-Based Queries](#pass-1---intent-based-queries)
-      - [Pass 2 - Specific Selections](#pass-2---specific-selections)
+      - [Catalog Discovery](#catalog-discovery)
+      - [Entity Queries](#entity-queries)
+      - [Snapshot Resources](#snapshot-resources)
   - [3. Events Monitoring](#3-events-monitoring)
     - [Capabilities](#capabilities-2)
     - [Example Prompts](#example-prompts-2)
@@ -65,6 +66,7 @@
   - [9. Mobile App Monitoring](#9-mobile-app-monitoring)
     - [Capabilities](#capabilities-8)
     - [Example Prompts](#example-prompts-8)
+      - [Session Replay](#session-replay)
       - [Beacon Analysis](#beacon-analysis-1)
       - [Performance Metrics](#performance-metrics)
       - [Geographic Analysis](#geographic-analysis-1)
@@ -213,13 +215,15 @@ This document provides comprehensive examples of how to interact with the Instan
 
 **Tools:**
 1. [Application Resources](#1-application-resources)
-2. [Infrastructure Analysis](#2-infrastructure-analysis)
+2. [Infrastructure Monitoring](#2-infrastructure-monitoring)
 3. [Events Monitoring](#3-events-monitoring)
 4. [Website Monitoring](#4-website-monitoring)
 5. [Automation Actions](#5-automation-actions)
 6. [Custom Dashboards](#6-custom-dashboards)
 7. [SLO Management](#7-slo-management)
 8. [Release Tracking](#8-release-tracking)
+9. [Mobile App Monitoring](#9-mobile-app-monitoring)
+10. [Maintenance Window Management](#10-maintenance-window-management)
 
 **Advanced:**
 - [Advanced Usage Tips](#advanced-usage-tips)
@@ -310,28 +314,54 @@ What metrics are available for application monitoring?
 
 ---
 
-## 2. Infrastructure Analysis
+## 2. Infrastructure Monitoring
 
-**Tool Name:** `analyze_infrastructure`
+**Tool Name:** `manage_infrastructure`
 
 ### Capabilities
 
-This tool uses a two-pass approach for infrastructure analysis:
-- **Pass 1**: Provide natural language intent and entity type → Server returns available metrics and filters
-- **Pass 2**: Select specific metrics and filters → Server executes query and returns results
+This unified smart router manages all infrastructure operations — analyze, catalog, and resource snapshots — through a single tool.
 
-The system automatically discovers all entity types from your Instana installation, supporting Kubernetes, JVM, databases, message queues, containers, hosts, and any custom plugins.
+**Recommended workflow:**
+1. `get_plugins` — discover all available entity types in your installation
+2. `get_plugin_schema` — get metrics **and** tags for a plugin in **one** call (replaces separate `get_metrics` + `get_tag_catalog`)
+3. Analyze operations — query entities or groups using discovered types, metrics, and tags
+
+**Resource Types:**
+- **analyze**: Query individual infrastructure entities or grouped entity metrics
+- **catalog**: Discover plugins, metrics, tags, and full plugin schemas
+- **resources**: Retrieve or search snapshot details
+
+The system automatically discovers all entity types from your Instana installation, supporting Kubernetes, JVM, databases, message queues, containers, hosts, and any custom plugins. Static schema files have been removed — schema is fetched live from the Instana API.
 
 ### Example Prompts
 
-#### Pass 1 - Intent-Based Queries
+#### Catalog Discovery
+
+```
+List all available infrastructure entity types (plugins) in my Instana installation
+```
+
+```
+Get the full schema (metrics and tags) for the "host" plugin in one call
+```
+
+```
+What metrics are available for JVM runtime monitoring?
+```
+
+```
+Show me the available tags I can filter by for Kubernetes pods
+```
+
+#### Entity Queries
 
 ```
 Show me the maximum heap size of JVM instances running on host galactica1
 ```
 
 ```
-I want to analyze CPU usage for Kubernetes pods in the production namespace
+Get CPU usage metrics for Kubernetes pods in the production namespace, grouped by namespace
 ```
 
 ```
@@ -346,10 +376,6 @@ Show me database connection pool metrics for DB2 instances
 Analyze IBM MQ queue depth and message rates for the order-processing queue
 ```
 
-#### Pass 2 - Specific Selections
-
-After receiving the schema from Pass 1, you can make specific selections:
-
 ```
 Get the following JVM metrics: jvm.heap.maxSize, jvm.heap.used, jvm.gc.collectionTime
 Filter by: host.name = "galactica1"
@@ -357,11 +383,18 @@ Aggregation: max
 Time range: last 1 hour
 ```
 
+#### Snapshot Resources
+
 ```
-Query Kubernetes pod metrics: kubernetes.pod.cpu.usage, kubernetes.pod.memory.usage
-Group by: kubernetes.namespace.name
-Filter by: kubernetes.cluster.name = "prod-cluster"
-Order by: cpu usage descending
+Find all host snapshots matching "payment" from the last hour
+```
+
+```
+Get detailed snapshot information for snapshot ID abc123xyz
+```
+
+```
+List all offline Kubernetes pod snapshots
 ```
 
 ---
@@ -772,8 +805,23 @@ Monitor mobile application performance, analyze user sessions, track crashes, an
 - **configuration**: Get mobile app configurations
 - **advanced_config**: Retrieve advanced configurations (geo-location, IP masking, geo rules)
 - **alert**: Get mobile app alert configurations
+- **session_replay**: Retrieve paginated session replay action beacons
 
 ### Example Prompts
+
+#### Session Replay
+
+```
+Get session replay action beacons for mobile app "app-123" and session "1d616527-2635-407f-89fc-de7136b66fb4"
+```
+
+```
+Show me the first 100 action beacons for session ID "abc-session-xyz" in the Robot Shop mobile app
+```
+
+```
+Retrieve all session replay beacons for session "session-456" using cursor-based pagination
+```
 
 #### Beacon Analysis
 
