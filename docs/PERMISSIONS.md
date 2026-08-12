@@ -64,6 +64,12 @@ These tools only fetch data and require **no additional permissions** beyond the
 | **Websites** | Create, edit, and delete website conversion goals for business impact | `No` |
 | **Websites** | Configuration of Smart Alerts for websites | `No` |
 
+#### manage_logs
+
+| Category | Permission | Required |
+| :--- | :--- | :---: |
+| **Logs** | Read access to logs | `Yes` |
+
 
 ### Configuration Tools 
 

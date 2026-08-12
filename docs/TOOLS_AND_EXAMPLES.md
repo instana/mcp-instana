@@ -224,6 +224,7 @@ This document provides comprehensive examples of how to interact with the Instan
 8. [Release Tracking](#8-release-tracking)
 9. [Mobile App Monitoring](#9-mobile-app-monitoring)
 10. [Maintenance Window Management](#10-maintenance-window-management)
+11. [Logs](#11-logs)
 
 **Advanced:**
 - [Advanced Usage Tips](#advanced-usage-tips)
@@ -1099,6 +1100,48 @@ Check if I can create a maintenance window for EAL-012471 using the deployment t
 
 ---
 
+
+## 11. Logs
+
+**Tool Name:** `manage_logs`
+
+### Capabilities
+
+Search Instana logs with the read-only `search` operation. Searches default to 10 results to keep large log messages and stack traces manageable. Set `retrieval_size` explicitly to request 1-200 results. Results are paginated by the caller: inspect `canLoadMore`, then increase `offset` as needed (up to 2000). Request at most ten tags.
+
+Log-native filters use `entity: "NOT_APPLICABLE"`; service-related filters use `entity: "DESTINATION"`. For complex filters, start with the Instana Logs UI **API Query** output.
+
+### Example Prompts
+
+```
+Show the latest 50 error logs with timestamp, level, and message from the last hour
+```
+
+```
+Search payment-service logs for messages containing "timeout" in the last 24 hours
+```
+
+```json
+{
+  "operation": "search",
+  "params": {
+    "time_frame": {"windowSize": 3600000},
+    "requested_tags": ["log.timestamp", "log.level", "log.message", "service.name"],
+    "tag_filter_expression": {
+      "type": "TAG_FILTER",
+      "name": "log.level",
+      "operator": "EQUALS",
+      "entity": "NOT_APPLICABLE",
+      "value": "ERROR"
+    },
+    "retrieval_size": 50,
+    "offset": 0,
+    "order_direction": "DESC"
+  }
+}
+```
+
+---
 
 ## Advanced Usage Tips
 

@@ -435,6 +435,7 @@ uv run src/core/server.py --transport streamable-http --tools events
 - **`app`**: Application performance tools and prompts (resources, metrics, alerts, catalog, topology, analyze, settings, global alerts)
 - **`events`**: Event monitoring tools and prompts (Kubernetes events, agent monitoring)
 - **`website`**: Website monitoring tools and prompts (metrics, catalog, analyze, configuration)
+- **`logs`**: Read-only Instana log search (`manage_logs`)
 
 ### Verifying Server Status
 
@@ -1160,6 +1161,7 @@ Configure port forwarding to expose your local server. Follow the [Ngrok setup d
 | `manage_releases`                                             | Release Management             | Unified smart router for release tracking: list releases with pagination and name filtering, get release details, create/update/delete releases with timezone support |
 | `manage_maintenance_windows`                                  | Maintenance Windows            | Unified smart router for maintenance window lifecycle management: create, modify, close, and list maintenance windows with template support and ServiceNow integration |
 | `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, session replay, configuration, and alert management |
+| `manage_logs`                                                 | Logs                           | Read-only Instana log search with caller-controlled pagination |
 
 👉 **For detailed tool documentation, capabilities, and technical reference, see [Tools & Examples](docs/TOOLS_AND_EXAMPLES.md)**
 
@@ -1238,6 +1240,10 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - **Device Analysis**: Monitor performance across different devices, platforms, and OS versions
   - **Configuration Management**: Manage mobile app configurations, geo-location, and IP masking settings
   - **Alert Management**: Configure and manage mobile app alert configurations
+
+- **`logs`**: Read-only log search
+  - `manage_logs`: Search Instana logs with up to ten requested tags and 200 results per request
+  - Pagination is caller-controlled with `offset` (maximum `2000`); responses include `canLoadMore`
 
 ### Usage Examples
 
