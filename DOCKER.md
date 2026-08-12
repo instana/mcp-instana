@@ -5,11 +5,17 @@ This guide documents everything Docker-related for MCP Instana. Use it when you 
 ## Overview
 
 - Two-stage image defined in `Dockerfile`: a builder installs only runtime dependencies, and the runtime stage copies the installed packages plus `src/`.
-- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8080`, and ships with a TCP health check on port 8080.
+- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8080`, and ships with a health check that sends a real MCP `initialize` request and verifies `serverInfo` is present in the response.
 - Entry point runs `python -m src.core.server --transport streamable-http`, so clients provide Instana credentials over HTTP headers rather than baking them into the container.
+- `.dockerignore` trims the build context to only the files the Dockerfile actually needs (`pyproject.toml`, `src/`, `README.md`), keeping build times fast and secrets out of image layers.
 - `build_multiplatform.sh` automates multi-architecture builds (amd64 + arm64) with Docker Buildx, QEMU, and optional pushes.
+- `docker-compose.yml` and `docker-compose.dev.yml` provide single-command workflows for production and development use.
+
+---
 
 ## Quickstart
+
+### Plain Docker
 
 ```bash
 # Build a local image (single architecture)
@@ -18,27 +24,91 @@ docker build -t mcp-instana .
 # Run it (streamable HTTP transport on port 8080)
 docker run --rm -p 8080:8080 mcp-instana
 
-# Override the HTTP port exposed by the container
+# Override the host port
 docker run --rm -e PORT=9090 -p 9090:9090 mcp-instana
 ```
 
-### Docker Compose snippet
+### Docker Compose (recommended)
 
-```yaml
-version: '3.8'
-services:
-  mcp-instana:
-    build: .
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8080),timeout=5); s.close()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+```bash
+# Build and start, detached
+docker compose up -d
+
+# Tail logs
+docker compose logs -f
+
+# Stop and remove containers
+docker compose down
 ```
+
+---
+
+## Docker Compose
+
+Docker Compose lets you define the full `docker run` invocation — ports, environment variables, restart policy, health check — in a checked-in YAML file instead of typing flags on the command line every time. This repo ships two Compose files:
+
+| File | Purpose |
+| --- | --- |
+| `docker-compose.yml` | Production / CI. Builds the image, maps port 8080, restarts on failure, runs the full MCP health check. |
+| `docker-compose.dev.yml` | Development override. Mounts `src/` live into the running container so code edits are visible without a rebuild. Enables `--debug` logging and disables restart. |
+
+### Credentials and `.env`
+
+In streamable-HTTP mode (the default), **no credentials belong in Compose**. The MCP client (Claude Desktop, GitHub Copilot, etc.) injects `instana-base-url` and `instana-api-token` as HTTP headers on every request; the container never stores them.
+
+The only time you need credentials in the environment is when running in **stdio mode** locally. Create a `.env` file in the repo root — it is already listed in `.gitignore` and must never be committed:
+
+```bash
+# .env  (create this file manually — do not commit it)
+INSTANA_API_TOKEN=your_api_token_here
+INSTANA_BASE_URL=https://your-instana-instance.example.com
+```
+
+Compose picks up `.env` automatically when you run `docker compose up`.
+
+### Production workflow
+
+```bash
+# Build image from source and start
+docker compose up -d
+
+# Pull a pre-built image from a registry instead of building locally
+docker compose pull && docker compose up -d
+
+# Check container health
+docker compose ps
+
+# Tail logs
+docker compose logs -f mcp-instana
+
+# Stop
+docker compose down
+```
+
+### Development workflow
+
+The dev override mounts `./src` into the running container as a read-only bind mount. Because the Python interpreter reads source files at import time (FastMCP is not a compiled binary), any edit you save on the host is visible the next time an MCP request triggers that code path — no rebuild required.
+
+```bash
+# Start with live source and debug logging
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# In a second terminal: edit any file under src/ and it is live immediately
+# Restart the server process to pick up changes that affect startup code:
+docker compose -f docker-compose.yml -f docker-compose.dev.yml restart mcp-instana
+```
+
+> **Note:** The dev override stops at the `builder` stage (which includes `gcc` etc.) rather than the leaner `runtime` stage. This is intentional — it gives you a fuller environment for debugging. The bind mount means the installed packages come from the builder, but the running source is your local working tree.
+
+### Overriding the host port
+
+The base `docker-compose.yml` reads the `PORT` variable from your shell environment (or from `.env`). To expose the container on a different host port without editing the file:
+
+```bash
+PORT=9090 docker compose up -d
+```
+
+---
 
 ## Image anatomy (`Dockerfile`)
 
@@ -47,8 +117,8 @@ services:
 | Builder stage | Based on `python:3.11-slim`, copies `pyproject.toml`, `src/`, `README.md`, then runs `pip install .` (runtime deps only). |
 | Runtime stage | Reuses `python:3.11-slim`, copies site-packages and binaries from builder, then copies `src/` only. |
 | User | Non-root `mcpuser` owns `/app`. |
-| Entry point | `python -m src.core.server --transport streamable-http`. Override with `docker run ... -- entrypoint` or `CMD`. |
-| Health check | `python -c "import socket; s=socket.create_connection(('127.0.0.1',8080),timeout=5); s.close()"` every 30s with retries. |
+| Entry point | `python -m src.core.server --transport streamable-http`. Override CMD args with `docker run ... mcp-instana --transport stdio`; override the entrypoint with `docker run --entrypoint python mcp-instana ...`. |
+| Health check | Posts a JSON-RPC `initialize` to `http://127.0.0.1:8080/mcp` and checks that `serverInfo` appears in the response. Passes only if the full MCP stack is responsive. |
 | Exposed port | `8080` (override with `PORT`). |
 
 ### Configuration reference
@@ -59,6 +129,24 @@ services:
 | `PYTHONUNBUFFERED` | `1` | Keeps logs unbuffered. Usually leave as-is. |
 | `PYTHONPATH` | `/app` | Ensures `src/` is importable. |
 | `--transport` (CMD arg) | `streamable-http` | Change via `docker run ... mcp-instana --transport <mode>`. |
+
+---
+
+## Build context and `.dockerignore`
+
+`.dockerignore` restricts what gets sent to the Docker daemon as the build context. Without it, Docker would upload the entire working tree — including `.git/`, `.venv/`, `htmlcov/`, and any local `.env` file — before the `COPY` instructions inside the Dockerfile filtered it down. This wastes time and creates risk.
+
+With `.dockerignore` in place the context is limited to exactly what the Dockerfile copies:
+
+| Included | Reason |
+| --- | --- |
+| `pyproject.toml` | Dependency metadata for `pip install .` |
+| `src/` | Application source code |
+| `README.md` | Referenced by `pyproject.toml` as the package long description |
+
+Everything else — `.git/`, `.venv/`, `tests/`, `htmlcov/`, `docs/`, `mcpb/`, `*.pem`, `*.key`, `.env*` — is excluded.
+
+---
 
 ## Building images
 
@@ -112,37 +200,48 @@ The script:
 | `--push` | Push manifest to the registry | disabled |
 | `-h, --help` | Show usage and exit | — |
 
+---
+
 ## Security posture
 
 - Non-root runtime user (`mcpuser`) limits container privileges.
 - Health check ensures orchestration platforms can restart unhealthy pods.
 - No credentials or secrets inside the image; MCP clients supply Instana headers at request time.
-- Runtime dependency set trimmed to ~20 packages, yielding ~266 MB images vs >1 GB for dev installs.
+- `.dockerignore` prevents local `.env` files, private keys, and other secrets from ever entering a build layer.
+- Runtime dependency set trimmed to ~20 packages, yielding ~266 MB images vs >1 GB for dev installs.
 - Multi-stage build keeps compilers and build artifacts out of the final layer.
+
+---
 
 ## Testing & troubleshooting
 
 ```bash
 # Inspect container status (health column)
 docker ps
+# or, with Compose:
+docker compose ps
 
-# Hit MCP endpoint directly
-curl http://localhost:8080/mcp/
+# Hit MCP endpoint directly (expect 406 from a bare GET — means the server is up)
+curl http://localhost:8080/mcp
 
 # Test using MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
 
-# Logs
+# Logs (plain Docker)
 docker logs -f <container_id>
+# Logs (Compose)
+docker compose logs -f
 
 # Debug shell (container already has /bin/bash from python:slim)
 docker exec -it <container_id> /bin/bash
 ```
 
+---
+
 ## Production deployment
 
 1. Keep Instana credentials outside the container; pass them through MCP-compatible clients (Claude Desktop, GitHub Copilot, etc.).
-2. Rely on the built-in TCP health check (port 8080) for orchestration probes.
+2. Rely on the built-in MCP health check (posts `initialize` to `/mcp`, verifies `serverInfo` in response) for orchestration probes.
 3. Configure persistent logging/metrics at the orchestrator level (CloudWatch, ELK, etc.).
 4. Run at least two replicas and enable rolling updates to avoid downtime.
 5. Regularly rebuild to pick up upstream `python:3.11-slim` security patches.
