@@ -1,0 +1,66 @@
+# Smaller context = faster builds and no risk of leaking local secrets or dev artifacts into the image layers.
+#
+# The Dockerfile only needs three things from the repo root:
+#   pyproject.toml   — dependency metadata for `pip install .`
+#   src/             — application source code
+#   README.md        — referenced by pyproject.toml as the long description
+#
+# Everything below is excluded.
+
+# ── Version control ──────────────────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+
+# ── Python byte-code & caches ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# ── Virtual environments & lock files ─────────────────────────────────────────
+# The image installs its own isolated packages; local venv is never needed.
+.venv/
+venv/
+env/
+uv.lock
+
+
+
+# ── Coverage & build artefacts ────────────────────────────────────────────────
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+dist/
+build/
+*.egg-info/
+
+# ── Documentation & images (not README.md — that stays) ──────────────────────
+docs/
+images/
+CHANGELOG.md
+CONTRIBUTING.md
+DOCKER.md
+OBSERVABILITY.md
+LICENSE.md
+
+# ── CI / tooling ─────────────────────────────────────────────────────────────
+.bob/
+mcpb/
+build_multiplatform.sh
+run_ruff_check.sh
+pyrightconfig.json
+
+# ── Secrets & local config — NEVER let these into a layer ────────────────────
+.env
+.env.*
+*.pem
+*.key
+
+# ── macOS noise ───────────────────────────────────────────────────────────────
+.DS_Store
