@@ -1,0 +1,37 @@
+# Production Compose file.
+#
+# Usage:
+#   docker compose up -d          # build image and start detached
+#   docker compose pull && \
+#   docker compose up -d          # pull pre-built image from a registry instead
+#   docker compose down           # stop and remove containers
+#
+# Instana credentials are NOT set here.  In streamable-HTTP mode (the default)
+# credentials are supplied per-request via HTTP headers by the MCP client
+# (Claude Desktop, GitHub Copilot, etc.).  Only stdio mode needs credentials
+# baked in — see .env.example if you need that.
+#
+# For a live-reload development environment use docker-compose.dev.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  mcp-instana:
+    build: .
+    image: mcp-instana:latest
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: "/app"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request, json, sys; req = urllib.request.Request('http://127.0.0.1:8080/mcp', data=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'healthcheck','version':'1.0'}}}).encode(), headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}, method='POST'); resp = urllib.request.urlopen(req, timeout=5).read().decode(); sys.exit(0 if 'serverInfo' in resp else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
