@@ -94,13 +94,15 @@ if [ "$PUSH" = true ]; then
 else
     echo "WARNING: Cannot load multi-platform images locally. Use --push flag to create multi-platform images."
     echo "Building only for the current platform..."
-    # Get current platform
+    # Get current platform from the Docker daemon (reports the Linux VM's arch even on macOS)
     CURRENT_PLATFORM=$(docker version -f '{{.Server.Os}}/{{.Server.Arch}}' | tr '[:upper:]' '[:lower:]')
     if [[ $CURRENT_PLATFORM == linux/* ]]; then
         BUILD_CMD="docker buildx build --platform $CURRENT_PLATFORM -t $FULL_IMAGE_NAME -f Dockerfile --load --provenance=false --sbom=false"
     else
-        echo "Current platform is not Linux. Skipping local build."
-        BUILD_CMD=""
+        # Docker Desktop on macOS reports a non-linux daemon OS in rare edge cases;
+        # fall back to a plain docker build which always builds for the local arch.
+        echo "Falling back to plain 'docker build' for local single-arch image..."
+        BUILD_CMD="docker build -t $FULL_IMAGE_NAME -f Dockerfile"
     fi
 fi
 

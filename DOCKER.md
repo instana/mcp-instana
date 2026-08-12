@@ -4,8 +4,8 @@ This guide documents everything Docker-related for MCP Instana. Use it when you 
 
 ## Overview
 
-- Two-stage image defined in `Dockerfile`: a builder installs only runtime dependencies (via `pyproject-runtime.toml` + `uv`), and the runtime stage copies the installed packages plus `src/`.
-- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8080`, and ships with a health check that curls `http://127.0.0.1:8080/health`.
+- Two-stage image defined in `Dockerfile`: a builder installs only runtime dependencies, and the runtime stage copies the installed packages plus `src/`.
+- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8080`, and ships with a TCP health check on port 8080.
 - Entry point runs `python -m src.core.server --transport streamable-http`, so clients provide Instana credentials over HTTP headers rather than baking them into the container.
 - `build_multiplatform.sh` automates multi-architecture builds (amd64 + arm64) with Docker Buildx, QEMU, and optional pushes.
 
@@ -33,7 +33,7 @@ services:
       - "8080:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8080),timeout=5); s.close()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -44,11 +44,11 @@ services:
 
 | Component | Details |
 | --- | --- |
-| Builder stage | Based on `python:3.11-slim`, installs `uv`, copies `pyproject-runtime.toml`, `pyproject.toml`, `src/`, `README.md`, then runs `pip install .` (runtime deps only). |
+| Builder stage | Based on `python:3.11-slim`, copies `pyproject.toml`, `src/`, `README.md`, then runs `pip install .` (runtime deps only). |
 | Runtime stage | Reuses `python:3.11-slim`, copies site-packages and binaries from builder, then copies `src/` only. |
 | User | Non-root `mcpuser` owns `/app`. |
 | Entry point | `python -m src.core.server --transport streamable-http`. Override with `docker run ... -- entrypoint` or `CMD`. |
-| Health check | `python -c "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)"` every 30s with retries. |
+| Health check | `python -c "import socket; s=socket.create_connection(('127.0.0.1',8080),timeout=5); s.close()"` every 30s with retries. |
 | Exposed port | `8080` (override with `PORT`). |
 
 ### Configuration reference
@@ -58,7 +58,7 @@ services:
 | `PORT` | `8080` | Align host port mapping when overriding. |
 | `PYTHONUNBUFFERED` | `1` | Keeps logs unbuffered. Usually leave as-is. |
 | `PYTHONPATH` | `/app` | Ensures `src/` is importable. |
-| `--transport` (CMD arg) | `streamable-http` | Change via `docker run ... -- --transport <mode>`. |
+| `--transport` (CMD arg) | `streamable-http` | Change via `docker run ... mcp-instana --transport <mode>`. |
 
 ## Building images
 
@@ -142,7 +142,7 @@ docker exec -it <container_id> /bin/bash
 ## Production deployment
 
 1. Keep Instana credentials outside the container; pass them through MCP-compatible clients (Claude Desktop, GitHub Copilot, etc.).
-2. Rely on the built-in HTTP health endpoint (`/health`) for orchestration probes.
+2. Rely on the built-in TCP health check (port 8080) for orchestration probes.
 3. Configure persistent logging/metrics at the orchestrator level (CloudWatch, ELK, etc.).
 4. Run at least two replicas and enable rolling updates to avoid downtime.
 5. Regularly rebuild to pick up upstream `python:3.11-slim` security patches.
@@ -173,14 +173,12 @@ spec:
         - name: PORT
           value: "8080"
         livenessProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5

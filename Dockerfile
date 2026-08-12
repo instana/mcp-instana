@@ -13,7 +13,6 @@ WORKDIR /app
 # Copy project files and source code needed for the build
 COPY pyproject.toml pyproject.toml
 COPY src ./src
-COPY schema ./schema
 COPY README.md ./
 
 # Install uv for dependency management
@@ -37,7 +36,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy only the source code and schema files needed for runtime
 COPY src ./src
-COPY schema ./schema
 
 # Set ownership to non-root user
 RUN chown -R mcpuser:mcpuser /app
@@ -54,8 +52,8 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
 # Health check using container's internal network
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import socket; s=socket.create_connection(('127.0.0.1',8080),timeout=5); s.close()" || exit 1
 
 # Run the server
 ENTRYPOINT ["python", "-m", "src.core.server"]
