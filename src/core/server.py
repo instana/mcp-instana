@@ -20,7 +20,6 @@ from src.prompts import PROMPT_REGISTRY
 
 load_dotenv()
 
-from src.observability import task, workflow
 
 # Configure logging
 # Read log level from environment variable (set by start.sh from config.yaml)
@@ -424,7 +423,6 @@ def get_enabled_client_configs(enabled_categories: str):
             logger.warning(f"Unknown category '{category}'")
     return enabled_configs
 
-@workflow(name="instana_mcp_workflow")
 def main():
     """Main entry point for the MCP server."""
     try:

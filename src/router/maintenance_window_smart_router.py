@@ -10,8 +10,10 @@ import logging
 from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
+from opentelemetry.trace import Status, StatusCode
 
 from src.core.utils import BaseInstanaClient, register_as_tool
+from src.observability import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +231,19 @@ Examples:
         ctx=None
     ) -> Dict[str, Any]:
         """Unified Instana maintenance window manager for lifecycle management."""
+        tracer = get_tracer()
+        _span = (
+            tracer.start_span(
+                "tools/call manage_maintenance_windows",
+                attributes={
+                    "gen_ai.tool.name": "manage_maintenance_windows",
+                    "mcp.method.name": "tools/call",
+                    "instana.tool.operation": operation or "",
+                    "instana.tool.resource_type": resource_type or "",
+                },
+            )
+            if tracer else None
+        )
         try:
             # Initialize params if not provided
             if params is None:
@@ -253,7 +268,12 @@ Examples:
             return await self._route_to_handler(resource_type, operation, params, ctx)
 
         except Exception as e:
+            if _span:
+                _span.set_status(Status(StatusCode.ERROR, str(e)))
             return self._handle_error(e, resource_type, operation, params or {})
+        finally:
+            if _span:
+                _span.end()
 
     def _log_incoming_request(
         self,

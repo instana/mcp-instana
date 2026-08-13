@@ -24,7 +24,12 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    create_instana_configuration,
+    register_as_tool,
+    with_header_auth,
+)
 
 
 class LogAlertConfigurationMCPTools(BaseInstanaClient):
@@ -38,8 +43,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"Initializing LogAlertConfigurationMCPTools with base_url={base_url}")
 
             # Configure the API client with the correct base URL and authentication
-            configuration = Configuration()
-            configuration.host = base_url
+            configuration = create_instana_configuration(base_url)
             configuration.api_key['ApiKeyAuth'] = read_token
             configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 

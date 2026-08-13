@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+from opentelemetry.trace import Status, StatusCode
 
 from src.core.timestamp_utils import convert_nested_datetime_param
 from src.core.utils import (
@@ -18,6 +19,7 @@ from src.core.utils import (
     normalize_beacon_type,
     register_as_tool,
 )
+from src.observability import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +279,19 @@ Returns:
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """Unified Instana mobile app resource manager for beacon monitoring, catalog, configuration, alert, and session replay operations."""
-
+        tracer = get_tracer()
+        _span = (
+            tracer.start_span(
+                "tools/call manage_mobile_apps",
+                attributes={
+                    "gen_ai.tool.name": "manage_mobile_apps",
+                    "mcp.method.name": "tools/call",
+                    "instana.tool.operation": operation or "",
+                    "instana.tool.resource_type": resource_type or "",
+                },
+            )
+            if tracer else None
+        )
         try:
             logger.debug(f"Mobile App Router: resource_type={resource_type}, operation={operation}")
 
@@ -312,6 +326,8 @@ Returns:
                 }
 
         except Exception as e:
+            if _span:
+                _span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(
                 f"Error in mobile app smart router: {e} | "
                 f"resource_type={resource_type}, operation={operation}, params={params}",
@@ -322,6 +338,9 @@ Returns:
                 "resource_type": resource_type,
                 "operation": operation
             }
+        finally:
+            if _span:
+                _span.end()
 
     async def _handle_analyze(
         self,

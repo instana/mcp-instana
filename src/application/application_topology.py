@@ -10,7 +10,11 @@ from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool
+from src.core.utils import (
+    BaseInstanaClient,
+    create_instana_configuration,
+    register_as_tool,
+)
 from src.prompts import mcp
 
 try:
@@ -40,8 +44,7 @@ class ApplicationTopologyMCPTools(BaseInstanaClient):
         try:
 
             # Configure the API client with the correct base URL and authentication
-            configuration = Configuration()
-            configuration.host = base_url
+            configuration = create_instana_configuration(base_url)
             configuration.api_key['ApiKeyAuth'] = read_token
             configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 

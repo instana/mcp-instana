@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from src.core.utils import (
     BaseInstanaClient,
+    create_instana_configuration,
     decode_response,
     parse_payload,
     register_as_tool,
@@ -60,8 +61,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
 
             # Configure the API client with the correct base URL and authentication
-            configuration = Configuration()
-            configuration.host = base_url
+            configuration = create_instana_configuration(base_url)
             configuration.api_key['ApiKeyAuth'] = read_token
             configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 

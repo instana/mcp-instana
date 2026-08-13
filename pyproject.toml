@@ -35,12 +35,17 @@ dependencies = [
     # pydantic>=2.13.4 ships pydantic-core>=2.46.4 which has pre-built cp314 wheels,
     # avoiding source compilation failures on Python 3.14 (jiter PyUnicode_* API removal).
     "pydantic==2.13.4",
-    "traceloop-sdk>=0.47.5",
+    # OTel API only — zero cost when no SDK is configured
+    "opentelemetry-api>=1.20.0",
 ]
 
 # Development dependencies for testing, linting, and development
 [project.optional-dependencies]
 dev = [
+    # OTel SDK + exporter — only needed when ENABLE_MCP_OBSERVABILITY=true
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20.0",
+
     # Testing framework - used in tests/e2e/ files
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",

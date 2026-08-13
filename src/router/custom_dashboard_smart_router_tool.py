@@ -10,8 +10,10 @@ from typing import Any, Dict, Optional
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+from opentelemetry.trace import Status, StatusCode
 
 from src.core.utils import BaseInstanaClient, register_as_tool
+from src.observability import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,18 @@ Examples:
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """Unified Instana custom dashboard manager for CRUD operations."""
+        tracer = get_tracer()
+        _span = (
+            tracer.start_span(
+                "tools/call manage_custom_dashboards",
+                attributes={
+                    "gen_ai.tool.name": "manage_custom_dashboards",
+                    "mcp.method.name": "tools/call",
+                    "instana.tool.operation": operation or "",
+                },
+            )
+            if tracer else None
+        )
         try:
             logger.info(f"Custom Dashboard Smart Router received: operation={operation}")
 
@@ -108,8 +122,13 @@ Examples:
             }
 
         except Exception as e:
+            if _span:
+                _span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error in custom dashboard smart router: {e}", exc_info=True)
             return {
                 "error": f"Custom dashboard smart router error: {e!s}",
                 "operation": operation
             }
+        finally:
+            if _span:
+                _span.end()

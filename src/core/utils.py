@@ -6,16 +6,25 @@ This module provides the base client for interacting with the Instana API.
 
 import json
 import logging
+import os
 import sys
+from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Union
 
 import requests
 
 from src.core.api_headers import build_instana_api_headers
+from src.observability import get_tracer
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _noop_span_ctx():
+    """Context manager that yields None — used when OTel tracing is disabled."""
+    yield None
 
 
 def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, Any], Dict[str, str]]:
@@ -270,16 +279,31 @@ def _set_csrf_headers(api_client_instance, auth_headers):
         logger.debug("Set CSRF header for JWT auth (no Cookie)")
 
 
-def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers):
-    """Create API client with configuration based on auth type."""
-    from instana_client.api_client import ApiClient
+def create_instana_configuration(base_url: str):
+    """Create an instana_client Configuration with SSL verification controlled by the
+    INSTANA_VERIFY_SSL environment variable.
+
+    Set ``INSTANA_VERIFY_SSL=false`` (case-insensitive) to disable certificate
+    verification — useful for development/Fyre VM environments that use self-signed
+    certificates.  Any other value (including the default when the variable is absent)
+    leaves verification enabled.
+    """
     from instana_client.configuration import Configuration
 
     configuration = Configuration()
     configuration.host = base_url
-    # Disable SSL verification for self-signed certificates (development/testing)
-    configuration.verify_ssl = False
-    configuration.ssl_ca_cert = None
+    verify_env = os.getenv("INSTANA_VERIFY_SSL", "true").strip().lower()
+    if verify_env == "false":
+        configuration.verify_ssl = False
+        configuration.ssl_ca_cert = None
+    return configuration
+
+
+def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers):
+    """Create API client with configuration based on auth type."""
+    from instana_client.api_client import ApiClient
+
+    configuration = create_instana_configuration(base_url)
 
     # Configure authentication type
     error = _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token)
@@ -349,10 +373,8 @@ def _try_http_mode_auth(api_class):
 def _create_api_client_from_config(base_url, api_token):
     """Create API client from configuration (for STDIO mode)."""
     from instana_client.api_client import ApiClient
-    from instana_client.configuration import Configuration
 
-    configuration = Configuration()
-    configuration.host = base_url
+    configuration = create_instana_configuration(base_url)
     configuration.api_key['ApiKeyAuth'] = api_token
     configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 
@@ -556,32 +578,53 @@ class BaseInstanaClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = self.get_headers()
 
-        try:
-            if method.upper() == "GET":
-                response = requests.get(url, headers=headers, params=params, verify=False)
-            elif method.upper() == "POST":
-                # Use the json parameter if provided, otherwise use params
-                data_to_send = json if json is not None else params
-                response = requests.post(url, headers=headers, json=data_to_send, verify=False)
-            elif method.upper() == "PUT":
-                data_to_send = json if json is not None else params
-                response = requests.put(url, headers=headers, json=data_to_send, verify=False)
-            elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, params=params, verify=False)
-            else:
-                return {"error": f"Unsupported HTTP method: {method}"}
+        tracer = get_tracer()
+        span_ctx = (
+            tracer.start_as_current_span(
+                "instana.api.request",
+                attributes={
+                    "http.method": method.upper(),
+                    "http.url": endpoint.lstrip("/"),
+                },
+            )
+            if tracer
+            else _noop_span_ctx()
+        )
 
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.HTTPError as err:
-            print(f"HTTP Error: {err}", file=sys.stderr)
-            return {"error": f"HTTP Error: {err}"}
-        except requests.exceptions.RequestException as err:
-            print(f"Error: {err}", file=sys.stderr)
-            return {"error": f"Error: {err}"}
-        except Exception as e:
-            print(f"Unexpected error: {e!s}", file=sys.stderr)
-            return {"error": f"Unexpected error: {e!s}"}
+        with span_ctx as span:
+            try:
+                if method.upper() == "GET":
+                    response = requests.get(url, headers=headers, params=params, verify=False)
+                elif method.upper() == "POST":
+                    # Use the json parameter if provided, otherwise use params
+                    data_to_send = json if json is not None else params
+                    response = requests.post(url, headers=headers, json=data_to_send, verify=False)
+                elif method.upper() == "PUT":
+                    data_to_send = json if json is not None else params
+                    response = requests.put(url, headers=headers, json=data_to_send, verify=False)
+                elif method.upper() == "DELETE":
+                    response = requests.delete(url, headers=headers, params=params, verify=False)
+                else:
+                    return {"error": f"Unsupported HTTP method: {method}"}
+
+                response.raise_for_status()
+                if span:
+                    span.set_attribute("http.status_code", response.status_code)
+                return response.json()
+            except requests.exceptions.HTTPError as err:
+                if span:
+                    span.set_attribute("http.status_code", err.response.status_code if err.response else 0)
+                    span.set_attribute("error.type", type(err).__name__)
+                print(f"HTTP Error: {err}", file=sys.stderr)
+                return {"error": f"HTTP Error: {err}"}
+            except requests.exceptions.RequestException as err:
+                if span:
+                    span.set_attribute("error.type", type(err).__name__)
+                print(f"Error: {err}", file=sys.stderr)
+                return {"error": f"Error: {err}"}
+            except Exception as e:
+                print(f"Unexpected error: {e!s}", file=sys.stderr)
+                return {"error": f"Unexpected error: {e!s}"}
 
 def decode_response(response) -> str:
     """

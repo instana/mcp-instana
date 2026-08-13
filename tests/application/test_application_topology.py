@@ -178,23 +178,24 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
         mock_config.api_key = {}
         mock_config.api_key_prefix = {}
 
-        with patch('src.application.application_topology.Configuration', return_value=mock_config) as mock_config_class, \
+        with patch('src.application.application_topology.create_instana_configuration', return_value=mock_config) as mock_create_config, \
              patch('src.application.application_topology.ApiClient', return_value=mock_api_client), \
              patch('src.application.application_topology.ApplicationTopologyApi', return_value=self.topology_api):
             ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)
 
-            # Verify Configuration was called
-            mock_config_class.assert_called_once()
-            # Verify configuration properties were set
-            self.assertEqual(mock_config.host, self.base_url)
+            # Verify create_instana_configuration was called with the base_url
+            mock_create_config.assert_called_once_with(self.base_url)
+            # Verify configuration properties were set on the returned config
             self.assertEqual(mock_config.api_key['ApiKeyAuth'], self.read_token)
             self.assertEqual(mock_config.api_key_prefix['ApiKeyAuth'], 'apiToken')
 
     def test_init_api_client_creation(self):
         """Test that ApiClient is created with the configuration"""
         mock_config = MagicMock()
+        mock_config.api_key = {}
+        mock_config.api_key_prefix = {}
 
-        with patch('src.application.application_topology.Configuration', return_value=mock_config), \
+        with patch('src.application.application_topology.create_instana_configuration', return_value=mock_config), \
              patch('src.application.application_topology.ApiClient', return_value=mock_api_client) as mock_api_client_class, \
              patch('src.application.application_topology.ApplicationTopologyApi', return_value=self.topology_api):
             ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)
@@ -218,7 +219,7 @@ class TestApplicationTopologyMCPTools(unittest.TestCase):
 
     def test_init_exception_handling(self):
         """Test that initialization handles exceptions properly"""
-        with patch('src.application.application_topology.Configuration', side_effect=Exception("Config error")), \
+        with patch('src.application.application_topology.create_instana_configuration', side_effect=Exception("Config error")), \
              patch('src.application.application_topology.logger') as mock_logger:
             with self.assertRaises(Exception):
                 ApplicationTopologyMCPTools(read_token=self.read_token, base_url=self.base_url)

@@ -90,7 +90,6 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         configuration_instance = MagicMock()
         configuration_instance.api_key = {}
         configuration_instance.api_key_prefix = {}
-        mock_configuration.return_value = configuration_instance
 
         api_client_instance = MagicMock()
         mock_api_client.return_value = api_client_instance
@@ -98,16 +97,17 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         analyze_api_instance = MagicMock()
         mock_analyze_api.return_value = analyze_api_instance
 
-        client = ApplicationAnalyzeMCPTools(
-            read_token=self.read_token,
-            base_url=self.base_url
-        )
+        with patch('src.application.application_analyze.create_instana_configuration', return_value=configuration_instance) as mock_create_config:
+            client = ApplicationAnalyzeMCPTools(
+                read_token=self.read_token,
+                base_url=self.base_url
+            )
 
         self.assertEqual(client.read_token, self.read_token)
         self.assertEqual(client.base_url, self.base_url)
         self.assertIs(client.analyze_api, analyze_api_instance)
 
-        self.assertEqual(configuration_instance.host, self.base_url)
+        mock_create_config.assert_called_once_with(self.base_url)
         self.assertEqual(configuration_instance.api_key['ApiKeyAuth'], self.read_token)
         self.assertEqual(configuration_instance.api_key_prefix['ApiKeyAuth'], 'apiToken')
 
@@ -115,13 +115,12 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         mock_analyze_api.assert_called_once_with(api_client=api_client_instance)
 
     def test_init_configuration_failure(self):
-        mock_configuration.side_effect = Exception("configuration failed")
-
-        with self.assertRaises(Exception) as context:
-            ApplicationAnalyzeMCPTools(
-                read_token=self.read_token,
-                base_url=self.base_url
-            )
+        with patch('src.application.application_analyze.create_instana_configuration', side_effect=Exception("configuration failed")):
+            with self.assertRaises(Exception) as context:
+                ApplicationAnalyzeMCPTools(
+                    read_token=self.read_token,
+                    base_url=self.base_url
+                )
 
         self.assertIn("configuration failed", str(context.exception))
         mock_api_client.assert_not_called()
@@ -147,17 +146,17 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         configuration_instance = MagicMock()
         configuration_instance.api_key = {}
         configuration_instance.api_key_prefix = {}
-        mock_configuration.return_value = configuration_instance
 
         api_client_instance = MagicMock()
         mock_api_client.return_value = api_client_instance
         mock_analyze_api.side_effect = Exception("analyze api failed")
 
-        with self.assertRaises(Exception) as context:
-            ApplicationAnalyzeMCPTools(
-                read_token=self.read_token,
-                base_url=self.base_url
-            )
+        with patch('src.application.application_analyze.create_instana_configuration', return_value=configuration_instance):
+            with self.assertRaises(Exception) as context:
+                ApplicationAnalyzeMCPTools(
+                    read_token=self.read_token,
+                    base_url=self.base_url
+                )
 
         self.assertIn("analyze api failed", str(context.exception))
         mock_api_client.assert_called_once_with(configuration=configuration_instance)

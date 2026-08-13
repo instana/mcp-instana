@@ -29,7 +29,12 @@ except ImportError:
     logger.error("Failed to import application analyze API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    create_instana_configuration,
+    register_as_tool,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -44,8 +49,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         try:
 
             # Configure the API client with the correct base URL and authentication
-            configuration = Configuration()
-            configuration.host = base_url
+            configuration = create_instana_configuration(base_url)
             configuration.api_key['ApiKeyAuth'] = read_token
             configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
 

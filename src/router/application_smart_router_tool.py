@@ -10,12 +10,14 @@ from typing import Any, Dict, List, Optional, Union
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+from opentelemetry.trace import Status, StatusCode
 
 from src.core.timestamp_utils import (
     convert_datetime_param,
     convert_nested_datetime_param,
 )
 from src.core.utils import BaseInstanaClient, register_as_tool
+from src.observability import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +254,19 @@ Examples:
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """Unified Instana application resource manager for metrics, alerts, configurations, and catalog."""
+        tracer = get_tracer()
+        _span = (
+            tracer.start_span(
+                "tools/call manage_applications",
+                attributes={
+                    "gen_ai.tool.name": "manage_applications",
+                    "mcp.method.name": "tools/call",
+                    "instana.tool.operation": operation or "",
+                    "instana.tool.resource_type": resource_type or "",
+                },
+            )
+            if tracer else None
+        )
         try:
             logger.info(f"Smart Router received: resource_type={resource_type}, operation={operation}")
 
@@ -304,12 +319,17 @@ Examples:
                 }
 
         except Exception as e:
+            if _span:
+                _span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error in smart router: {e}", exc_info=True)
             return {
                 "error": f"Smart router error: {e!s}",
                 "resource_type": resource_type,
                 "operation": operation
             }
+        finally:
+            if _span:
+                _span.end()
 
     async def _handle_metrics(
         self,
