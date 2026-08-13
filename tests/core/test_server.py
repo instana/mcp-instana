@@ -233,6 +233,15 @@ class TestMCPServer(unittest.TestCase):
         configs = get_enabled_client_configs("unknown")
         self.assertEqual(len(configs), 0)
 
+    @patch('src.core.server.get_client_categories')
+    def test_get_enabled_client_configs_logs(self, mock_get_categories):
+        log_client = MagicMock()
+        mock_get_categories.return_value = {"logs": [('smart_router_log_client', log_client)]}
+        self.assertEqual(
+            get_enabled_client_configs("logs"),
+            [('smart_router_log_client', log_client)],
+        )
+
     @patch('src.core.server.argparse.ArgumentParser')
     @patch('src.core.server.create_app')
     @patch('src.core.server.sys.argv', ['mcp_server.py'])
