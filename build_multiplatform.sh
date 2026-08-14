@@ -64,8 +64,29 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---------------------------------------------------------------------------
+# Detect OS: Darwin (macOS), Linux, or Windows (Git Bash / WSL reports MINGW
+# or MSYS or CYGWIN in uname; WSL reports Linux but WSLENV is set).
+# ---------------------------------------------------------------------------
+detect_os() {
+    local uname_out
+    uname_out="$(uname -s 2>/dev/null || echo "unknown")"
+    case "$uname_out" in
+        Darwin*)  HOST_OS="mac"     ;;
+        Linux*)
+            if [[ -n "${WSLENV:-}" || -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+                HOST_OS="windows"   # WSL2
+            else
+                HOST_OS="linux"
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*) HOST_OS="windows" ;;   # Git Bash
+        *) HOST_OS="linux" ;;
+    esac
+    echo "Detected host OS: $HOST_OS"
+}
+
+# ---------------------------------------------------------------------------
 # Detect container engine: prefer podman if available, fall back to docker.
-# Set CONTAINER_ENGINE to the resolved binary path.
 # ---------------------------------------------------------------------------
 detect_engine() {
     if command -v podman &>/dev/null; then
@@ -81,6 +102,7 @@ detect_engine() {
     echo "Using container engine: $CONTAINER_ENGINE ($($CONTAINER_ENGINE --version 2>&1 | head -1))"
 }
 
+detect_os
 detect_engine
 
 # Full image name with registry and tag
@@ -91,9 +113,11 @@ FULL_IMAGE_NAME="${REGISTRY}${IMAGE_NAME}:${IMAGE_TAG}"
 # ---------------------------------------------------------------------------
 if [ "$ENGINE_TYPE" = "podman" ]; then
 
-    # Ensure the podman machine is running (macOS only)
-    if [[ "$(uname)" == "Darwin" ]]; then
-        # Discover the first machine name rather than assuming "podman-machine-default"
+    # Ensure the podman machine is running.
+    # - macOS: podman runs inside an applehv/qemu VM — discover and start it.
+    # - Windows (WSL2/Git Bash): podman uses WSL2 directly; no machine to start.
+    # - Linux: podman is native; no machine needed.
+    if [[ "$HOST_OS" == "mac" ]]; then
         PODMAN_MACHINE=$(podman machine list --format '{{.Name}}' 2>/dev/null | head -1)
         if [[ -z "$PODMAN_MACHINE" ]]; then
             echo "ERROR: No podman machine found. Create one with: podman machine init"
@@ -106,6 +130,8 @@ if [ "$ENGINE_TYPE" = "podman" ]; then
         else
             echo "Podman machine '$PODMAN_MACHINE' is already running."
         fi
+    elif [[ "$HOST_OS" == "windows" ]]; then
+        echo "Windows detected: podman uses WSL2 directly — no machine start needed."
     fi
 
     # Register QEMU binfmt handlers inside the podman machine for cross-arch builds
@@ -153,10 +179,9 @@ if [ "$ENGINE_TYPE" = "podman" ]; then
     else
         echo "WARNING: Cannot load multi-platform images locally. Use --push to create multi-platform images."
         echo "Building only for the current platform..."
-        # Derive current Linux platform from the podman machine or uname fallback
-        CURRENT_PLATFORM=$(podman machine inspect --format '{{.VMType}}' 2>/dev/null \
-            && echo "linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" \
-            || echo "linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')")
+        # Derive the current Linux platform.
+        # On Windows (Git Bash) uname -m returns the Windows host arch; map it the same way.
+        CURRENT_PLATFORM="linux/$(uname -m 2>/dev/null | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/AMD64/amd64/' || echo 'amd64')"
         echo "Building for platform: $CURRENT_PLATFORM"
         podman build \
             --platform "$CURRENT_PLATFORM" \
