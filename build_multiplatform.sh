@@ -172,8 +172,14 @@ if [ "$ENGINE_TYPE" = "podman" ]; then
         podman manifest inspect "$FULL_IMAGE_NAME"
 
         echo "Testing image pull for different architectures..."
-        podman pull --platform=linux/amd64 "$FULL_IMAGE_NAME"
-        podman pull --platform=linux/arm64 "$FULL_IMAGE_NAME"
+        NATIVE_ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/AMD64/amd64/')
+        if [ "$NATIVE_ARCH" = "amd64" ]; then
+            podman pull --platform=linux/arm64 "$FULL_IMAGE_NAME"
+            podman pull --platform=linux/amd64 "$FULL_IMAGE_NAME"
+        else
+            podman pull --platform=linux/amd64 "$FULL_IMAGE_NAME"
+            podman pull --platform=linux/arm64 "$FULL_IMAGE_NAME"
+        fi
 
         echo "Image successfully built and pushed for multiple architectures"
     else
@@ -255,8 +261,14 @@ else
         docker manifest inspect $FULL_IMAGE_NAME
 
         echo "Testing image pull for different architectures..."
-        docker pull --platform=linux/amd64 $FULL_IMAGE_NAME
-        docker pull --platform=linux/arm64 $FULL_IMAGE_NAME
+        NATIVE_ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/AMD64/amd64/')
+        if [ "$NATIVE_ARCH" = "amd64" ]; then
+            docker pull --platform=linux/arm64 $FULL_IMAGE_NAME
+            docker pull --platform=linux/amd64 $FULL_IMAGE_NAME
+        else
+            docker pull --platform=linux/amd64 $FULL_IMAGE_NAME
+            docker pull --platform=linux/arm64 $FULL_IMAGE_NAME
+        fi
 
         echo "Image successfully built and pushed for multiple architectures"
     else
