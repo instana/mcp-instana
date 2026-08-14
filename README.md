@@ -1316,18 +1316,22 @@ uv run src/core/server.py --list-tools
 
 The MCP Instana server can be deployed using Docker for production environments. The Docker setup is optimized for security, performance, and minimal resource usage.
 
-### Building and running
+### Building the Docker Image
 
 #### **Prerequisites**
 - Docker installed and running
 - Access to the project source code
 
-#### **Plain Docker**
-
+#### **Build and Run**
 ```bash
 # Build the image
 docker build -t mcp-instana:latest .
 
+# Build with a specific tag
+docker build -t mcp-instana:<image_tag> .
+```
+
+```bash
 # Run the container (credentials are supplied via HTTP headers at request time)
 docker run -p 8080:8080 mcp-instana
 
@@ -1335,24 +1339,7 @@ docker run -p 8080:8080 mcp-instana
 docker run -p 8081:8080 mcp-instana
 ```
 
-#### **Docker Compose (recommended)**
-
-The repo ships `docker-compose.yml` (production) and `docker-compose.dev.yml` (development override with live-reloading source):
-
-```bash
-# Build and start detached
-docker compose up -d
-
-# Development: live src/ bind-mount + debug logging (no rebuild needed for src/ edits)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Stop
-docker compose down
-```
-
-Instana credentials are **not** required in Compose for HTTP mode — the MCP client supplies them as headers at request time. For stdio mode, create a `.env` file in the repo root with `INSTANA_API_TOKEN` and `INSTANA_BASE_URL` — see [DOCKER.md](DOCKER.md) for details.
-
-📖 **For comprehensive Docker documentation including multi-architecture builds, Docker Compose workflows, `.dockerignore`, security best practices, and production deployment examples, see [DOCKER.md](DOCKER.md).**
+📖 **For comprehensive Docker documentation including multi-architecture builds, `.dockerignore`, security best practices, and production deployment examples, see [DOCKER.md](DOCKER.md).**
 
 ## Troubleshooting
 

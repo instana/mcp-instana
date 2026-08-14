@@ -9,13 +9,10 @@ This guide documents everything Docker-related for MCP Instana. Use it when you 
 - Entry point runs `python -m src.core.server --transport streamable-http`, so clients provide Instana credentials over HTTP headers rather than baking them into the container.
 - `.dockerignore` trims the build context to only the files the Dockerfile actually needs (`pyproject.toml`, `src/`, `README.md`), keeping build times fast and secrets out of image layers.
 - `build_multiplatform.sh` automates multi-architecture builds (amd64 + arm64) with Docker Buildx, QEMU, and optional pushes.
-- `docker-compose.yml` and `docker-compose.dev.yml` provide single-command workflows for production and development use.
 
 ---
 
 ## Quickstart
-
-### Plain Docker
 
 ```bash
 # Build a local image (single architecture)
@@ -26,86 +23,6 @@ docker run --rm -p 8080:8080 mcp-instana
 
 # Override the host port
 docker run --rm -e PORT=9090 -p 9090:9090 mcp-instana
-```
-
-### Docker Compose (recommended)
-
-```bash
-# Build and start, detached
-docker compose up -d
-
-# Tail logs
-docker compose logs -f
-
-# Stop and remove containers
-docker compose down
-```
-
----
-
-## Docker Compose
-
-Docker Compose lets you define the full `docker run` invocation — ports, environment variables, restart policy, health check — in a checked-in YAML file instead of typing flags on the command line every time. This repo ships two Compose files:
-
-| File | Purpose |
-| --- | --- |
-| `docker-compose.yml` | Production / CI. Builds the image, maps port 8080, restarts on failure, runs the full MCP health check. |
-| `docker-compose.dev.yml` | Development override. Mounts `src/` live into the running container so code edits are visible without a rebuild. Enables `--debug` logging and disables restart. |
-
-### Credentials and `.env`
-
-In streamable-HTTP mode (the default), **no credentials belong in Compose**. The MCP client (Claude Desktop, GitHub Copilot, etc.) injects `instana-base-url` and `instana-api-token` as HTTP headers on every request; the container never stores them.
-
-The only time you need credentials in the environment is when running in **stdio mode** locally. Create a `.env` file in the repo root — it is already listed in `.gitignore` and must never be committed:
-
-```bash
-# .env  (create this file manually — do not commit it)
-INSTANA_API_TOKEN=your_api_token_here
-INSTANA_BASE_URL=https://your-instana-instance.example.com
-```
-
-Compose picks up `.env` automatically when you run `docker compose up`.
-
-### Production workflow
-
-```bash
-# Build image from source and start
-docker compose up -d
-
-# Pull a pre-built image from a registry instead of building locally
-docker compose pull && docker compose up -d
-
-# Check container health
-docker compose ps
-
-# Tail logs
-docker compose logs -f mcp-instana
-
-# Stop
-docker compose down
-```
-
-### Development workflow
-
-The dev override mounts `./src` into the running container as a read-only bind mount. Because the Python interpreter reads source files at import time (FastMCP is not a compiled binary), any edit you save on the host is visible the next time an MCP request triggers that code path — no rebuild required.
-
-```bash
-# Start with live source and debug logging
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# In a second terminal: edit any file under src/ and it is live immediately
-# Restart the server process to pick up changes that affect startup code:
-docker compose -f docker-compose.yml -f docker-compose.dev.yml restart mcp-instana
-```
-
-> **Note:** The dev override stops at the `builder` stage (which includes `gcc` etc.) rather than the leaner `runtime` stage. This is intentional — it gives you a fuller environment for debugging. The bind mount means the installed packages come from the builder, but the running source is your local working tree.
-
-### Overriding the host port
-
-The base `docker-compose.yml` reads the `PORT` variable from your shell environment (or from `.env`). To expose the container on a different host port without editing the file:
-
-```bash
-PORT=9090 docker compose up -d
 ```
 
 ---
@@ -218,8 +135,6 @@ The script:
 ```bash
 # Inspect container status (health column)
 docker ps
-# or, with Compose:
-docker compose ps
 
 # Hit MCP endpoint directly (expect 406 from a bare GET — means the server is up)
 curl http://localhost:8080/mcp
@@ -227,10 +142,8 @@ curl http://localhost:8080/mcp
 # Test using MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
 
-# Logs (plain Docker)
+# Logs
 docker logs -f <container_id>
-# Logs (Compose)
-docker compose logs -f
 
 # Debug shell (container already has /bin/bash from python:slim)
 docker exec -it <container_id> /bin/bash
