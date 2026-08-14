@@ -89,6 +89,8 @@ docker buildx build \
 
 ### Using `build_multiplatform.sh`
 
+**macOS / Linux:**
+
 ```bash
 chmod +x build_multiplatform.sh
 # Build local arch (loads result when host is linux/*)
@@ -97,6 +99,26 @@ chmod +x build_multiplatform.sh
 # Build and push multi-arch manifest
 ./build_multiplatform.sh --registry username/ --tag v1.0 --push
 ```
+
+**Windows:**
+
+Git on Windows checks out files with CRLF line endings by default, which causes
+bash to fail with `$'\r': command not found`. Strip the carriage returns before
+running the script for the first time, then run it from Git Bash or WSL:
+
+In **PowerShell** (fix line endings):
+```powershell
+(Get-Content build_multiplatform.sh -Raw) -replace "`r`n", "`n" | Set-Content build_multiplatform.sh -NoNewline
+```
+
+In **Git Bash or WSL** (fix line endings and run in one step):
+```bash
+sed -i 's/\r//' build_multiplatform.sh && ./build_multiplatform.sh --registry username/ --tag v1.0 --push
+```
+
+> **Permanent fix:** the repo's `.gitattributes` forces LF endings for `*.sh` files
+> on all platforms. If you cloned before `.gitattributes` was added, the one-time
+> fix above is all that's needed. Fresh clones will not have this problem.
 
 The script:
 
