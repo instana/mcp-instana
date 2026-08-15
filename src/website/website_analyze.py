@@ -508,6 +508,10 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
             "stackTrace", "parsedStackTrace", "errorId", "stackTraceReadability",
             # Session and user tracking (all beacon types)
             "sessionId",
+            # Custom event metadata (user-defined key/value pairs, e.g. reported
+            # via ineum('reportEvent', name, {meta: {...}}) — primary payload of
+            # CUSTOM beacons)
+            "meta",
             # Backend correlation (for PAGELOAD beacons)
             "backendTraceId",
             # HTTP metrics (if applicable)

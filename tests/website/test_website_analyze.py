@@ -459,6 +459,51 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertEqual(len(result["beacons"]), 1)
         self.assertEqual(result["beacons"][0]["websiteLabel"], "Test Site")
 
+    def test_summarize_includes_custom_event_meta(self):
+        """Custom-event meta key/value pairs must survive summarization"""
+        response_data = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "beaconId": "abc123",
+                        "timestamp": 1234567890,
+                        "duration": 42,
+                        "type": "custom",
+                        "meta": {"flow": "checkout", "step": "payment", "attempt": "1"}
+                    }
+                }
+            ]
+        }
+
+        result = self.tools_instance._summarize_beacons_response(response_data)
+
+        self.assertEqual(len(result["beacons"]), 1)
+        self.assertEqual(
+            result["beacons"][0]["meta"],
+            {"flow": "checkout", "step": "payment", "attempt": "1"}
+        )
+
+    def test_summarize_skips_empty_meta(self):
+        """Beacons without meta (empty dict) should not carry an empty meta key"""
+        response_data = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "beaconId": "abc123",
+                        "timestamp": 1234567890,
+                        "meta": {}
+                    }
+                }
+            ]
+        }
+
+        result = self.tools_instance._summarize_beacons_response(response_data)
+
+        self.assertEqual(len(result["beacons"]), 1)
+        self.assertNotIn("meta", result["beacons"][0])
+
     def test_check_elicitation_all_params_missing(self):
         """Test elicitation when all parameters are missing"""
         result = self.tools_instance._check_elicitation_for_beacon_groups(None, None, None)
