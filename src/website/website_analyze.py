@@ -153,6 +153,15 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         elif "groupbyTagEntity" in group:
             mapped_group["groupbyTagEntity"] = group["groupbyTagEntity"]
 
+        # Optional 2nd-level key for key/value tags (e.g. the sub-key of
+        # beacon.meta) — supported by the API's WebsiteBeaconTagGroup model
+        second_level_key = (
+            group.get("groupByTagSecondLevelKey")
+            or group.get("groupbyTagSecondLevelKey")
+        )
+        if second_level_key:
+            mapped_group["groupbyTagSecondLevelKey"] = second_level_key
+
         mapped_group.setdefault("groupbyTag", DEFAULT_GROUP_BY_TAG)
         mapped_group.setdefault("groupbyTagEntity", DEFAULT_GROUP_BY_TAG_ENTITY)
         return mapped_group
@@ -289,6 +298,10 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 ]
             group: Grouping configuration
                 Example: {"groupByTag": "beacon.page.name"}
+                For key/value tags (e.g. `beacon.meta`), an optional
+                `groupbyTagSecondLevelKey` selects the sub-key to group by:
+                {"groupbyTag": "beacon.meta", "groupbyTagEntity": "NOT_APPLICABLE",
+                 "groupbyTagSecondLevelKey": "myKey"}
             tag_filter_expression: Filter expression for tags
                 Example: {
                     "type": "TAG_FILTER",

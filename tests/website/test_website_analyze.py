@@ -278,6 +278,31 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertEqual(self.tools_instance.read_token, "test_token")
         self.assertEqual(self.tools_instance.base_url, "https://test.instana.io")
 
+    def test_map_group_fields_passes_second_level_key(self):
+        """groupbyTagSecondLevelKey must survive group field mapping"""
+        mapped = self.tools_instance._map_group_fields({
+            "groupbyTag": "beacon.meta",
+            "groupbyTagEntity": "NOT_APPLICABLE",
+            "groupbyTagSecondLevelKey": "myKey"
+        })
+        self.assertEqual(mapped["groupbyTagSecondLevelKey"], "myKey")
+        self.assertEqual(mapped["groupbyTag"], "beacon.meta")
+
+    def test_map_group_fields_second_level_key_camel_case(self):
+        """camelCase groupByTagSecondLevelKey is accepted like the other group fields"""
+        mapped = self.tools_instance._map_group_fields({
+            "groupByTag": "beacon.meta",
+            "groupByTagSecondLevelKey": "myKey"
+        })
+        self.assertEqual(mapped["groupbyTagSecondLevelKey"], "myKey")
+
+    def test_map_group_fields_omits_absent_second_level_key(self):
+        """No groupbyTagSecondLevelKey in the output when not provided"""
+        mapped = self.tools_instance._map_group_fields({
+            "groupbyTag": "beacon.page.name"
+        })
+        self.assertNotIn("groupbyTagSecondLevelKey", mapped)
+
     @PATCH_CATALOG
     def test_get_beacon_groups_with_all_params(self, _mock_catalog):
         """Test get_website_beacon_groups with all parameters"""
