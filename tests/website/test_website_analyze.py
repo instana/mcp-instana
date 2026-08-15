@@ -278,6 +278,68 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertEqual(self.tools_instance.read_token, "test_token")
         self.assertEqual(self.tools_instance.base_url, "https://test.instana.io")
 
+    def test_convert_beacon_tag_filters_flat_and_expression(self):
+        """A flat AND expression of TAG_FILTERs converts successfully"""
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "beacon.page.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "/home"},
+                {"type": "TAG_FILTER", "name": "beacon.customEvent.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "my_event"},
+            ],
+        })
+        self.assertNotIn("error", result)
+        self.assertEqual(len(result["tagFilters"]), 2)
+
+    def test_convert_beacon_tag_filters_rejects_key_in_single_filter(self):
+        """A 'key' field cannot be expressed in deprecated tagFilters — must error, not drop"""
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "TAG_FILTER", "name": "beacon.meta", "key": "myKey",
+            "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "some_value",
+        })
+        self.assertIn("error", result)
+        self.assertIn("'key'", result["error"])
+
+    def test_convert_beacon_tag_filters_rejects_key_in_expression_element(self):
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "beacon.meta", "key": "myKey", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "some_value"},
+            ],
+        })
+        self.assertIn("error", result)
+        self.assertIn("'key'", result["error"])
+
+    def test_convert_beacon_tag_filters_rejects_or_operator(self):
+        """Deprecated tagFilters are implicitly AND — OR must error, not silently change semantics"""
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "EXPRESSION", "logicalOperator": "OR",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "beacon.page.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "/home"},
+            ],
+        })
+        self.assertIn("error", result)
+        self.assertIn("OR", result["error"])
+
+    def test_convert_beacon_tag_filters_rejects_nested_expression(self):
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [
+                {"type": "EXPRESSION", "logicalOperator": "OR", "elements": []},
+            ],
+        })
+        self.assertIn("error", result)
+
+    def test_convert_beacon_tag_filters_rejects_unknown_type(self):
+        result = self.tools_instance._convert_beacon_tag_filters({"type": "SOMETHING_ELSE"})
+        self.assertIn("error", result)
+
+    def test_convert_beacon_tag_filters_empty_expression_is_noop(self):
+        """An empty EXPRESSION means 'no filters' and must stay accepted"""
+        result = self.tools_instance._convert_beacon_tag_filters({
+            "type": "EXPRESSION", "logicalOperator": "AND", "elements": [],
+        })
+        self.assertEqual(result, {})
+
     @PATCH_CATALOG
     def test_get_beacon_groups_with_all_params(self, _mock_catalog):
         """Test get_website_beacon_groups with all parameters"""
