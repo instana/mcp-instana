@@ -28,6 +28,10 @@
     - [Tool Categories](#tool-categories)
       - [Using CLI (PyPI Installation)](#using-cli-pypi-installation-2)
       - [Using Development Installation](#using-development-installation-3)
+    - [SSL Certificate Verification](#ssl-certificate-verification)
+      - [Using the CLI option](#using-the-cli-option)
+      - [Using the environment variable](#using-the-environment-variable)
+      - [Using a custom CA bundle](#using-a-custom-ca-bundle)
     - [Verifying Server Status](#verifying-server-status)
     - [Common Startup Issues](#common-startup-issues)
   - [Setup and Usage](#setup-and-usage)
@@ -301,6 +305,7 @@ uv run src/core/server.py [OPTIONS]
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events,website). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
 - `--list-tools`: List all available tool categories and exit
 - `--port <port>`: MCP server port (default: 8080, can be overridden with PORT env var)
+- `--verify-ssl`: Enable SSL certificate verification for outgoing Instana API calls. Equivalent to setting `INSTANA_SSL_VERIFY=true`. SSL verification is **disabled by default**.
 - `--help`: Show help message and exit
 
 ### Starting in Streamable HTTP Mode
@@ -437,6 +442,49 @@ uv run src/core/server.py --transport streamable-http --tools events
 - **`events`**: Event monitoring tools and prompts (Kubernetes events, agent monitoring)
 - **`website`**: Website monitoring tools and prompts (metrics, catalog, analyze, configuration)
 
+
+### SSL Certificate Verification
+
+SSL certificate verification for outgoing Instana API calls is **disabled by default**. This applies to both **Streamable HTTP** and **Stdio** transport modes.
+
+To enable SSL certificate verification, use either the `--verify-ssl` CLI option or the `INSTANA_SSL_VERIFY` environment variable.
+
+#### Using the CLI option
+
+```bash
+uv run src/core/server.py --verify-ssl
+```
+
+The `--verify-ssl` option is equivalent to setting:
+
+```bash
+export INSTANA_SSL_VERIFY=true
+```
+
+#### Using the environment variable
+
+```bash
+export INSTANA_SSL_VERIFY=true
+uv run src/core/server.py
+```
+
+SSL verification is disabled when `INSTANA_SSL_VERIFY` is set to `0`, `false`, or `no` (case-insensitive), or left unset. Any other value enables verification — use `true`, `1`, or `yes` as the conventional choices.
+
+#### Using a custom CA bundle
+
+When SSL verification is enabled, the system CA bundle is used by default. To use a custom CA certificate bundle, set `INSTANA_CA_BUNDLE`:
+
+```bash
+export INSTANA_SSL_VERIFY=true
+export INSTANA_CA_BUNDLE=/path/to/ca-bundle.crt
+uv run src/core/server.py
+```
+
+`INSTANA_CA_BUNDLE` is only used when SSL certificate verification is enabled.
+
+> The server logs the effective SSL verification state at startup, so you can immediately confirm whether your environment variable or CLI flag was picked up.
+
+
 ### Verifying Server Status
 
 Once started, you can verify the server is running:
@@ -455,8 +503,9 @@ The server will start and wait for stdin input from MCP clients.
 
 ### Common Startup Issues
 
-**Certificate Issues:**
-If you encounter SSL certificate errors, ensure your Python environment has access to system certificates:
+**SSL / Certificate Issues:**
+See the [SSL Certificate Verification](#ssl-certificate-verification) section above for configuration options. If you encounter SSL errors with verification enabled and are using macOS, ensure your Python environment has access to system certificates:
+
 ```bash
 # macOS - Install certificates for Python
 /Applications/Python\ 3.13/Install\ Certificates.command
