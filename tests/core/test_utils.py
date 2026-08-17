@@ -170,13 +170,14 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
+        # Patch SSL verify to False BEFORE constructing the client so that
+        # BaseInstanaClient.__init__ captures False in self.ssl_verify.
+        self._ssl_patch = patch('src.core.utils._ssl_verify_from_env', return_value=False)
+        self._ssl_patch.start()
         # Create the client
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"
         self.client = BaseInstanaClient(read_token=self.read_token, base_url=self.base_url)
-        # Patch SSL verify to False so tests reflect disabled-SSL behaviour
-        self._ssl_patch = patch('src.core.utils._ssl_verify_from_env', return_value=False)
-        self._ssl_patch.start()
 
     def tearDown(self):
         self._ssl_patch.stop()
@@ -1254,8 +1255,8 @@ class TestVersionImport(unittest.TestCase):
         # Re-import to trigger the version logic
         importlib.reload(src.core.utils)
 
-        # Check that the fallback version was used (updated to 1.0.0)
-        self.assertEqual(src.core.utils.__version__, "1.0.0")
+        # Check that the fallback version was used (updated to 0.9.6)
+        self.assertEqual(src.core.utils.__version__, "0.9.6")
 
     def test_version_used_in_headers(self):
         """Test that __version__ is used in User-Agent headers"""
@@ -1270,6 +1271,218 @@ class TestVersionImport(unittest.TestCase):
         self.assertIn("User-Agent", headers)
         self.assertIn(current_version, headers["User-Agent"])
         self.assertEqual(headers["User-Agent"], f"MCP-server/{current_version}")
+
+
+class TestMcpTrackingHelpers(unittest.TestCase):
+    """Tests for _get_ctx_session_id, _get_ctx_request_id, _get_ctx_client_name,
+    _build_mcp_tracking_context, _stamp_tracking_headers, and the ctx-extraction
+    logic inside _auth_wrapper_logic."""
+
+    # ------------------------------------------------------------------
+    # _get_ctx_session_id
+    # ------------------------------------------------------------------
+
+    def test_get_ctx_session_id_returns_value(self):
+        ctx = MagicMock()
+        ctx.session_id = "sess-abc"
+        from src.core.utils import _get_ctx_session_id
+        self.assertEqual(_get_ctx_session_id(ctx), "sess-abc")
+
+    def test_get_ctx_session_id_returns_none_when_empty(self):
+        ctx = MagicMock()
+        ctx.session_id = ""
+        from src.core.utils import _get_ctx_session_id
+        self.assertIsNone(_get_ctx_session_id(ctx))
+
+    def test_get_ctx_session_id_returns_none_on_exception(self):
+        ctx = MagicMock()
+        type(ctx).session_id = property(lambda self: (_ for _ in ()).throw(RuntimeError("no session")))
+        from src.core.utils import _get_ctx_session_id
+        self.assertIsNone(_get_ctx_session_id(ctx))
+
+    # ------------------------------------------------------------------
+    # _get_ctx_request_id
+    # ------------------------------------------------------------------
+
+    def test_get_ctx_request_id_returns_value(self):
+        ctx = MagicMock()
+        ctx.request_id = "7"
+        from src.core.utils import _get_ctx_request_id
+        self.assertEqual(_get_ctx_request_id(ctx), "7")
+
+    def test_get_ctx_request_id_returns_none_when_empty(self):
+        ctx = MagicMock()
+        ctx.request_id = ""
+        from src.core.utils import _get_ctx_request_id
+        self.assertIsNone(_get_ctx_request_id(ctx))
+
+    def test_get_ctx_request_id_returns_none_on_exception(self):
+        ctx = MagicMock()
+        type(ctx).request_id = property(lambda self: (_ for _ in ()).throw(RuntimeError("no request")))
+        from src.core.utils import _get_ctx_request_id
+        self.assertIsNone(_get_ctx_request_id(ctx))
+
+    # ------------------------------------------------------------------
+    # _get_ctx_client_name
+    # ------------------------------------------------------------------
+
+    def test_get_ctx_client_name_returns_value(self):
+        ctx = MagicMock()
+        ctx.session.client_params.clientInfo.name = "github.copilot"
+        from src.core.utils import _get_ctx_client_name
+        self.assertEqual(_get_ctx_client_name(ctx), "github.copilot")
+
+    def test_get_ctx_client_name_returns_none_when_no_session(self):
+        ctx = MagicMock()
+        ctx.session = None
+        from src.core.utils import _get_ctx_client_name
+        self.assertIsNone(_get_ctx_client_name(ctx))
+
+    def test_get_ctx_client_name_returns_none_on_exception(self):
+        ctx = MagicMock()
+        type(ctx).session = property(lambda self: (_ for _ in ()).throw(RuntimeError("no session")))
+        from src.core.utils import _get_ctx_client_name
+        self.assertIsNone(_get_ctx_client_name(ctx))
+
+    # ------------------------------------------------------------------
+    # _build_mcp_tracking_context
+    # ------------------------------------------------------------------
+
+    def test_build_tracking_returns_empty_dict_when_no_ctx(self):
+        from src.core.utils import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context()
+        self.assertEqual(result, {})
+
+    def test_build_tracking_with_full_ctx(self):
+        ctx = MagicMock()
+        ctx.session_id = "sess-123"
+        ctx.request_id = "5"
+        ctx.session.client_params.clientInfo.name = "claude-desktop"
+        from src.core.utils import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context(ctx=ctx)
+        self.assertEqual(result["X-MCP-Session-ID"], "sess-123")
+        self.assertEqual(result["X-MCP-Request-ID"], "5")
+        self.assertEqual(result["X-MCP-Client"], "claude-desktop")
+        self.assertNotIn("X-MCP-User-ID", result)
+
+    def test_build_tracking_with_http_user_id(self):
+        from src.core.utils import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context(http_headers={"x-mcp-user-id": "jay@ibm.com"})
+        self.assertEqual(result["X-MCP-User-ID"], "jay@ibm.com")
+
+    def test_build_tracking_omits_empty_user_id(self):
+        from src.core.utils import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context(http_headers={"x-mcp-user-id": ""})
+        self.assertNotIn("X-MCP-User-ID", result)
+
+    def test_build_tracking_omits_missing_ctx_fields(self):
+        """When ctx raises for session_id/request_id they are omitted, not set to None."""
+        ctx = MagicMock()
+        type(ctx).session_id = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
+        type(ctx).request_id = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
+        type(ctx).session = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
+        from src.core.utils import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context(ctx=ctx)
+        self.assertNotIn("X-MCP-Session-ID", result)
+        self.assertNotIn("X-MCP-Request-ID", result)
+        self.assertNotIn("X-MCP-Client", result)
+
+    # ------------------------------------------------------------------
+    # _stamp_tracking_headers
+    # ------------------------------------------------------------------
+
+    def test_stamp_tracking_headers_sets_all_non_empty(self):
+        from src.core.utils import _stamp_tracking_headers
+        mock_client = MagicMock()
+        tracking = {
+            "X-MCP-Session-ID": "sess-abc",
+            "X-MCP-Request-ID": "3",
+            "X-MCP-Client": "mcp-use",
+        }
+        _stamp_tracking_headers(mock_client, tracking)
+        mock_client.set_default_header.assert_any_call("X-MCP-Session-ID", "sess-abc")
+        mock_client.set_default_header.assert_any_call("X-MCP-Request-ID", "3")
+        mock_client.set_default_header.assert_any_call("X-MCP-Client", "mcp-use")
+        self.assertEqual(mock_client.set_default_header.call_count, 3)
+
+    def test_stamp_tracking_headers_skips_empty_values(self):
+        from src.core.utils import _stamp_tracking_headers
+        mock_client = MagicMock()
+        _stamp_tracking_headers(mock_client, {"X-MCP-Session-ID": "", "X-MCP-Client": "copilot"})
+        # Only the non-empty one should be set
+        mock_client.set_default_header.assert_called_once_with("X-MCP-Client", "copilot")
+
+    def test_stamp_tracking_headers_no_calls_for_empty_dict(self):
+        from src.core.utils import _stamp_tracking_headers
+        mock_client = MagicMock()
+        _stamp_tracking_headers(mock_client, {})
+        mock_client.set_default_header.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # ctx positional extraction in _auth_wrapper_logic
+    # ------------------------------------------------------------------
+
+    def test_auth_wrapper_extracts_ctx_from_kwargs(self):
+        """ctx passed as keyword argument is picked up correctly."""
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_headers, \
+             patch('instana_client.configuration.Configuration') as mock_cfg, \
+             patch('instana_client.api_client.ApiClient') as mock_api:
+
+            mock_headers.return_value = {
+                "instana-api-token": "tok",
+                "instana-base-url": "https://test.instana.io",
+            }
+            mock_cfg.return_value = MagicMock(api_key={}, api_key_prefix={})
+            mock_api.return_value = MagicMock()
+
+            ctx = MagicMock()
+            ctx.session_id = "kwarg-session"
+            ctx.request_id = "1"
+            ctx.session.client_params.clientInfo.name = "test-client"
+
+            class FakeApiClass:
+                def __init__(self, api_client):
+                    pass
+
+            @with_header_auth(FakeApiClass)
+            async def tool_method(self, ctx=None, api_client=None):
+                return {"ok": True}
+
+            client = BaseInstanaClient(read_token="tok", base_url="https://test.instana.io")
+            result = asyncio.run(tool_method(client, ctx=ctx))
+            self.assertEqual(result, {"ok": True})
+
+    def test_auth_wrapper_extracts_ctx_from_positional_args(self):
+        """ctx passed positionally (as internal helpers do) is still picked up."""
+        with patch('fastmcp.server.dependencies.get_http_headers') as mock_headers, \
+             patch('instana_client.configuration.Configuration') as mock_cfg, \
+             patch('instana_client.api_client.ApiClient') as mock_api:
+
+            mock_headers.return_value = {
+                "instana-api-token": "tok",
+                "instana-base-url": "https://test.instana.io",
+            }
+            mock_cfg.return_value = MagicMock(api_key={}, api_key_prefix={})
+            mock_api.return_value = MagicMock()
+
+            ctx = MagicMock()
+            ctx.session_id = "pos-session"
+            ctx.request_id = "2"
+            ctx.session.client_params.clientInfo.name = "test-client"
+
+            class FakeApiClass:
+                def __init__(self, api_client):
+                    pass
+
+            @with_header_auth(FakeApiClass)
+            async def internal_helper(self, some_id: str, ctx=None, api_client=None):
+                return {"ok": True}
+
+            client = BaseInstanaClient(read_token="tok", base_url="https://test.instana.io")
+            # Simulates: await self._internal_helper(id, ctx)  — ctx is positional
+            result = asyncio.run(internal_helper(client, "some-id", ctx))
+            self.assertEqual(result, {"ok": True})
+
 
 
 if __name__ == '__main__':

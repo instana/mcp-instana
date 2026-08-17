@@ -130,26 +130,6 @@ def register_as_tool(title=None, annotations=None, description=None):
 
     return decorator
 
-def _validate_http_headers(instana_token, instana_base_url):
-    """Validate HTTP mode headers."""
-    if not instana_token or not instana_base_url:
-        missing = []
-        if not instana_token:
-            missing.append("instana-api-token")
-        if not instana_base_url:
-            missing.append("instana-base-url")
-        error_msg = f"HTTP mode detected but missing required headers: {', '.join(missing)}"
-        print(f" {error_msg}", file=sys.stderr)
-        return {"error": error_msg}
-
-    if not instana_base_url.startswith("http://") and not instana_base_url.startswith("https://"):
-        error_msg = "Instana base URL must start with http:// or https://"
-        print(f" {error_msg}", file=sys.stderr)
-        return {"error": error_msg}
-
-    return None
-
-
 def _validate_http_auth_headers(instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url):
     """Validate HTTP authentication headers."""
     # Check for API token auth (needs token + base_url)
@@ -248,10 +228,11 @@ def _set_authorization_header(api_client_instance, auth_headers):
         logger.debug("Skipping Authorization header for API token (using SDK configuration)")
         return
 
-    # Set header for JWT Bearer tokens and other auth types
-    masked_value = _mask_token_for_logging(auth_header_value)
+    # Set header for JWT Bearer tokens and other auth types.
+    # Log only the scheme (e.g. "Bearer"), never any part of the token value.
+    scheme = auth_header_value.split(" ", 1)[0]
     api_client_instance.set_default_header("Authorization", auth_header_value)
-    logger.debug(f"Set Authorization header: {masked_value}")
+    logger.debug("Set Authorization header scheme: %s", scheme)
 
 
 def _set_csrf_headers(api_client_instance, auth_headers):
@@ -281,7 +262,77 @@ def _ssl_verify_from_env() -> bool:
     return raw not in ("0", "false", "no")
 
 
-def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers):
+def _get_ctx_session_id(ctx) -> Optional[str]:
+    """Return ctx.session_id as a string, or None if unavailable."""
+    try:
+        sid = ctx.session_id
+        return str(sid) if sid else None
+    except Exception:
+        return None
+
+
+def _get_ctx_request_id(ctx) -> Optional[str]:
+    """Return ctx.request_id as a string, or None if unavailable."""
+    try:
+        rid = ctx.request_id
+        return str(rid) if rid else None
+    except Exception:
+        return None
+
+
+def _get_ctx_client_name(ctx) -> Optional[str]:
+    """Return the LLM client name from the MCP initialize handshake, or None."""
+    try:
+        session = ctx.session
+        client_params = getattr(session, "client_params", None) if session else None
+        client_info = getattr(client_params, "clientInfo", None) if client_params else None
+        name = getattr(client_info, "name", None)
+        return str(name) if name else None
+    except Exception:
+        return None
+
+
+def _build_mcp_tracking_context(ctx=None, http_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """Build MCP tracking headers for outgoing Instana API calls (HTTP mode).
+
+    Sources (all opportunistic — missing values are silently omitted):
+      ctx.session_id                         → X-MCP-Session-ID  (stable per conversation)
+      ctx.request_id                         → X-MCP-Request-ID  (unique per tool call)
+      ctx.session.client_params.clientInfo   → X-MCP-Client      (LLM product name from MCP handshake)
+      http_headers["x-mcp-user-id"]          → X-MCP-User-ID     (injected by upstream coordinator)
+    """
+    tracking: Dict[str, str] = {}
+
+    if ctx is not None:
+        sid = _get_ctx_session_id(ctx)
+        if sid:
+            tracking["X-MCP-Session-ID"] = sid
+
+        rid = _get_ctx_request_id(ctx)
+        if rid:
+            tracking["X-MCP-Request-ID"] = rid
+
+        client = _get_ctx_client_name(ctx)
+        if client:
+            tracking["X-MCP-Client"] = client
+
+    if http_headers:
+        user_id = http_headers.get("x-mcp-user-id", "")
+        if user_id:
+            tracking["X-MCP-User-ID"] = user_id
+
+    return tracking
+
+
+def _stamp_tracking_headers(api_client_instance, tracking: Dict[str, str]) -> None:
+    """Set MCP tracking headers on an SDK ApiClient as default headers."""
+    for name, value in tracking.items():
+        if value:
+            api_client_instance.set_default_header(name, value)
+
+
+def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers,
+                                    tracking: Optional[Dict[str, str]] = None):
     """Create API client with configuration based on auth type."""
     from instana_client.api_client import ApiClient
     from instana_client.configuration import Configuration
@@ -313,10 +364,14 @@ def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_toke
     _set_authorization_header(api_client_instance, auth_headers)
     _set_csrf_headers(api_client_instance, auth_headers)
 
+    # Stamp MCP tracking headers so every outgoing Instana REST call carries them
+    if tracking:
+        _stamp_tracking_headers(api_client_instance, tracking)
+
     return api_client_instance, None
 
 
-def _try_http_mode_auth(api_class):
+def _try_http_mode_auth(api_class, tracking: Optional[Dict[str, str]] = None):
     """Attempt HTTP mode authentication."""
     try:
         from fastmcp.server.dependencies import get_http_headers
@@ -350,9 +405,16 @@ def _try_http_mode_auth(api_class):
             cookie_name=instana_cookie_name
         )
 
-        # Create API client
+        # Enrich tracking with x-mcp-user-id forwarded by the upstream coordinator.
+        # get_http_headers() returns all non-auth request headers, so this is safe.
+        if tracking is not None:
+            user_id = headers.get("x-mcp-user-id", "")
+            if user_id:
+                tracking["X-MCP-User-ID"] = user_id
+
+        # Create API client, stamping tracking headers onto it
         api_client_instance, error = _create_api_client_with_config(
-            instana_base_url, instana_api_token, instana_jwt_token, auth_headers
+            instana_base_url, instana_api_token, instana_jwt_token, auth_headers, tracking
         )
         if error:
             return error
@@ -432,9 +494,9 @@ def _auth_check_mock(allow_mock, kwargs):
     return False
 
 
-def _auth_try_http(api_class):
+def _auth_try_http(api_class, tracking: Optional[Dict[str, str]] = None):
     """Try HTTP mode authentication and return (api_instance, error)."""
-    api_instance = _try_http_mode_auth(api_class)
+    api_instance = _try_http_mode_auth(api_class, tracking)
     if isinstance(api_instance, dict) and "error" in api_instance:
         return None, api_instance
     return api_instance, None
@@ -462,8 +524,43 @@ async def _auth_wrapper_logic(func, self, args, kwargs, api_class, allow_mock):
     if _auth_check_mock(allow_mock, kwargs):
         return await func(self, *args, **kwargs)
 
-    # Try HTTP mode first
-    api_instance, error = _auth_try_http(api_class)
+    # Extract the FastMCP Context injected by FastMCP for tools that declare
+    # `ctx: Optional[Context]`. Used to read session_id, request_id, and clientInfo.
+    #
+    # ctx can arrive two ways:
+    #   1. As a keyword argument  → kwargs["ctx"]          (top-level router tools)
+    #   2. As a positional argument → args[n]              (internal helpers called as
+    #      `await self._method(id, ctx)` without an explicit keyword)
+    # We check kwargs first, then fall back to inspecting the function signature to
+    # locate the positional index of the `ctx` parameter.
+    ctx = kwargs.get("ctx")
+    if ctx is None:
+        import inspect as _inspect
+        try:
+            _param_names = list(_inspect.signature(func).parameters.keys())
+            # param_names[0] is always 'self'; args starts after self
+            _ctx_pos = _param_names.index("ctx") - 1  # -1 to skip 'self'
+            if 0 <= _ctx_pos < len(args):
+                ctx = args[_ctx_pos]
+        except (ValueError, TypeError):
+            pass  # 'ctx' not in signature or inspection failed — leave ctx as None
+
+    # Build per-call tracking context for the HTTP path.
+    # x-mcp-user-id is read later inside _try_http_mode_auth where we have the
+    # raw HTTP request headers from get_http_headers().
+    tracking = _build_mcp_tracking_context(ctx=ctx)
+
+    logger.info(
+        "MCP tool call | tool=%s session_id=%s request_id=%s client=%s user_id=%s",
+        func.__name__,
+        tracking.get("X-MCP-Session-ID", "-"),
+        tracking.get("X-MCP-Request-ID", "-"),
+        tracking.get("X-MCP-Client", "-"),
+        tracking.get("X-MCP-User-ID", "-"),
+    )
+
+    # Try HTTP mode first — passes tracking so headers are stamped on the ApiClient
+    api_instance, error = _auth_try_http(api_class, tracking)
     if error:
         return error
 
@@ -471,7 +568,7 @@ async def _auth_wrapper_logic(func, self, args, kwargs, api_class, allow_mock):
         kwargs['api_client'] = api_instance
         return await func(self, *args, **kwargs)
 
-    # Fall back to STDIO mode
+    # Fall back to STDIO mode (tracking not applied for POC scope)
     api_instance, error = _auth_try_stdio(self, api_class)
     if error:
         return error

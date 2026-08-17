@@ -44,6 +44,7 @@
       - [Streamable HTTP Mode](#streamable-http-mode-2)
       - [Stdio Mode](#stdio-mode-3)
     - [Mistral AI](#mistral-ai)
+  - [Connecting to Multiple Instana MCP Servers](#connecting-to-multiple-instana-mcp-servers)
   - [Supported Features](#supported-features)
   - [Available Tools](#available-tools)
   - [Tool Filtering](#tool-filtering)
@@ -258,7 +259,7 @@ When using **Streamable HTTP mode**, you must pass Instana credentials via HTTP 
 **Authentication Priority:**
 1. **JWT Token** (if provided with CSRF token) - Takes precedence for IBM Platform integration
 2. **Session Tokens** (if both auth_token and csrf_token provided)
-3. **API Token** (if provided) - Standard authentication 
+3. **API Token** (if provided) - Standard authentication
 4. **Environment Variable** (`INSTANA_API_TOKEN`) - Fallback
 
 **Authentication Flow:**
@@ -808,7 +809,7 @@ Kiro is an agentic IDE, not an extension that can be downloaded into VS Code or 
 ![alt text](./images/kiro-features.png)
 
 **Step 4: Select the Edit Config icon in the top right corner of the MCP Servers section.**
-![alt text](./images/edir-kiro-config.png)
+![alt text](./images/edit-kiro-config.png)
 
 **Step 5: Open the MCP server configuration file (mcp.json) and configure it based on your preferred transport mode:**
 
@@ -869,7 +870,7 @@ mcp-instana --transport streamable-http
 }
 ```
 
-**Step 6: After saving the file, Click the Enable MCP button and you'll see your MCP server and its available tools appear in the bottom-left section of Kiro.**
+**Step 6: After saving the file, click the Enable MCP button and you'll see your MCP server and its available tools appear in the bottom-left section of Kiro.**
 ![alt text](./images/enable-kiro-mcp.png)
 
 **Step 7: Go to the AI Chat panel, enter a prompt related to your MCP server, and view the response directly within Kiro.**
@@ -1058,7 +1059,48 @@ Configure port forwarding to expose your local server. Follow the [Ngrok setup d
    ![Testing MCP connection](./images/mistral-new-chat.png)
    ![Response](./images/mistral-response.png)
 
+## Connecting to Multiple Instana MCP Servers
 
+You can configure your MCP client to connect to multiple instances. Below is a sample configuration:
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server1": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://0.0.0.0:8080/mcp/",
+        "--allow-http",
+        "--header",
+        "instana-base-url: ENV1_INSTANA_URL",
+        "--header",
+        "instana-api-token: ENV1_INSTANA_API_TOKEN"
+      ]
+    },
+    "Instana MCP Server2": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://0.0.0.0:8080/mcp/",
+        "--allow-http",
+        "--header",
+        "instana-base-url: ENV2_INSTANA_URL",
+        "--header",
+        "instana-api-token: ENV2_INSTANA_API_TOKEN"
+      ]
+    }
+  }
+}
+```
+
+To target a specific server, ensure that:
+- The server is configured with the appropriate environment name in the MCP configuration (e.g. Instana MCP Server1)
+- The prompt explicitly mentions the server/environment name.
+
+The request will then be routed to the corresponding configured server. If no server/environment is explicitly mentioned in the prompt, MCP uses the first server defined in the configuration as the default server.
+
+Note: If the requested server is down or unreachable, MCP behaves as expected and forwards the API failure. The user will receive the corresponding error returned by the API, indicating that the server is unavailable. MCP relies on the underlying API availability and does not perform automatic failover.
 
 ## Supported Features
 
@@ -1381,5 +1423,5 @@ docker inspect <container_id> | grep -A 10 Health
   - If you encounter certificate issues, such as `[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate`: 
     - Check that you can reach the Instana API endpoint using `curl` or `wget` with SSL verification. 
       - If that works, your Python environment may not be able to verify the certificate and might not have access to the same certificates as your shell or system. Ensure your Python environment uses system certificates (macOS). You can do this by installing certificates to Python:
-      `//Applications/Python\ 3.13/Install\ Certificates.command`
+      `/Applications/Python\ 3.13/Install\ Certificates.command`
     - If you cannot reach the endpoint with SSL verification, try without it. If that works, check your system's CA certificates and ensure they are up-to-date.
