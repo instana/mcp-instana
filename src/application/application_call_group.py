@@ -62,6 +62,10 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
             result = validator_fn(field_val, **kwargs)
             if result:
                 all_errors.extend(result["api_error"])
+        # Cross-field: granularity/windowSize ratio (granularity in seconds for application)
+        _gr = StructureValidator.validate_granularity_ratio(metrics, time_frame, granularity_in_ms=False)
+        if _gr:
+            all_errors.extend(_gr["api_error"])
         if not all_errors:
             return None
         return {

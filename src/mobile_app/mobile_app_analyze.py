@@ -194,6 +194,10 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             result = validator_fn(field_val, **kwargs)
             if result:
                 errors.extend(result["api_error"])
+        # Cross-field: granularity/windowSize ratio (granularity in seconds for mobile)
+        _gr = StructureValidator.validate_granularity_ratio(metrics, time_frame, granularity_in_ms=False)
+        if _gr:
+            errors.extend(_gr["api_error"])
         if not errors:
             return None
         return {
@@ -504,8 +508,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         self,
         tag_filter_expression: Dict[str, Any]
     ) -> Union[List[Any], Dict[str, Any]]:
-        """
-        Convert tag filter expression to deprecated tag filters.
+        """Convert tag filter expression to deprecated tag filters.
 
         Returns:
             - List[DeprecatedTagFilter]: Successfully converted filters
@@ -839,8 +842,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         metrics: Optional[List[Dict[str, Any]]],
         user_provided: bool
     ) -> Optional[Dict[str, Any]]:
-        """
-        Validate metric names to catch invalid metrics before API call.
+        """Validate metric names to catch invalid metrics before API call.
 
         Args:
             metrics: List of metric configurations to validate

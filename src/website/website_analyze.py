@@ -331,6 +331,10 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 (StructureValidator.validate_order, order, {}),
                 (StructureValidator.validate_pagination, pagination, {}),
             ])
+            # Cross-field: granularity/windowSize ratio (granularity in seconds for website)
+            _gr = StructureValidator.validate_granularity_ratio(metrics, time_frame, granularity_in_ms=False)
+            if _gr:
+                validation_errors = (validation_errors or []) + _gr["api_error"]
             if validation_errors:
                 return self._build_validation_error_response("get_website_beacon_groups", validation_errors)
 

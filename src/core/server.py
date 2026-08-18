@@ -86,6 +86,7 @@ class MCPState:
     smart_router_mobile_client: Any = None
     smart_router_automation_client: Any = None
     smart_router_slo_client: Any = None
+    smart_router_synthetic_client: Any = None
     smart_router_releases_client: Any = None
     smart_router_maintenance_window_client: Any = None
 
@@ -266,6 +267,7 @@ def get_client_categories():
         from src.router.mobile_app_smart_router import MobileAppSmartRouterMCPTool
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
+        from src.router.synthetic_smart_router_tool import SyntheticSmartRouterMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
@@ -295,6 +297,9 @@ def get_client_categories():
         ],
         "slo": [
             ('smart_router_slo_client', SLOSmartRouterMCPTool),
+        ],
+        "synthetic": [
+            ('smart_router_synthetic_client', SyntheticSmartRouterMCPTool),
         ],
         "releases": [
             ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
@@ -338,6 +343,12 @@ def get_prompt_categories():
             MobileAppConfigurationPrompts,
         )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
+        from src.prompts.synthetic.synthetic_catalog import SyntheticCatalogPrompts
+        from src.prompts.synthetic.synthetic_metrics import SyntheticMetricsPrompts
+        from src.prompts.synthetic.synthetic_settings import SyntheticSettingsPrompts
+        from src.prompts.synthetic.synthetic_test_playback_results import (
+            SyntheticTestPlaybackResultsPrompts,
+        )
         from src.prompts.website.website_alert import WebsiteAlertPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
@@ -369,6 +380,10 @@ def get_prompt_categories():
     mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
     mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
     website_alert_prompts = WebsiteAlertPrompts.get_prompts()
+    synthetic_catalog_prompts: list[Any]= SyntheticCatalogPrompts.get_prompts()
+    synthetic_metrics_prompts: list[Any]= SyntheticMetricsPrompts.get_prompts()
+    synthetic_settings_prompts: list[Any]= SyntheticSettingsPrompts.get_prompts()
+    synthetic_test_playback_prompts: list[Any] = SyntheticTestPlaybackResultsPrompts.get_prompts()
 
     return {
         "app": [
@@ -394,6 +409,12 @@ def get_prompt_categories():
         ],
         "settings": [
             ("Custom Dashboard", custom_dashboard_prompts),
+        ],
+        "synthetic": [
+            ("Synthetic Catalog", synthetic_catalog_prompts),
+            ("Synthetic Metrics", synthetic_metrics_prompts),
+            ("Synthetic Settings", synthetic_settings_prompts),
+            ("Synthetic Playback", synthetic_test_playback_prompts),
         ],
         "mobile_app": [
             ("Mobile App Analyze", mobile_app_analyze_prompts),
@@ -477,7 +498,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--list-tools",
@@ -540,7 +561,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance"}
+        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance", "synthetic"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -568,7 +589,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic")
             sys.exit(2)
 
         # Print enabled tools for user information
@@ -625,6 +646,7 @@ def main():
             if args.debug:
                 logger.info(f"FastMCP instance: {app}")
                 logger.info(f"Registered tools: {registered_tool_count}")
+
             try:
                 app.run(transport="streamable-http", host="0.0.0.0", port=port)
                 # app.run() returns normally on graceful shutdown (e.g. SIGTERM).

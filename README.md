@@ -1228,6 +1228,26 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
   - [x] Action History (resource_type="history")
     - [x] List action execution instances with filtering (operation="list")
     - [x] Get details of a specific action execution (operation="get_details")
+- [x] **Unified Synthetic Monitoring** (`manage_synthetics`)
+  - [x] Synthetic Catalog (resource_type="catalog")
+    - [x] Get available metrics with supported aggregations for query planning (operation="get_synthetic_catalog_metrics")
+    - [x] Get valid tag names for filtering, grouping, and smart alerts (operation="get_synthetic_tag_catalog")
+  - [x] Synthetic Metrics (resource_type="metrics")
+    - [x] Retrieve aggregated synthetic metrics grouped by location or test name (operation="get_metrics_result")
+  - [x] Synthetic Settings (resource_type="settings")
+    - [x] Get a synthetic test's full configuration by ID or name (operation="get_synthetic_test")
+    - [x] List synthetic tests with optional filtering by application, location, or credential (operation="get_synthetic_tests")
+    - [x] List all monitoring locations with type, geo, and capability metadata (operation="get_locations")
+    - [x] Get a single location by ID or name with automatic name resolution (operation="get_location_by_id")
+    - [x] Get all datacenter (Managed) locations with online count (operation="get_all_datacenters")
+  - [x] Synthetic Test Playback (resource_type="test_playback")
+    - [x] Get aggregated playback metrics per test (operation="get_synthetic_result")
+    - [x] Get the most recent result per test using LAST_VALUE analytic (operation="get_synthetic_result_analytic")
+    - [x] Get individual test run results with raw status, errors, and timestamps (operation="get_synthetic_result_list")
+    - [x] Get location-level summary metadata including last run time and PoP version (operation="get_location_summary_list")
+    - [x] Get per-test success rates with per-location breakdown (operation="get_test_summary_list")
+    - [x] Get available detail data types for a specific test result (operation="get_synthetic_result_metadata")
+    - [x] Get detail data file contents such as logs, HAR, or screenshots (operation="get_synthetic_result_detail_data")
 - [x] **Custom Dashboards** (`manage_custom_dashboards`)
   - [x] Get all custom dashboards
   - [x] Get specific dashboard by ID
@@ -1251,6 +1271,7 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 | `manage_releases`                                             | Release Management             | Unified smart router for release tracking: list releases with pagination and name filtering, get release details, create/update/delete releases with timezone support |
 | `manage_maintenance_windows`                                  | Maintenance Windows            | Unified smart router for maintenance window lifecycle management: create, modify, close, and list maintenance windows with template support and ServiceNow integration |
 | `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, session replay, configuration, and alert management |
+| `manage_synthetics`                                           | Synthetic Monitoring           | Unified smart router for synthetic monitoring: catalog, metrics, settings (read-only), and test playback results |
 
 👉 **For detailed tool documentation, capabilities, and technical reference, see [Tools & Examples](docs/TOOLS_AND_EXAMPLES.md)**
 
@@ -1329,6 +1350,13 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - **Device Analysis**: Monitor performance across different devices, platforms, and OS versions
   - **Configuration Management**: Manage mobile app configurations, geo-location, and IP masking settings
   - **Alert Management**: Configure and manage mobile app alert configurations
+
+- **`synthetics`**: Synthetic monitoring management
+  - `manage_synthetics`: Unified smart router for all synthetic monitoring operations
+  - **Catalog**: Discover valid metric IDs and tag names before building queries
+  - **Metrics**: Retrieve aggregated response times and success rates grouped by location or test name
+  - **Settings**: List and look up tests and locations with automatic name resolution; identify datacenter (Managed) vs self-hosted (Private) PoPs
+  - **Test Playback**: Per-run raw results, LAST_VALUE analytics, per-location success rate summaries, and detail file downloads (LOGS, HAR, screenshots)
 
 ### Usage Examples
 

@@ -32,8 +32,22 @@ StructureValidator
     * ``validate_metrics_array`` — non-empty list, each entry has non-empty
       ``metric`` string and valid ``aggregation`` enum, list length ≤ max_items.
     * ``validate_order`` — ``by`` non-empty, ``direction`` in {ASC, DESC}.
-    * ``validate_time_frame`` — ``windowSize`` within SDK bounds (0-2 678 400 000 ms).
-    * ``validate_pagination`` — ``retrievalSize`` within 1-200.
+    * ``validate_time_frame`` - ``windowSize`` within SDK bounds (0-2678400000 ms).
+    * ``validate_granularity_ratio`` — cross-field check that ``windowSize /
+      granularity_ms`` does not exceed ``MAX_GRANULARITY_DATA_POINTS`` (1 000) and
+      that the granularity value itself does not overflow a 32-bit integer when the
+      backend converts it to milliseconds.  Must be called after both
+      ``validate_metrics_array`` and ``validate_time_frame`` pass.
+      ``granularity_in_ms=True`` for infrastructure (granularity already in ms);
+      ``granularity_in_ms=False`` (default) for all other domains (granularity in
+      seconds).
+    * ``validate_pagination`` - cursor-based ``retrievalSize`` within 1-200;
+      or page-based ``page`` / ``pageSize`` when ``page_based=True``
+      (synthetic playback endpoints use ``Pagination`` SDK model).
+    * ``validate_synthetic_playback_structure`` — combined preflight for all
+      six synthetic endpoints that share the same optional fields
+      (``timeFrame``, ``order``, ``pagination``, ``tagFilterExpression``).
+      Accepts flags for required-field checks and granularity ratio.
     * ``validate_group`` — ``groupbyTag`` non-empty, ``groupbyTagEntity`` enum.
 
     All methods collect *every* failing field before returning so the LLM receives
@@ -521,6 +535,17 @@ WINDOW_SIZE_MAX_MS = 2_678_400_000
 RETRIEVAL_SIZE_MIN = 1
 RETRIEVAL_SIZE_MAX = 200
 
+# Maximum data points the backend will materialize for time-series endpoints
+# (e.g. get_test_summary_list).  Exceeding this produces HTTP 400
+# "too many values".  The same cap likely applies to any endpoint whose
+# response size scales linearly with windowSize / granularity.
+MAX_GRANULARITY_DATA_POINTS = 1_000
+
+# Java Integer.MAX_VALUE in ms — granularity values above this cause the backend
+# to overflow when converting seconds → milliseconds internally (HTTP 400
+# "integer overflow").  Applies only when granularity_in_ms=False (seconds).
+_JAVA_INT_MAX_MS = 2_147_483_647
+
 
 # ---------------------------------------------------------------------------
 # StructureValidator
@@ -931,6 +956,132 @@ class StructureValidator:
         }
 
     # ------------------------------------------------------------------
+    # granularity / windowSize ratio  (cross-field)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def validate_granularity_ratio(
+        metrics: Optional[Any],
+        time_frame: Optional[Any],
+        granularity_in_ms: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Cross-field check: ``windowSize / granularity_ms <= MAX_GRANULARITY_DATA_POINTS``.
+
+        Also catches the backend integer-overflow bug where granularity (in seconds)
+        exceeds Java's Integer.MAX_VALUE when the backend converts it to milliseconds.
+
+        This is a *cross-field* validator — it requires both ``metrics`` (for
+        granularity values) and ``timeFrame`` (for windowSize) to be present.
+        Call it **after** ``validate_metrics_array`` and ``validate_time_frame``
+        have already passed so that both fields are structurally sound.
+
+        Parameters
+        ----------
+        metrics:
+            The metrics list from the request payload.  Each entry may contain
+            an optional ``granularity`` key.  Entries without ``granularity``
+            are silently skipped.
+        time_frame:
+            The ``timeFrame`` dict from the request payload.  If ``None`` or
+            ``windowSize`` is absent the check is skipped (nothing to validate).
+        granularity_in_ms:
+            ``True``  → granularity values are already in **milliseconds**
+                        (infrastructure endpoints: ``get_entities``,
+                        ``get_aggregated_entity_groups``).
+            ``False`` → granularity values are in **seconds** (default; all
+                        other domains: application, website, mobile, synthetic).
+
+        Returns
+        -------
+        ``None`` when valid or when there is insufficient data to check.
+        An elicitation dict listing every offending metric entry otherwise.
+
+        Examples
+        --------
+        Safe — 1 hr window, 600 s granularity (ratio = 6):
+            validate_granularity_ratio(
+                [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}],
+                {"windowSize": 3_600_000},
+            )  # → None
+
+        Unsafe — 30-day window, 600 s granularity (ratio = 4 320):
+            validate_granularity_ratio(
+                [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}],
+                {"windowSize": 2_592_000_000},
+            )
+            # → elicitation dict with safe minimum granularity suggestion
+        """
+        # Nothing to validate if either side is missing
+        if not metrics or not isinstance(metrics, list):
+            return None
+        if not time_frame or not isinstance(time_frame, dict):
+            return None
+
+        window_size_ms = time_frame.get("windowSize")
+        if not isinstance(window_size_ms, int) or window_size_ms <= 0:
+            return None
+
+        errors: List[str] = []
+
+        for idx, entry in enumerate(metrics):
+            if not isinstance(entry, dict):
+                continue
+            granularity = entry.get("granularity")
+            if granularity is None:
+                continue
+            if not isinstance(granularity, int) or granularity <= 0:
+                # Type/value errors are already caught by validate_metrics_array;
+                # skip here to avoid duplicate messages.
+                continue
+
+            granularity_ms = granularity if granularity_in_ms else granularity * 1_000
+
+            # Check 1: integer overflow (seconds-only domains)
+            if not granularity_in_ms and granularity_ms > _JAVA_INT_MAX_MS:
+                max_safe_s = _JAVA_INT_MAX_MS // 1_000  # 2 147 483 s ≈ 35 min
+                errors.append(
+                    f"metrics[{idx}].granularity {granularity}s overflows when the backend "
+                    f"converts it to milliseconds (Java Integer.MAX_VALUE = {_JAVA_INT_MAX_MS} ms). "
+                    f"Use granularity <= {max_safe_s}s (~35 minutes)."
+                )
+                continue  # ratio check is moot if overflow would occur
+
+            # Check 2: too many data points
+            ratio = window_size_ms / granularity_ms
+            if ratio > MAX_GRANULARITY_DATA_POINTS:
+                unit = "ms" if granularity_in_ms else "s"
+                # Minimum safe granularity to stay within the cap
+                min_safe = (
+                    -(-window_size_ms // MAX_GRANULARITY_DATA_POINTS)  # ceiling division
+                    if granularity_in_ms
+                    else -(-window_size_ms // (MAX_GRANULARITY_DATA_POINTS * 1_000))
+                )
+                errors.append(
+                    f"metrics[{idx}].granularity {granularity}{unit} produces "
+                    f"{int(ratio)} data points for windowSize {window_size_ms} ms "
+                    f"(max {MAX_GRANULARITY_DATA_POINTS}). "
+                    f"Use granularity >= {min_safe}{unit}."
+                )
+
+        if not errors:
+            return None
+
+        return {
+            "elicitation_needed": True,
+            "reason": (
+                f"granularity/windowSize ratio validation failed: "
+                f"{len(errors)} problem{'s' if len(errors) != 1 else ''} found"
+            ),
+            "api_error": errors,
+            "message": (
+                f"granularity/windowSize ratio has {len(errors)} problem(s). "
+                f"Correct all issues below and retry:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            ),
+        }
+
+    # ------------------------------------------------------------------
     # pagination
     # ------------------------------------------------------------------
 
@@ -940,43 +1091,78 @@ class StructureValidator:
         field_name: str = "pagination",
         min_retrieval_size: int = RETRIEVAL_SIZE_MIN,
         max_retrieval_size: int = RETRIEVAL_SIZE_MAX,
+        page_based: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
-        Validate a pagination object ``{"retrievalSize": <int>}``.
+        Validate a pagination object.
 
-        Checks ``retrievalSize`` against the ``CursorPagination`` SDK bounds
-        (``ge=1, le=200`` by default).
+        Two modes controlled by ``page_based``:
+
+        ``page_based=False`` (default) — cursor-based pagination used by
+        Application, Website, Mobile App, and Infrastructure endpoints:
+            ``{"retrievalSize": <int>}``
+            ``retrievalSize``: optional, ``ge=1, le=200``
+
+        ``page_based=True`` — offset-based pagination used by all synthetic
+        playback endpoints (``Pagination`` SDK model):
+            ``{"page": <int>, "pageSize": <int>}``
+            ``page``:     optional, ``ge=1``
+            ``pageSize``: optional, ``ge=1, le=200``
 
         Returns ``None`` when *pagination* is ``None`` (optional) or valid.
         """
         if pagination is None:
             return None
 
+        example = '{"page": 1, "pageSize": 50}' if page_based else '{"retrievalSize": 50}'
         if not isinstance(pagination, dict):
             return {
                 "elicitation_needed": True,
                 "reason": f"{field_name} must be a dict, got {type(pagination).__name__!r}",
-                "api_error": [f"{field_name}: must be a dict, e.g. {{\"retrievalSize\": 50}}"],
-                "message": (
-                    f"{field_name} must be a dict, e.g.:\n"
-                    f'  {{"retrievalSize": 50}}'
-                ),
+                "api_error": [f"{field_name}: must be a dict, e.g. {example}"],
+                "message": f"{field_name} must be a dict, e.g.:\n  {example}",
             }
 
         errors: List[str] = []
-        retrieval_size = pagination.get("retrievalSize")
 
-        if retrieval_size is not None:
-            if not isinstance(retrieval_size, int):
-                errors.append(
-                    f"{field_name}.retrievalSize: must be an integer, "
-                    f"got {type(retrieval_size).__name__!r}"
-                )
-            elif retrieval_size < min_retrieval_size or retrieval_size > max_retrieval_size:
-                errors.append(
-                    f"{field_name}.retrievalSize: {retrieval_size} is out of range. "
-                    f"Must be {min_retrieval_size}-{max_retrieval_size}"
-                )
+        if page_based:
+            page = pagination.get("page")
+            if page is not None:
+                if not isinstance(page, int):
+                    errors.append(
+                        f"{field_name}.page: must be an integer, "
+                        f"got {type(page).__name__!r}"
+                    )
+                elif page < 1:
+                    errors.append(
+                        f"{field_name}.page: {page} is out of range. Must be >= 1"
+                    )
+
+            page_size = pagination.get("pageSize")
+            if page_size is not None:
+                if not isinstance(page_size, int):
+                    errors.append(
+                        f"{field_name}.pageSize: must be an integer, "
+                        f"got {type(page_size).__name__!r}"
+                    )
+                elif page_size < 1 or page_size > 200:
+                    errors.append(
+                        f"{field_name}.pageSize: {page_size} is out of range. "
+                        f"Must be 1-200"
+                    )
+        else:
+            retrieval_size = pagination.get("retrievalSize")
+            if retrieval_size is not None:
+                if not isinstance(retrieval_size, int):
+                    errors.append(
+                        f"{field_name}.retrievalSize: must be an integer, "
+                        f"got {type(retrieval_size).__name__!r}"
+                    )
+                elif retrieval_size < min_retrieval_size or retrieval_size > max_retrieval_size:
+                    errors.append(
+                        f"{field_name}.retrievalSize: {retrieval_size} is out of range. "
+                        f"Must be {min_retrieval_size}-{max_retrieval_size}"
+                    )
 
         if not errors:
             return None
@@ -1146,6 +1332,107 @@ class StructureValidator:
             }
 
         return None
+
+
+    # ------------------------------------------------------------------
+    # synthetic playback  (cross-method shared preflight)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def validate_synthetic_playback_structure(
+        operation: str,
+        request_body: Dict[str, Any],
+        *,
+        requires_metrics: bool = False,
+        requires_synthetic_metrics: bool = False,
+        check_granularity_ratio: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Run all structural pre-flight validators for a synthetic playback payload.
+
+        Covers the five playback endpoints (``GetTestResult``,
+        ``GetTestResultAnalytic``, ``GetTestResultList``,
+        ``GetTestResultBase``, ``GetTestSummaryResult``) and the metrics
+        endpoint (``GetMetricsResult``).  All share the same optional
+        structural fields; only the required-field and granularity flags differ.
+
+        Parameters
+        ----------
+        operation:
+            Human-readable operation name used in error messages.
+        request_body:
+            Parsed payload dict.
+        requires_metrics:
+            Validate that ``metrics`` is a non-empty list with valid
+            ``metric`` / ``aggregation`` entries.
+            (``GetTestResult``, ``GetTestSummaryResult``, ``GetMetricsResult``)
+        requires_synthetic_metrics:
+            Validate that ``syntheticMetrics`` is a non-empty list of strings.
+            (``GetTestResultAnalytic``, ``GetTestResultList``)
+        check_granularity_ratio:
+            Run the cross-field ``windowSize / granularity`` ratio check.
+            Only meaningful when ``requires_metrics=True``.
+            Granularity is in **seconds** for all synthetic endpoints.
+        """
+        errors: List[str] = []
+
+        # --- required fields ---
+        if requires_metrics:
+            res = StructureValidator.validate_metrics_array(
+                request_body.get("metrics"), required=True
+            )
+            if res:
+                errors.extend(res["api_error"])
+
+        if requires_synthetic_metrics:
+            sm = request_body.get("syntheticMetrics")
+            if not sm:
+                errors.append(
+                    "syntheticMetrics: required, must be a non-empty list of metric name strings"
+                )
+            elif not isinstance(sm, list):
+                errors.append(
+                    f"syntheticMetrics: must be a list of strings, got {type(sm).__name__!r}"
+                )
+            else:
+                for i, item in enumerate(sm):
+                    if not isinstance(item, str) or not item.strip():
+                        errors.append(f"syntheticMetrics[{i}]: must be a non-empty string")
+
+        # --- optional structural fields ---
+        for validator_fn, field_val, kwargs in [
+            (StructureValidator.validate_time_frame,            request_body.get("timeFrame"),             {}),
+            (StructureValidator.validate_order,                 request_body.get("order"),                 {}),
+            (StructureValidator.validate_pagination,            request_body.get("pagination"),            {"page_based": True}),
+            (StructureValidator.validate_tag_filter_expression, request_body.get("tagFilterExpression"),   {}),
+        ]:
+            res = validator_fn(field_val, **kwargs)
+            if res:
+                errors.extend(res["api_error"])
+
+        # --- cross-field: granularity / windowSize ratio ---
+        if check_granularity_ratio:
+            res = StructureValidator.validate_granularity_ratio(
+                request_body.get("metrics"),
+                request_body.get("timeFrame"),
+                granularity_in_ms=False,  # synthetic granularity is always in seconds
+            )
+            if res:
+                errors.extend(res["api_error"])
+
+        if not errors:
+            return None
+
+        return {
+            "elicitation_needed": True,
+            "reason": f"{operation} payload has {len(errors)} validation problem(s)",
+            "api_error": errors,
+            "message": (
+                f"The {operation} payload has {len(errors)} problem(s). "
+                "Correct all issues below and retry:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            ),
+        }
 
 
 # ---------------------------------------------------------------------------
