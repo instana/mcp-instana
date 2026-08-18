@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 sys.modules["instana_client"] = MagicMock()
 sys.modules["instana_client.api"] = MagicMock()
-sys.modules["instana_client.api.mobile_app_catalog_api"] = MagicMock()
+sys.modules["instana_client.api.mobile_app_session_replay_api"] = MagicMock()
 sys.modules["instana_client.models"] = MagicMock()
 sys.modules["instana_client.models.get_action_beacons_result"] = MagicMock()
 sys.modules["instana_client.configuration"] = MagicMock()
@@ -40,7 +40,7 @@ class FakeModel:
     def to_dict(self):
         return self.kwargs
 
-sys.modules["instana_client.api.mobile_app_catalog_api"].MobileAppCatalogApi = MagicMock()
+sys.modules["instana_client.api.mobile_app_session_replay_api"].MobileAppSessionReplayApi = MagicMock()
 
 from src.mobile_app.mobile_app_session_replay import (
     MobileAppSessionReplayMCPTools,

@@ -31,7 +31,7 @@ def clean_nan_values(data: Any) -> Any:
         return data
 
 try:
-    from instana_client.api.mobile_app_catalog_api import MobileAppCatalogApi
+    from instana_client.api.mobile_app_session_replay_api import MobileAppSessionReplayApi
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
@@ -189,7 +189,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get mobile app session beacons: {e!s}"}
 
 
-    @with_header_auth(MobileAppCatalogApi)
+    @with_header_auth(MobileAppSessionReplayApi)
     async def get_session_replay_action_beacons(
         self,
         mobile_app_id: Optional[str] = None,
