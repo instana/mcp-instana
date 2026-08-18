@@ -31,7 +31,9 @@ def clean_nan_values(data: Any) -> Any:
         return data
 
 try:
-    from instana_client.api.mobile_app_session_replay_api import MobileAppSessionReplayApi
+    from instana_client.api.mobile_app_session_replay_api import (
+        MobileAppSessionReplayApi,
+    )
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
