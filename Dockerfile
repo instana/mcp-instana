@@ -13,13 +13,12 @@ WORKDIR /app
 # Copy project files and source code needed for the build
 COPY pyproject.toml pyproject.toml
 COPY src ./src
-COPY schema ./schema
 COPY README.md ./
 
 # Install uv for dependency management
 RUN pip install --no-cache-dir uv
 
-# Install only runtime dependencies using the minimal pyproject-runtime.toml
+# Install runtime dependencies
 RUN pip install --no-cache-dir .
 
 # Stage 2: Runtime stage
@@ -37,7 +36,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy only the source code and schema files needed for runtime
 COPY src ./src
-COPY schema ./schema
 
 # Set ownership to non-root user
 RUN chown -R mcpuser:mcpuser /app
@@ -53,9 +51,19 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-# Health check using container's internal network
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://127.0.0.1:8080/health', timeout=5)" || exit 1
+# Health check: send a real MCP initialize request and confirm a valid JSON-RPC
+# result comes back. This exercises the full stack (uvicorn → fastmcp → app)
+# and requires no Instana credentials.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "\
+import urllib.request, json, sys; \
+req = urllib.request.Request( \
+    'http://127.0.0.1:8080/mcp', \
+    data=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'healthcheck','version':'1.0'}}}).encode(), \
+    headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}, \
+    method='POST'); \
+resp = urllib.request.urlopen(req, timeout=5).read().decode(); \
+sys.exit(0 if 'serverInfo' in resp else 1)" || exit 1
 
 # Run the server
 ENTRYPOINT ["python", "-m", "src.core.server"]

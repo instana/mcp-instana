@@ -1,0 +1,8 @@
+# Force LF line endings for shell scripts on all platforms.
+# Without this, git on Windows checks out .sh files with CRLF endings,
+# which causes bash to fail with "$'\r': command not found" errors.
+*.sh text eol=lf
+
+# Standard: keep other text files normalised to LF in the repo,
+# checked out as the platform default everywhere else.
+* text=auto
