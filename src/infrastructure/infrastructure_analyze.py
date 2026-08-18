@@ -56,8 +56,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
     def _normalize_tag_filter_expression(self, filter_expr: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Normalize tagFilterExpression to the correct format required by the API.
+        """Normalize tagFilterExpression to the correct format required by the API.
 
         The Infrastructure Analyze API requires:
         1. Filters must be wrapped in an EXPRESSION envelope with elements array
@@ -281,6 +280,12 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                     _sv_res = _sv_fn(request_body.get(_sv_key), **_sv_kw)
                     if _sv_res:
                         _sv_errors.extend(_sv_res["api_error"])
+                # Cross-field: granularity/windowSize ratio (granularity in ms for infrastructure)
+                _gr = StructureValidator.validate_granularity_ratio(
+                    request_body.get("metrics"), request_body.get("timeFrame"), granularity_in_ms=True
+                )
+                if _gr:
+                    _sv_errors.extend(_gr["api_error"])
                 if _sv_errors:
                     return {
                         "elicitation_needed": True,
@@ -403,6 +408,12 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                     _sv_res = _sv_fn(request_body.get(_sv_key), **_sv_kw)
                     if _sv_res:
                         _sv_errors.extend(_sv_res["api_error"])
+                # Cross-field: granularity/windowSize ratio (granularity in ms for infrastructure)
+                _gr = StructureValidator.validate_granularity_ratio(
+                    request_body.get("metrics"), request_body.get("timeFrame"), granularity_in_ms=True
+                )
+                if _gr:
+                    _sv_errors.extend(_gr["api_error"])
                 if _sv_errors:
                     return {
                         "elicitation_needed": True,

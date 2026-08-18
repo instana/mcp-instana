@@ -29,23 +29,17 @@ def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, 
     3. If payload is a string, attempts to parse as JSON
     4. If JSON parsing fails, attempts to parse as Python literal (ast.literal_eval)
     5. If all parsing fails, returns error dict
-
     Args:
         payload: Payload as dict, JSON string, or Python literal string
-
     Returns:
         Parsed dict if successful, error dict with 'error' key otherwise
-
     Examples:
         >>> parse_payload('{"key": "value"}')
         {'key': 'value'}
-
         >>> parse_payload("{'key': 'value'}")
         {'key': 'value'}
-
         >>> parse_payload({'key': 'value'})
         {'key': 'value'}
-
         >>> parse_payload(None)
         {'error': 'payload is required'}
     """
@@ -85,7 +79,7 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "1.0.0"
+    __version__ = "0.9.6"
 
 # Registry to store all tools
 MCP_TOOLS = {}
@@ -650,8 +644,7 @@ class BaseInstanaClient:
         }
 
     def handle_api_error_response(self, response, operation_name: str, logger) -> Dict[str, Any]:
-        """
-        Handle API error responses in a standardized way.
+        """Handle API error responses in a standardized way.
 
         Args:
             response: The API response object
@@ -803,15 +796,14 @@ def extract_tag_names_from_tree(node, tag_names=None):
     return tag_names
 
 
-def process_tag_catalog_response(full_response: Dict[str, Any], beacon_type: str, use_case: str) -> Dict[str, Any]:
-    """
-    Process tag catalog API response to extract tag names.
+def process_tag_catalog_response(full_response: Dict[str, Any], beacon_type: Optional[str], use_case: str) -> Dict[str, Any]:
+    """Process tag catalog API response to extract tag names.
 
-    This shared function reduces code duplication between website and mobile app catalog modules.
+    This shared function reduces code duplication between website, mobile app, and synthetic catalog modules.
 
     Args:
         full_response: The full API response containing tagTree and/or tags
-        beacon_type: The beacon type for the catalog
+        beacon_type: The beacon type for the catalog (None for synthetics, which has no beacon type)
         use_case: The use case for the catalog
 
     Returns:
@@ -886,8 +878,7 @@ MOBILE_BEACON_TYPE_MAP = {
 
 
 def normalize_beacon_type(beacon_type: str, beacon_type_map: Dict[str, str]) -> str:
-    """
-    Normalize beacon type from uppercase to camelCase format.
+    """Normalize beacon type from uppercase to camelCase format.
 
     This shared function reduces code duplication between website and mobile app routers.
 
