@@ -24,7 +24,7 @@ dependencies = [
     # Pinned to 1.26.x to match fastmcp 3.1.x compatibility
     "mcp",
     # Instana API client - imported in src/event/events_tools.py
-    "instana-client==1.0.9",
+    "instana-client==1.1.0",
     # Lazy imports for Instana SDK - required by instana-client
     "lazy_imports",
     # HTTP client - imported in src/core/utils.py
