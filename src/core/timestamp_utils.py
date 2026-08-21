@@ -63,8 +63,10 @@ def parse_datetime_string(datetime_str: str, timezone: str = "UTC") -> datetime:
 
     Supported formats:
     - "10 March 2026, 2:00 PM"
+    - "10 October 2023, 00:00 AM"  (midnight; uses 24-hour hour with AM/PM literal)
     - "2026-03-10 14:00:00"
     - "2026-03-10T14:00:00"
+    - "2026-03-10T14:00:00Z"  (trailing 'Z' forces UTC regardless of the timezone argument)
     - "10/03/2026 14:00"
     - "March 10, 2026 2 PM"
 
@@ -93,10 +95,17 @@ def parse_datetime_string(datetime_str: str, timezone: str = "UTC") -> datetime:
     tz_to_use = detected_tz if detected_tz else timezone
     tz = parse_timezone(tz_to_use)
 
+    # Handle format with 'Z' suffix (UTC indicator)
+    if datetime_str_clean.endswith('Z'):
+        datetime_str_clean = datetime_str_clean[:-1]  # Remove 'Z'
+        tz = ZoneInfo("UTC")  # Force UTC timezone
+        logger.info("Detected format with 'Z' suffix, using UTC timezone")
+
     # List of datetime formats to try
     formats = [
         "%d %B %Y, %I:%M %p",      # 10 March 2026, 2:00 PM
         "%d %B %Y, %I %p",          # 10 March 2026, 2 PM
+        "%d %B %Y, %H:%M %p",       # 10 October 2023, 00:00 AM (handles 00:00)
         "%B %d, %Y %I:%M %p",       # March 10, 2026 2:00 PM
         "%B %d, %Y %I %p",          # March 10, 2026 2 PM
         "%Y-%m-%d %H:%M:%S",        # 2026-03-10 14:00:00

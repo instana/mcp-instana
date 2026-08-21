@@ -110,6 +110,38 @@ class TestParseDatetimeString(unittest.TestCase):
         self.assertEqual(dt.day, 10)
         self.assertEqual(dt.hour, 14)
 
+    def test_parse_datetime_iso8601_with_z_suffix(self):
+        """Test parsing ISO 8601 format with Z suffix (UTC indicator)"""
+        dt = parse_datetime_string("2023-10-10T00:00:00Z", "UTC")
+        self.assertEqual(dt.year, 2023)
+        self.assertEqual(dt.month, 10)
+        self.assertEqual(dt.day, 10)
+        self.assertEqual(dt.hour, 0)
+        self.assertEqual(dt.minute, 0)
+        self.assertEqual(str(dt.tzinfo), "UTC")
+
+    def test_parse_datetime_iso8601_with_z_suffix_ignores_provided_timezone(self):
+        """Test that Z suffix forces UTC regardless of provided timezone"""
+        dt = parse_datetime_string("2023-10-10T14:30:00Z", "IST")
+        # Should use UTC from Z suffix, not IST
+        self.assertEqual(str(dt.tzinfo), "UTC")
+        self.assertEqual(dt.hour, 14)
+
+    def test_parse_datetime_midnight_am_format(self):
+        """Test parsing '10 October 2023, 00:00 AM' format"""
+        dt = parse_datetime_string("10 October 2023, 00:00 AM", "UTC")
+        self.assertEqual(dt.year, 2023)
+        self.assertEqual(dt.month, 10)
+        self.assertEqual(dt.day, 10)
+        self.assertEqual(dt.hour, 0)
+        self.assertEqual(dt.minute, 0)
+
+    def test_parse_datetime_midnight_am_format_with_timezone(self):
+        """Test parsing midnight AM format with IST timezone"""
+        dt = parse_datetime_string("10 October 2023, 00:00 AM", "IST")
+        self.assertEqual(dt.hour, 0)
+        self.assertEqual(str(dt.tzinfo), "Asia/Kolkata")
+
 
 class TestConvertToTimestamp(unittest.TestCase):
     """Test convert_to_timestamp function"""
@@ -416,4 +448,3 @@ class TestTimezoneAliases(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
