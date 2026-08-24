@@ -1,4 +1,9 @@
 # Changelog
+### 1.0.1
+- **New Feature:** Introduced `manage_synthetics` as a unified smart router for managing synthetic monitoring operations.
+- **Enhancement:** Added multi-arch docker support for windows.
+- **Enhancement:** Added pre-flight validation checks across all MCP tools.
+
 ### 1.0.0
 - **New Feature:** Introduced `manage_infrastructure` as a unified smart router for infrastructure operations, replacing `analyze_infrastructure`. Consolidates analyze, catalog, and snapshot resource operations into a single tool.
 - **New Feature:** Added Session Replay support in mobile-apps tool.
