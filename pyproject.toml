@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-instana"
-version = "1.0.0"
+version = "1.0.1"
 description = "MCP server for Instana"
 authors = [
     {name = "Jay Sharma", email = "Jay.Sharma3@ibm.com"},
