@@ -34,6 +34,26 @@ ERROR_PLUGIN_REQUIRED = "plugin parameter is required"
 _HINT_GET_PLUGINS = "First call get_plugins to discover available plugin IDs"
 _MSG_PLUGIN_MISSING = "Missing required parameter 'plugin'. Call get_plugins first to discover valid plugin IDs."
 
+# Static metric overrides for plugins whose tagged metrics are not exposed by the catalog API.
+# The catalog endpoint GET /catalog/metrics/{plugin} only returns untagged/builtin definitions;
+# tagged metrics (registered via the custom catalog path) are absent from its response.
+# Add an entry here whenever a plugin's full metric set cannot be discovered via the API.
+_STATIC_METRICS_OVERRIDE: Dict[str, List[str]] = {
+    "oTelLLM": [
+        "metrics.gauges.llm.usage.total_tokens",
+        "metrics.gauges.llm.usage.input_tokens",
+        "metrics.gauges.llm.usage.output_tokens",
+        "metrics.gauges.llm.usage.cost",
+        "metrics.gauges.llm.usage.input_cost",
+        "metrics.gauges.llm.usage.output_cost",
+        "metrics.gauges.llm.response.duration",
+        "metrics.gauges.llm.latency.per_token",
+        "metrics.sums.llm.request.count",
+        "__message_size",
+        "__message_count"
+    ],
+}
+
 class InfrastructureCatalogMCPTools(BaseInstanaClient):
     """Tools for infrastructure catalog in Instana MCP."""
 
@@ -621,28 +641,36 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 "errors": []
             }
 
-            # Get metrics
-            try:
-                metrics = await self.get_infrastructure_catalog_metrics(
-                    plugin=plugin,
-                    filter=filter,
-                    ctx=ctx,
-                    api_client=api_client
+            # Get metrics — use static override for plugins whose tagged metrics are not
+            # returned by the catalog API (e.g. oTelLLM uses the tagged-metrics path).
+            if plugin in _STATIC_METRICS_OVERRIDE:
+                result["metrics"] = _STATIC_METRICS_OVERRIDE[plugin]
+                logger.debug(
+                    "Using static metric override for plugin '%s' (%d metrics)",
+                    plugin, len(result["metrics"])
                 )
+            else:
+                try:
+                    metrics = await self.get_infrastructure_catalog_metrics(
+                        plugin=plugin,
+                        filter=filter,
+                        ctx=ctx,
+                        api_client=api_client
+                    )
 
-                # Check if metrics call returned an error
-                if isinstance(metrics, dict) and "error" in metrics:
-                    result["errors"].append(f"Metrics: {metrics['error']}")
-                    result["metrics"] = []
-                elif isinstance(metrics, dict) and "metrics" in metrics:
-                    result["metrics"] = metrics["metrics"]
-                else:
-                    result["metrics"] = []
+                    # Check if metrics call returned an error
+                    if isinstance(metrics, dict) and "error" in metrics:
+                        result["errors"].append(f"Metrics: {metrics['error']}")
+                        result["metrics"] = []
+                    elif isinstance(metrics, dict) and "metrics" in metrics:
+                        result["metrics"] = metrics["metrics"]
+                    else:
+                        result["metrics"] = []
 
-            except Exception as e:
-                error_msg = f"Failed to get metrics: {e!s}"
-                logger.error(error_msg, exc_info=True)
-                result["errors"].append(error_msg)
+                except Exception as e:
+                    error_msg = f"Failed to get metrics: {e!s}"
+                    logger.error(error_msg, exc_info=True)
+                    result["errors"].append(error_msg)
 
             # Get tags
             try:

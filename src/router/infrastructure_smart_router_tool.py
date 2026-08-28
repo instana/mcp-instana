@@ -93,7 +93,8 @@ RECOMMENDED WORKFLOW FOR ANALYZE:
     2. SECOND: Call get_plugin_schema with a VALID plugin ID from step 1
        - Combines get_metrics + get_tag_catalog into ONE efficient call
        - IMPORTANT: Plugin ID must be from get_plugins - invalid IDs return HTTP 400
-       - Returns: {"metrics": ["memory.usage", ...], "tags": ["host.name", ...]}
+       - Returns: {"metrics": ["memory.usage", ...], "tags": ["tag.name", ...]}
+       - tagFilterExpression is OPTIONAL — only add a filter when the user explicitly names a specific entity to filter by
 
     3. THIRD: Use the discovered entity types, metrics, and tags in analyze operations
        - Build queries with proper type, metrics, and tagFilterExpression
@@ -147,7 +148,7 @@ CATALOG (resource_type="catalog"):
         This is the FIRST step - discover what entity types are available in your environment
 
     get_plugin_schema - Get complete schema (metrics + tags) for a plugin in ONE call (RECOMMENDED)
-        - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform")
+        - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - filter (optional): "builtin" or "custom" to filter metric types
         Returns: Dictionary with both metrics and tags for the plugin
         {
@@ -159,13 +160,13 @@ CATALOG (resource_type="catalog"):
         This COMBINES get_metrics and get_tag_catalog into a single call
 
     get_metrics - Get infrastructure metrics catalog for a specific plugin
-        - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform")
+        - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - filter (optional): "builtin" or "custom" to filter metric types
         Returns: List of metric names available for the plugin
         Use returned metric names exactly in analyze operations
 
     get_tag_catalog - Get valid tag names for a specific plugin
-        - plugin (required): Plugin ID from get_plugins (e.g., "host", "kubernetesPod")
+        - plugin (required): Plugin ID from get_plugins (e.g., "host", "kubernetesPod", "oTelLLM")
         Returns: Available tag names for filtering and grouping
         Use returned tag names exactly in analyze operations
 
@@ -185,7 +186,7 @@ RESOURCES (resource_type="resources"):
         - from_time (optional): Start timestamp in milliseconds (default: 1 hour ago)
         - to_time (optional): End timestamp in milliseconds (default: now)
         - size (optional): Maximum number of results to return (default: 100)
-        - plugin (optional): Entity type to filter by (e.g., "host", "jvmRuntimePlatform")
+        - plugin (optional): Entity type to filter by (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - offline (optional): Include offline snapshots (default: false)
         - detailed (optional): Return full raw data vs summarized (default: false)
         Returns: List of snapshots matching the search criteria
@@ -207,7 +208,7 @@ Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"plugin": "host"}
     resource_type="analyze", operation="get_entities", params={"payload": {"type": "host", "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}}}
     resource_type="analyze", operation="get_entities", params={"payload": {"type": "jvmRuntimePlatform", "metrics": [{"metric": "memory.used", "granularity": 3600000, "aggregation": "MAX"}, {"metric": "threads.blocked", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"to": 1743923995000, "windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "EQUALS", "value": "server1"}, "pagination": {"retrievalSize": 200}}}
-    resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "kubernetesPod", "groupBy": ["kubernetes.namespace.name"], "metrics": [{"metric": "cpu.requests", "granularity": 3600000, "aggregation": "SUM"}], "timeFrame": {"windowSize": 7200000}, "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "pagination": {"retrievalSize": 20}, "order": {"by": "label", "direction": "ASC"}}}
+    resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "oTelLLM", "groupBy": ["otel.attribute.service.name"], "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "otel.attribute.service.name", "operator": "EQUALS", "value": "dispatch-agent"}, "pagination": {"retrievalSize": 20}}}
     resource_type="resources", operation="get_snapshot", params={"snapshot_id": "abc123xyz"}
     resource_type="resources", operation="get_snapshots", params={"plugin": "host", "size": 50}
     resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": 1617994800000, "to_time": 1618081200000, "detailed": true}"""

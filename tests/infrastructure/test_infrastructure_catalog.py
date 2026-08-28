@@ -946,6 +946,59 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         self.assertEqual(result['total'], 50)
         self.assertEqual(result['plugin'], "host")
 
+    # -------------------------------------------------------------------------
+    # get_plugin_schema — static metric override tests
+    # -------------------------------------------------------------------------
+
+    def test_get_plugin_schema_otel_llm_uses_static_metrics(self):
+        """get_plugin_schema for oTelLLM must use the static override and never call
+        the catalog metrics API, because tagged metrics are absent from that endpoint."""
+        # Tag catalog returns something minimal so the schema call can complete
+        self.catalog_api.get_tag_catalog.return_value = {}
+
+        result = asyncio.run(self.client.get_plugin_schema(plugin="oTelLLM"))
+
+        # The catalog metrics endpoint must NOT have been called
+        self.catalog_api.get_infrastructure_catalog_metrics_without_preload_content.assert_not_called()
+        # The result must carry metrics
+        self.assertIn("metrics", result)
+        self.assertGreater(len(result["metrics"]), 0)
+
+    def test_get_plugin_schema_otel_llm_static_metrics_content(self):
+        """get_plugin_schema for oTelLLM must return the exact authoritative metric names."""
+        self.catalog_api.get_tag_catalog.return_value = {}
+
+        result = asyncio.run(self.client.get_plugin_schema(plugin="oTelLLM"))
+
+        expected = {
+            "metrics.gauges.llm.usage.total_tokens",
+            "metrics.gauges.llm.usage.input_tokens",
+            "metrics.gauges.llm.usage.output_tokens",
+            "metrics.gauges.llm.usage.cost",
+            "metrics.gauges.llm.usage.input_cost",
+            "metrics.gauges.llm.usage.output_cost",
+            "metrics.gauges.llm.response.duration",
+            "metrics.gauges.llm.latency.per_token",
+            "metrics.sums.llm.request.count",
+            "__message_size",
+            "__message_count"
+        }
+        self.assertEqual(set(result["metrics"]), expected)
+
+    def test_get_plugin_schema_non_override_plugin_still_calls_catalog(self):
+        """get_plugin_schema for a normal plugin (e.g. 'host') must still call the
+        catalog metrics API — the static override must not affect other plugins."""
+        response = MagicMock()
+        response.status = 200
+        response.data = b'["cpu.used", "memory.used"]'
+        self.catalog_api.get_infrastructure_catalog_metrics_without_preload_content.return_value = response
+        self.catalog_api.get_tag_catalog.return_value = {}
+
+        result = asyncio.run(self.client.get_plugin_schema(plugin="host"))
+
+        self.catalog_api.get_infrastructure_catalog_metrics_without_preload_content.assert_called_once()
+        self.assertIn("metrics", result)
+        self.assertEqual(result["metrics"], ["cpu.used", "memory.used"])
 
 
 if __name__ == '__main__':
