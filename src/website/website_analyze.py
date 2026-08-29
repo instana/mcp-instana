@@ -208,36 +208,57 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         normalized.setdefault("offset", DEFAULT_BEACON_PAGINATION["offset"])
         return normalized
 
+    # The beacons list endpoint only accepts the API's deprecated `tagFilters`
+    # format: a flat, implicitly AND-combined list of TAG_FILTERs without a
+    # `key` field. Anything richer must be rejected loudly — silently dropping
+    # `key`, OR semantics or nested expressions would change the query meaning
+    # without any signal to the caller.
+    _UNSUPPORTED_FILTER_HINT = (
+        "The beacons list endpoint only supports a single TAG_FILTER or a flat, "
+        "AND-combined EXPRESSION of TAG_FILTERs, without a 'key' field. For "
+        "filters that need 'key' (e.g. beacon.meta sub-keys), OR, or nested "
+        "expressions, use get_website_beacon_groups instead."
+    )
+
+    def _convert_single_beacon_tag_filter(self, tag_filter: Dict[str, Any]) -> Dict[str, Any]:
+        if tag_filter.get("key"):
+            return {"error": f"TAG_FILTER with a 'key' field is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
+        name = tag_filter.get("name")
+        operator = tag_filter.get("operator")
+        value = tag_filter.get("value")
+        if not name or not operator or not value:
+            return {"error": "TAG_FILTER requires 'name', 'operator', and 'value' fields"}
+        tag_filter_dict = {"name": name, "operator": operator, "value": value}
+        if "entity" in tag_filter:
+            tag_filter_dict["entity"] = tag_filter.get("entity")
+        return tag_filter_dict
+
     def _convert_beacon_tag_filters(self, tag_filter_expression: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not tag_filter_expression:
             return {}
         try:
             from instana_client.models.deprecated_tag_filter import DeprecatedTagFilter
-            if tag_filter_expression.get("type") == "TAG_FILTER":
-                name = tag_filter_expression.get("name")
-                operator = tag_filter_expression.get("operator")
-                value = tag_filter_expression.get("value")
-                if not name or not operator or not value:
-                    return {"error": "TAG_FILTER requires 'name', 'operator', and 'value' fields"}
-                tag_filter_dict = {"name": name, "operator": operator, "value": value}
-                if "entity" in tag_filter_expression:
-                    tag_filter_dict["entity"] = tag_filter_expression.get("entity")
-                return {"tagFilters": [DeprecatedTagFilter(**tag_filter_dict)]}
-            if tag_filter_expression.get("type") == "EXPRESSION":
+            filter_type = tag_filter_expression.get("type")
+            if filter_type == "TAG_FILTER":
+                converted = self._convert_single_beacon_tag_filter(tag_filter_expression)
+                if "error" in converted:
+                    return converted
+                return {"tagFilters": [DeprecatedTagFilter(**converted)]}
+            if filter_type == "EXPRESSION":
+                logical_operator = tag_filter_expression.get("logicalOperator", "AND")
+                if logical_operator != "AND":
+                    return {"error": f"logicalOperator {logical_operator!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
                 elements = tag_filter_expression.get("elements", [])
                 tag_filters = []
                 for elem in elements:
-                    if elem.get("type") == "TAG_FILTER":
-                        tag_filter_dict = {
-                            "name": elem.get("name"),
-                            "operator": elem.get("operator"),
-                            "value": elem.get("value"),
-                        }
-                        if "entity" in elem:
-                            tag_filter_dict["entity"] = elem.get("entity")
-                        tag_filters.append(DeprecatedTagFilter(**tag_filter_dict))
+                    if elem.get("type") != "TAG_FILTER":
+                        return {"error": f"EXPRESSION element of type {elem.get('type')!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
+                    converted = self._convert_single_beacon_tag_filter(elem)
+                    if "error" in converted:
+                        return converted
+                    tag_filters.append(DeprecatedTagFilter(**converted))
                 return {"tagFilters": tag_filters} if tag_filters else {}
-            return {}
+            return {"error": f"Tag filter type {filter_type!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
         except Exception as e:
             logger.error(f"[get_website_beacons] Error converting tag filter expression: {e}")
             return {"error": f"Invalid tag filter expression: {e!s}"}

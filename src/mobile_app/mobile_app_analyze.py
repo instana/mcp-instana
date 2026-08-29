@@ -470,9 +470,24 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
         return pagination
 
+    # The beacons list endpoint only accepts the API's deprecated `tagFilters`
+    # format: a flat, implicitly AND-combined list of TAG_FILTERs without a
+    # `key` field. Anything richer must be rejected loudly — silently dropping
+    # `key`, OR semantics or nested expressions would change the query meaning
+    # without any signal to the caller.
+    _UNSUPPORTED_FILTER_HINT = (
+        "The beacons list endpoint only supports a single TAG_FILTER or a flat, "
+        "AND-combined EXPRESSION of TAG_FILTERs, without a 'key' field. For "
+        "filters that need 'key' (e.g. mobileBeacon.meta sub-keys), OR, or "
+        "nested expressions, use get_mobile_app_beacon_groups instead."
+    )
+
     def _convert_single_tag_filter(self, tag_filter: Dict[str, Any]) -> Union[Any, Dict[str, Any]]:
         """Convert a single TAG_FILTER to DeprecatedTagFilter."""
         from instana_client.models.deprecated_tag_filter import DeprecatedTagFilter
+
+        if tag_filter.get("key"):
+            return {"error": f"TAG_FILTER with a 'key' field is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
 
         name = tag_filter.get("name")
         operator = tag_filter.get("operator")
@@ -487,21 +502,16 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
         return DeprecatedTagFilter(**tag_filter_dict)
 
-    def _convert_expression_filters(self, elements: List[Dict[str, Any]]) -> List[Any]:
-        """Convert EXPRESSION elements to list of DeprecatedTagFilter."""
-        from instana_client.models.deprecated_tag_filter import DeprecatedTagFilter
-
+    def _convert_expression_filters(self, elements: List[Dict[str, Any]]) -> Union[List[Any], Dict[str, Any]]:
+        """Convert EXPRESSION elements to a list of DeprecatedTagFilter, or an error dict."""
         tag_filters = []
         for elem in elements:
-            if elem.get("type") == "TAG_FILTER":
-                tag_filter_dict = {
-                    "name": elem.get("name"),
-                    "operator": elem.get("operator"),
-                    "value": elem.get("value"),
-                }
-                if "entity" in elem:
-                    tag_filter_dict["entity"] = elem.get("entity")
-                tag_filters.append(DeprecatedTagFilter(**tag_filter_dict))
+            if elem.get("type") != "TAG_FILTER":
+                return {"error": f"EXPRESSION element of type {elem.get('type')!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
+            result = self._convert_single_tag_filter(elem)
+            if isinstance(result, dict) and "error" in result:
+                return result
+            tag_filters.append(result)
         return tag_filters
 
     def _convert_tag_filter_to_deprecated(
@@ -515,8 +525,10 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             - Dict with 'error' key: Conversion error occurred
             - Empty list: No filters to convert
         """
+        filter_type = tag_filter_expression.get("type")
+
         # Single TAG_FILTER
-        if tag_filter_expression.get("type") == "TAG_FILTER":
+        if filter_type == "TAG_FILTER":
             result = self._convert_single_tag_filter(tag_filter_expression)
             if isinstance(result, dict) and "error" in result:
                 return result
@@ -524,17 +536,23 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             return [result]
 
         # EXPRESSION with elements
-        elif tag_filter_expression.get("type") == "EXPRESSION":
+        elif filter_type == "EXPRESSION":
+            logical_operator = tag_filter_expression.get("logicalOperator", "AND")
+            if logical_operator != "AND":
+                return {"error": f"logicalOperator {logical_operator!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
             elements = tag_filter_expression.get("elements", [])
             if elements:
                 tag_filters = self._convert_expression_filters(elements)
+                if isinstance(tag_filters, dict) and "error" in tag_filters:
+                    return tag_filters
                 if tag_filters:
                     logger.debug(f"[get_mobile_app_beacons] Converted {len(tag_filters)} TAG_FILTERs from EXPRESSION")
                     return tag_filters
             else:
                 logger.debug("[get_mobile_app_beacons] Empty EXPRESSION - no tag filters applied")
+            return []
 
-        return []
+        return {"error": f"Tag filter type {filter_type!r} is not supported here. {self._UNSUPPORTED_FILTER_HINT}"}
 
     def _build_beacons_query_params(
         self,
