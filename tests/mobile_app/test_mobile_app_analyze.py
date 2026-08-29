@@ -177,6 +177,34 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
     def test_summarize_beacons_non_dict(self):
         self.assertEqual(self.client._summarize_beacons_response(["x"]), ["x"])
 
+    def test_build_beacon_groups_query_params_passes_second_level_key(self):
+        query_params = self.client._build_beacon_groups_query_params(
+            beacon_type="CUSTOM_EVENT",
+            metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
+            group={
+                "groupbyTag": "mobileBeacon.meta",
+                "groupbyTagEntity": "NOT_APPLICABLE",
+                "groupbyTagSecondLevelKey": "myKey",
+            },
+            time_frame={"windowSize": 3600000},
+            tag_filter_expression=None,
+            order=None,
+            pagination=None,
+        )
+        self.assertEqual(query_params["group"]["groupbyTagSecondLevelKey"], "myKey")
+
+    def test_build_beacon_groups_query_params_omits_absent_second_level_key(self):
+        query_params = self.client._build_beacon_groups_query_params(
+            beacon_type="CUSTOM_EVENT",
+            metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
+            time_frame={"windowSize": 3600000},
+            tag_filter_expression=None,
+            order=None,
+            pagination=None,
+        )
+        self.assertNotIn("groupbyTagSecondLevelKey", query_params["group"])
+
     async def test_get_all_mobile_app_beacons_success(self):
         payload = {
             "totalHits": 1,

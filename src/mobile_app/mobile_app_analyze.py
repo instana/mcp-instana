@@ -115,6 +115,14 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             "groupbyTag": group.get("groupbyTag") or group.get("groupByTag", DEFAULT_GROUP_BY_TAG),
             "groupbyTagEntity": group.get("groupbyTagEntity") or group.get("groupByTagEntity", DEFAULT_GROUP_BY_TAG_ENTITY),
         }
+        # Optional 2nd-level key for key/value tags (e.g. the sub-key of
+        # mobileBeacon.meta) — supported by the API's MobileAppBeaconTagGroup model
+        second_level_key = (
+            group.get("groupbyTagSecondLevelKey")
+            or group.get("groupByTagSecondLevelKey")
+        )
+        if second_level_key:
+            mapped_group["groupbyTagSecondLevelKey"] = second_level_key
         query_params["group"] = mapped_group
 
         # Convert tag filter expression to SDK model
@@ -277,16 +285,19 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
                 {
                     "groupbyTag": "<tag_name>",
-                    "groupbyTagEntity": "<entity_type>"
+                    "groupbyTagEntity": "<entity_type>",
+                    "groupbyTagSecondLevelKey": "<optional sub-key for key/value tags>"
                 }
 
                 Rules:
-                - Only `groupbyTag` and `groupbyTagEntity` keys are supported.
+                - Only `groupbyTag`, `groupbyTagEntity` and `groupbyTagSecondLevelKey` keys are supported.
                 - camelCase variants such as `groupByTag` are NOT supported.
                 - If `group` is not provided, default grouping will be applied.
                 - If `group` is provided but fields are missing:
                     - groupbyTag defaults to: mobileBeacon.mobileApp.name
                     - groupbyTagEntity defaults to: NOT_APPLICABLE
+                - `groupbyTagSecondLevelKey` is optional; use it to group a
+                  key/value tag (e.g. `mobileBeacon.meta`) by one of its keys.
             tag_filter_expression: Filter expression for tags
                 Example: {
                     "type": "TAG_FILTER",
