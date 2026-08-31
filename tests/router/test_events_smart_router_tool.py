@@ -321,15 +321,19 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
 
         self.assertTrue(captured["filters"]["rca"])
 
-    def test_get_events_time_validation_fails_without_time_params(self):
-        """get_events without any time params should fail time validation."""
+    def test_get_events_without_time_params_uses_defaults(self):
+        """get_events without any time params should succeed and use defaults."""
+        async def mock_get_events(*args, **kwargs):
+            return {"events": [], "events_returned": 0, "total_events": 0}
+
+        self.mock_events.get_events = mock_get_events
+
         result = asyncio.run(self.router.manage_events(
             operation="get_events",
             params={"filters": {}}
         ))
 
-        self.assertIn("validation_failed", result)
-        self.assertTrue(result["validation_failed"])
+        self.assertIn("results", result)
 
     def test_get_events_exception_handling(self):
         """get_events should return an error dict when events client raises."""

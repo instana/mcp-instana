@@ -281,9 +281,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_kubernetes_info_events())
 
         # Check that the mock was called with the correct arguments
-        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
+        # When no time params provided, _build_time_params uses var_from/to (default 10 min window)
         expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
-        expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
+        expected_from_time = expected_to_time - (10 * 60 * 1000)  # 10 minutes earlier
 
         self.events_api.kubernetes_info_events.assert_called_once_with(
             var_from=expected_from_time,
@@ -409,9 +409,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_agent_monitoring_events())
 
         # Check that the mock was called with the correct arguments
-        # When no time params provided, _build_time_params uses var_from/to (default 24h window)
+        # When no time params provided, _build_time_params uses var_from/to (default 10 min window)
         expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
-        expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
+        expected_from_time = expected_to_time - (10 * 60 * 1000)  # 10 minutes earlier
 
         self.events_api.agent_monitoring_events.assert_called_once_with(
             var_from=expected_from_time,
@@ -517,12 +517,12 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
 
         # Expected window sizes for each time range (used when time_range is provided)
         expected_window_sizes = [
-            24 * 60 * 60 * 1000,           # last few hours -> default 24 hours
+            10 * 60 * 1000,                # last few hours -> default 10 minutes
             5 * 60 * 60 * 1000,            # last 5 hours
             3 * 24 * 60 * 60 * 1000,       # last 3 days
             2 * 7 * 24 * 60 * 60 * 1000,   # last 2 weeks
             1 * 30 * 24 * 60 * 60 * 1000,  # last 1 month
-            24 * 60 * 60 * 1000            # unknown format -> default 24 hours (still uses window_size)
+            10 * 60 * 1000                 # unknown format -> default 10 minutes (still uses window_size)
         ]
 
         for i, time_range in enumerate(time_ranges):
@@ -767,9 +767,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             # Call the method with unusual time range
             result_from_time, result_to_time = self.client._process_time_range("last century", None, None)
 
-            # Check that default values were used (24 hours)
+            # Check that default values were used (10 minutes)
             expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
-            expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
+            expected_from_time = expected_to_time - (10 * 60 * 1000)  # 10 minutes earlier
 
             self.assertEqual(result_from_time, expected_from_time)
             self.assertEqual(result_to_time, expected_to_time)
@@ -848,12 +848,12 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             # Result not needed as we're checking the mock call
             _ = asyncio.run(self.client.get_agent_monitoring_events(to_time=to_time))
 
-            # Check that from_time was set to 1 hour before to_time
+            # Check that from_time was set to 10 minutes before to_time
             self.events_api.agent_monitoring_events.assert_called_once()
             call_args = self.events_api.agent_monitoring_events.call_args[1]
             self.assertEqual(call_args['to'], to_time)
-            # The default from_time is 24 hours before to_time, not 1 hour
-            self.assertEqual(call_args['var_from'], to_time - (24 * 60 * 60 * 1000))  # 24 hours in milliseconds
+            # The default from_time is 10 minutes before to_time
+            self.assertEqual(call_args['var_from'], to_time - (10 * 60 * 1000))  # 10 minutes in milliseconds
 
     def test_get_agent_monitoring_events_with_non_dict_event(self):
         """Test get_agent_monitoring_events with non-dictionary event"""
@@ -1036,9 +1036,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             # Call the method with 'few hours' format
             from_time, to_time = self.client._process_time_range("last few hours", None, None)
 
-            # Check that default values were used (24 hours)
+            # Check that default values were used (10 minutes)
             expected_to_time = 1000 * 1000  # Convert seconds to milliseconds
-            expected_from_time = expected_to_time - (24 * 60 * 60 * 1000)  # 24 hours earlier
+            expected_from_time = expected_to_time - (10 * 60 * 1000)  # 10 minutes earlier
 
             self.assertEqual(from_time, expected_from_time)
             self.assertEqual(to_time, expected_to_time)
@@ -1055,8 +1055,8 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             to_time_value = 500000
             from_time, to_time = self.client._process_time_range(None, None, to_time_value)
 
-            # Check that from_time was set to 24 hours before to_time
-            expected_from_time = to_time_value - (24 * 60 * 60 * 1000)  # 24 hours earlier
+            # Check that from_time was set to 10 minutes before to_time
+            expected_from_time = to_time_value - (10 * 60 * 1000)  # 10 minutes earlier
 
             self.assertEqual(from_time, expected_from_time)
             self.assertEqual(to_time, to_time_value)
@@ -1595,16 +1595,15 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertEqual(result["affectedMetrics"], ["errors", "latency"])
 
     def test_build_time_params_with_invalid_time_range(self):
-        """Test _build_time_params with invalid time_range falls back to defaults."""
-        # Mock _convert_time_range_to_window_size to return None
-        with patch.object(self.client, '_convert_time_range_to_window_size', return_value=None):
-            result = self.client._build_time_params(time_range="invalid time range")
+        """Test _build_time_params with an unrecognised time_range uses the default window_size."""
+        # _convert_time_range_to_window_size always returns a value (defaults to 10 minutes)
+        # so api_params receives window_size, not var_from/to
+        result = self.client._build_time_params(time_range="invalid time range")
 
-            self.assertIn("api_params", result)
-            self.assertIn("var_from", result["api_params"])
-            self.assertIn("to", result["api_params"])
-            self.assertIn("from_time", result)
-            self.assertIn("to_time", result)
+        self.assertIn("api_params", result)
+        self.assertIn("window_size", result["api_params"])
+        self.assertIn("from_time", result)
+        self.assertIn("to_time", result)
 
     def test_extract_event_filters_returns_only_allowed_keys(self):
         """_extract_event_filters should whitelist keys and apply defaults."""
