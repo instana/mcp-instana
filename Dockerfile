@@ -15,9 +15,6 @@ COPY pyproject.toml pyproject.toml
 COPY src ./src
 COPY README.md ./
 
-# Install uv for dependency management
-RUN pip install --no-cache-dir uv
-
 # Install runtime dependencies
 RUN pip install --no-cache-dir .
 
@@ -63,7 +60,8 @@ req = urllib.request.Request( \
     headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}, \
     method='POST'); \
 resp = urllib.request.urlopen(req, timeout=5).read().decode(); \
-sys.exit(0 if 'serverInfo' in resp else 1)" || exit 1
+data = json.loads(resp); \
+sys.exit(0 if 'result' in data and 'serverInfo' in data['result'] else 1)" || exit 1
 
 # Run the server
 ENTRYPOINT ["python", "-m", "src.core.server"]
