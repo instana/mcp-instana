@@ -73,7 +73,7 @@ detect_os() {
     case "$uname_out" in
         Darwin*)  HOST_OS="mac"     ;;
         Linux*)
-            if [[ -n "${WSLENV:-}" || -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+            if [[ -n "${WSLENV:-}" ]] || grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
                 HOST_OS="windows"   # WSL2
             else
                 HOST_OS="linux"
@@ -165,7 +165,7 @@ if [ "$ENGINE_TYPE" = "podman" ]; then
             podman manifest add "$MANIFEST_NAME" "$ARCH_TAG"
         done
 
-        podman manifest push "$MANIFEST_NAME" "docker://$MANIFEST_NAME"
+        podman manifest push "$MANIFEST_NAME" "docker://$MANIFEST_NAME" || { echo "Push failed!"; exit 1; }
 
         echo "Multi-architecture image pushed as: $FULL_IMAGE_NAME"
         echo "Verifying manifest..."
