@@ -962,7 +962,7 @@ class TestAgentMonitoringEventsE2E:
             # Test with no parameters (should use defaults)
             from_time, to_time = client._process_time_range()
             assert to_time == 1625097900000  # Current time in ms
-            assert from_time == to_time - (24 * 60 * 60 * 1000)  # 24 hours before
+            assert from_time == to_time - (10 * 60 * 1000)  # 10 minutes before
 
             # Test with only from_time
             custom_from = 1625000000000
@@ -974,7 +974,7 @@ class TestAgentMonitoringEventsE2E:
             custom_to = 1625090000000
             from_time, to_time = client._process_time_range(to_time=custom_to)
             assert to_time == custom_to
-            assert from_time == custom_to - (24 * 60 * 60 * 1000)
+            assert from_time == custom_to - (10 * 60 * 1000)
 
             # Test with both from_time and to_time
             custom_from = 1625000000000
@@ -986,7 +986,7 @@ class TestAgentMonitoringEventsE2E:
             # Test with "last few hours"
             from_time, to_time = client._process_time_range(time_range="last few hours")
             assert to_time == 1625097900000
-            assert from_time == to_time - (24 * 60 * 60 * 1000)
+            assert from_time == to_time - (10 * 60 * 1000)
 
             # Test with "last 12 hours"
             from_time, to_time = client._process_time_range(time_range="last 12 hours")
@@ -1011,7 +1011,7 @@ class TestAgentMonitoringEventsE2E:
             # Test with unknown format
             from_time, to_time = client._process_time_range(time_range="unknown format")
             assert to_time == 1625097900000
-            assert from_time == to_time - (24 * 60 * 60 * 1000)
+            assert from_time == to_time - (10 * 60 * 1000)
 
             # Test with time_range overriding from_time and to_time
             custom_from = 1625000000000
@@ -1176,7 +1176,7 @@ class TestAgentMonitoringEventsE2E:
         assert to_time == test_to_time
         assert isinstance(from_time, int)
         assert to_time > from_time
-        assert to_time - from_time == 24 * 60 * 60 * 1000  # 24 hours
+        assert to_time - from_time == 10 * 60 * 1000  # 10 minutes
 
         # Test with both from_time and to_time
         test_from_time = 1625097600000
@@ -1442,7 +1442,7 @@ class TestAgentMonitoringEventsE2E:
         assert isinstance(from_time, int)
         assert isinstance(to_time, int)
         assert to_time > from_time
-        assert to_time - from_time == 24 * 60 * 60 * 1000  # 24 hours
+        assert to_time - from_time == 10 * 60 * 1000  # 10 minutes
 
         # Test with "last 12 hours"
         from_time, to_time = client._process_time_range(time_range="last 12 hours")
@@ -1459,14 +1459,14 @@ class TestAgentMonitoringEventsE2E:
         assert to_time - from_time == 3 * 24 * 60 * 60 * 1000  # 3 days
 
         # Test with "last week" - "last week" contains "week" but no number, so no match
-        # falls through to default 24 hours
+        # falls through to default 10 minutes
         from_time, to_time = client._process_time_range(time_range="last week")
         assert isinstance(from_time, int)
         assert isinstance(to_time, int)
         assert to_time > from_time
         # "last week" has no digit before "week", so _convert_time_range_to_window_size
-        # falls through to default 24 hours
-        assert to_time - from_time == 24 * 60 * 60 * 1000  # default 24 hours
+        # falls through to default 10 minutes
+        assert to_time - from_time == 10 * 60 * 1000  # default 10 minutes
 
         # Test with "last 2 weeks"
         from_time, to_time = client._process_time_range(time_range="last 2 weeks")
@@ -1476,14 +1476,14 @@ class TestAgentMonitoringEventsE2E:
         assert to_time - from_time == 2 * 7 * 24 * 60 * 60 * 1000  # 2 weeks
 
         # Test with "last month" - "last month" has no digit, so no regex match
-        # falls through to default 24 hours
+        # falls through to default 10 minutes
         from_time, to_time = client._process_time_range(time_range="last month")
         assert isinstance(from_time, int)
         assert isinstance(to_time, int)
         assert to_time > from_time
         # "last month" has no digit before "month", so _convert_time_range_to_window_size
-        # falls through to default 24 hours
-        assert to_time - from_time == 24 * 60 * 60 * 1000  # default 24 hours
+        # falls through to default 10 minutes
+        assert to_time - from_time == 10 * 60 * 1000  # default 10 minutes
 
         # Test with "last 2 months"
         from_time, to_time = client._process_time_range(time_range="last 2 months")

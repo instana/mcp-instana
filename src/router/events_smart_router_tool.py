@@ -13,7 +13,7 @@ from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
-from src.core.validation import BooleanCoercer, EventsValidator, TimeValidator
+from src.core.validation import BooleanCoercer, EventsValidator
 
 logger = logging.getLogger(__name__)
 
@@ -190,20 +190,8 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         self,
         operation: str,
         filters: Dict[str, Any],
-        from_time: Any,
-        to_time: Any,
     ) -> Optional[Dict[str, Any]]:
-        """Validate time params and max_events for time-requiring operations; return error dict or None."""
-        logger.debug(f"[manage_events] Validating time parameters for operation: {operation}")
-        time_validation = TimeValidator.validate_time_parameters(
-            from_time=from_time,
-            to_time=to_time,
-            time_range=filters[PARAM_TIME_RANGE],
-        )
-        if not time_validation.is_valid():
-            logger.warning(f"[manage_events] Time parameter validation failed for operation: {operation}, errors: {time_validation.to_dict()}")
-            return {"operation": operation, "validation_failed": True, **time_validation.to_dict()}
-
+        """Validate max_events for time-requiring operations; return error dict or None."""
         max_events_error = EventsValidator.validate_max_events(filters[PARAM_MAX_EVENTS])
         if max_events_error:
             logger.warning(f"[manage_events] max_events validation failed: {max_events_error.message}, provided value: {filters[PARAM_MAX_EVENTS]}")
@@ -267,6 +255,7 @@ Operations:
     - "get_events_by_ids": Get multiple events by their IDs
 
 Parameters (params dict):
+- MANDATORY: If NONE of from_time, to_time, or time_range are provided, defaults to the last 10 minutes
 - For "get_event" and "get_events_by_ids", pass flat params:
     - event_id: Event ID (required for get_event)
     - event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
@@ -275,7 +264,7 @@ Parameters (params dict):
         If timezone not specified in datetime string, defaults to UTC
     - to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
         If timezone not specified in datetime string, defaults to UTC
-    - time_range: Natural language time range like "last 24 hours", "last 2 days"
+    - time_range: Natural language time range (e.g., "last 10 minutes", "last 2 days"). DEFAULT when omitted: "last 10 minutes"
     - query: Optional query string for agent monitoring events
     - max_events: Maximum number of events to process for analysis (optional, default 50)
         NOTE: This is a post-processing limit, not an API parameter
@@ -283,7 +272,7 @@ Parameters (params dict):
     - filters: Dictionary containing event filters.
         - from_time: Start timestamp - milliseconds OR datetime string
         - to_time: End timestamp - milliseconds OR datetime string
-        - time_range: Natural language time range like "last 24 hours", "last 2 days"
+        - time_range: Natural language time range (e.g., "last 10 minutes", "last 2 days"). DEFAULT when omitted: "last 10 minutes"
         - query: Optional query string
         - max_events: Maximum number of events to process for analysis (optional, default 50)
         - filter_event_updates: Boolean flag to filter results to only show events with state changes within timeframe (optional, default True)
@@ -323,9 +312,10 @@ Returns:
 
 Examples:
     operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
-    operation="get_kubernetes_info_events", params={"time_range": "last 24 hours", "max_events": 50}
+    operation="get_kubernetes_info_events", params={"time_range": "last 2 hours", "max_events": 50}
     operation="get_agent_monitoring_events", params={"query": "Monitoring issue", "from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
-    operation="get_events", params={"filters": {"time_range": "last 24 hours", "event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "entity_label": "payment-service-v2", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
+    operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"]}}  # no time_range → defaults to last 10 minutes
+    operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "entity_label": "payment-service-v2", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
     operation="get_events_by_ids", params={"event_ids": ["1a2b3c4d5e6f", "7g8h9i0j1k2l"]}"""
     )
     async def manage_events(
@@ -376,7 +366,7 @@ Examples:
             to_time = conversion_result["params"][PARAM_TO_TIME]
 
             if operation in TIME_REQUIRED_OPERATIONS:
-                time_error = self._validate_time_and_max_events(operation, filters, from_time, to_time)
+                time_error = self._validate_time_and_max_events(operation, filters)
                 if time_error:
                     return time_error
 

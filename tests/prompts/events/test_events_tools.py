@@ -54,12 +54,13 @@ class TestEventsPrompts(unittest.TestCase):
         """Test that get_prompts returns all prompts defined in the class."""
         prompts = EventsPrompts.get_prompts()
         # There are now 7 prompts in the EventsPrompts class
-        self.assertEqual(len(prompts), 7)
+        self.assertEqual(len(prompts), 8)
         self.assertEqual(prompts[0][0], 'get_event')
         self.assertEqual(prompts[1][0], 'get_kubernetes_info_events')
         self.assertEqual(prompts[2][0], 'get_agent_monitoring_events')
-        self.assertEqual(prompts[3][0], 'get_events_by_severity_and_state')
-        self.assertEqual(prompts[4][0], 'get_events_by_entity_and_problem')
+        self.assertEqual(prompts[3][0], 'get_events')
+        self.assertEqual(prompts[4][0], 'get_events_by_severity_and_state')
+        self.assertEqual(prompts[5][0], 'get_events_by_entity_and_problem')
 
     def test_get_event_prompt_content(self):
         """Test that get_event returns expected prompt content."""
@@ -135,7 +136,13 @@ class TestEventsPrompts(unittest.TestCase):
         for name, prompt_func in prompts:
             if name == "get_event":
                 result = prompt_func(event_id="test")
-            elif name in {"get_kubernetes_info_events", "get_agent_monitoring_events", "get_events_by_severity_and_state", "get_events_by_entity_and_problem", "get_events_by_entity_type_and_event_type"}:
+            elif name in {
+                "get_kubernetes_info_events",
+                "get_agent_monitoring_events",
+                "get_events_by_severity_and_state",
+                "get_events_by_entity_and_problem",
+                "get_events_by_entity_type_and_event_type",
+            }:
                 result = prompt_func()
             elif name == "get_events_by_ids":
                 result = prompt_func(event_ids=["test"])

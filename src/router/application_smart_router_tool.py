@@ -70,7 +70,7 @@ CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER:
        - resource_type="catalog", operation="get_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and data sources
 
-    2. SECOND: Call get_tag_catalog to get valid tag names
+2. SECOND: Call get_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_tag_catalog"
        - params: {"use_case": "GROUPING", "data_source": "CALLS"}
 
@@ -93,6 +93,8 @@ METRICS (resource_type="metrics"):
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
         - to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
+        - CRITICAL: Never pass "to": 0. Zero is Unix epoch (1970-01-01) and returns no data.
+          Omit "to" entirely when the user means "now", as "to" is OPTIONAL — the API defaults to the current time.
 
     tag_filter_expression: CRITICAL - Entity field is REQUIRED for ALL tag filters
 
@@ -167,6 +169,8 @@ ANALYZE (resource_type="analyze"):
         - to: Unix timestamp in milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
         - If timezone not specified in datetime string, defaults to UTC
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
+        - CRITICAL: Never pass "to": 0. Zero is Unix epoch (1970-01-01) and returns no data.
+          Omit "to" entirely when the user means "now", as "to" is OPTIONAL — the API defaults to the current time.
 
     get_all_traces - params: {payload}
         payload: {timeFrame, includeInternal, includeSynthetic, tagFilterExpression, pagination, order}
@@ -240,9 +244,9 @@ Examples:
     resource_type="resources", operation="get_application_endpoints", params={"application_id": "app-123", "service_id": "svc-456", "endpoint_id": "ep-789", "name_filter": "/api/users", "types": ["HTTP"], "technologies": ["Java"]}
 
     # ANALYZE operations
-    resource_type="analyze", operation="get_all_traces", params={"payload": {"timeFrame": {"windowSize": 3600000, "to": 1710658800000}, "includeInternal": False, "includeSynthetic": False, "pagination": {"retrievalSize": 200}}}
+    resource_type="analyze", operation="get_all_traces", params={"payload": {"timeFrame": {"windowSize": 3600000}, "includeInternal": True, "includeSynthetic": False, "pagination": {"retrievalSize": 200}}}
     resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}
-    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"}, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}"""
+    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},  "includeInternal": True, "includeSynthetic": False, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}"""
     )
     async def manage_applications(
         self,
@@ -322,6 +326,12 @@ Examples:
         ctx
     ) -> Dict[str, Any]:
         """Handle application metrics queries."""
+        # Guard: "to": 0 means Unix epoch (1970), not "now". Strip it so the
+        # API defaults to the current server time, which is the correct behaviour
+        # when the user asks for a relative window like "last 1 hour".
+        if isinstance(params.get("time_frame"), dict) and params["time_frame"].get("to") == 0:
+            del params["time_frame"]["to"]
+
         # Convert datetime string for time_frame.to if provided
         conversion_result = convert_nested_datetime_param(
             params, "time_frame", "to", default_timezone="UTC"
@@ -705,6 +715,45 @@ Examples:
             logger.error(f"Error fetching application ID: {e}", exc_info=True)
             return {"error": f"Failed to fetch application ID: {e!s}"}
 
+    def _convert_analyze_time_params(
+        self, operation: str, params: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Convert datetime strings in analyze params in-place.
+        Returns an error dict if conversion fails, otherwise None.
+        """
+        # Convert datetime string for timeFrame.to in payload
+        payload = params.get("payload")
+        if isinstance(payload, dict):
+            time_frame = payload.get("timeFrame")
+            if isinstance(time_frame, dict):
+                # Guard: "to": 0 means Unix epoch (1970), not "now". Strip it so the
+                # API defaults to the current server time, which is the correct behaviour
+                # when the user asks for a relative window like "last 1 hour".
+                if time_frame.get("to") == 0:
+                    del time_frame["to"]
+                conversion_result = convert_nested_datetime_param(
+                    payload, "timeFrame", "to", default_timezone="UTC"
+                )
+                if "error" in conversion_result:
+                    return {"error": conversion_result["error"], "operation": operation, "resource_type": "analyze"}
+                params["payload"] = conversion_result["params"]
+
+        # Convert datetime string for ingestionTime in get_trace_details
+        if operation == "get_trace_details" and "ingestionTime" in params:
+            conversion_result = convert_datetime_param(
+                params["ingestionTime"],
+                "ingestionTime",
+                default_timezone="UTC",
+                output_unit="seconds"
+            )
+            if "error" in conversion_result:
+                return {"error": conversion_result["error"], "operation": operation, "resource_type": "analyze"}
+            if conversion_result["converted"]:
+                params["ingestionTime"] = conversion_result["value"]
+
+        return None
+
     async def _handle_analyze(
         self, operation: str, params: Dict[str, Any], ctx
     ) -> Dict[str, Any]:
@@ -725,38 +774,9 @@ Examples:
                 "message": f"Invalid operation '{operation}' for resource_type 'analyze'. Valid operations: {valid_operations}"
             }
 
-        # Convert datetime string for timeFrame.to in payload
-        if "payload" in params and isinstance(params.get("payload"), dict):
-            payload = params["payload"]
-            if "timeFrame" in payload and isinstance(payload.get("timeFrame"), dict):
-                conversion_result = convert_nested_datetime_param(
-                    payload, "timeFrame", "to", default_timezone="UTC"
-                )
-                if "error" in conversion_result:
-                    return {
-                        "error": conversion_result["error"],
-                        "operation": operation,
-                        "resource_type": "analyze"
-                    }
-                # Update payload with converted params
-                params["payload"] = conversion_result["params"]
-
-        # Convert datetime string for ingestionTime in get_trace_details
-        if operation == "get_trace_details" and "ingestionTime" in params:
-            conversion_result = convert_datetime_param(
-                params["ingestionTime"],
-                "ingestionTime",
-                default_timezone="UTC",
-                output_unit="seconds"
-            )
-            if "error" in conversion_result:
-                return {
-                    "error": conversion_result["error"],
-                    "operation": operation,
-                    "resource_type": "analyze"
-                }
-            if conversion_result["converted"]:
-                params["ingestionTime"] = conversion_result["value"]
+        time_error = self._convert_analyze_time_params(operation, params)
+        if time_error:
+            return time_error
 
         # Route to the analyze client with params
         result = await self.app_analyze_client.execute_analyze_operation(

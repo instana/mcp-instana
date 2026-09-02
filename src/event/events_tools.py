@@ -36,7 +36,7 @@ MS_PER_WEEK = 7 * MS_PER_DAY
 MS_PER_MONTH = 30 * MS_PER_DAY
 
 # Default values
-DEFAULT_TIME_WINDOW_HOURS = 24
+DEFAULT_TIME_WINDOW_MINUTES = 10
 DEFAULT_MAX_EVENTS = 50
 DEFAULT_SIZE = 100
 
@@ -103,25 +103,18 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         elif time_range:
             # Convert time_range to window_size
             window_size_param = self._convert_time_range_to_window_size(time_range)
-            if window_size_param:
-                api_params[API_PARAM_WINDOW_SIZE] = window_size_param
-                logger.debug(
-                    f"[_build_time_params] Using window_size from time_range '{time_range}' - "
-                    f"window_size: {window_size_param}ms ({window_size_param/MS_PER_MINUTE:.1f} minutes)"
-                )
-                # For display purposes, calculate from/to times
-                current_time_ms = int(datetime.now().timestamp() * 1000)
-                to_time = current_time_ms
-                from_time = current_time_ms - window_size_param
-            else:
-                # Fallback to default
-                logger.debug(f"[_build_time_params] Failed to parse time_range '{time_range}', using defaults")
-                from_time, to_time = self._process_time_range(None, None, None)
-                api_params[API_PARAM_FROM] = from_time
-                api_params[API_PARAM_TO] = to_time
+            api_params[API_PARAM_WINDOW_SIZE] = window_size_param
+            logger.debug(
+                f"[_build_time_params] Using window_size from time_range '{time_range}' - "
+                f"window_size: {window_size_param}ms ({window_size_param/MS_PER_MINUTE:.1f} minutes)"
+            )
+            # For display purposes, calculate from/to times
+            current_time_ms = int(datetime.now().timestamp() * 1000)
+            to_time = current_time_ms
+            from_time = current_time_ms - window_size_param
         else:
             # No time parameters provided, use defaults
-            logger.debug(f"[_build_time_params] No time parameters provided, using default {DEFAULT_TIME_WINDOW_HOURS} hours")
+            logger.debug(f"[_build_time_params] No time parameters provided, using default {DEFAULT_TIME_WINDOW_MINUTES} minutes")
             from_time, to_time = self._process_time_range(None, None, None)
             api_params[API_PARAM_FROM] = from_time
             api_params[API_PARAM_TO] = to_time
@@ -140,7 +133,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             time_range: Natural language time range like "last 5 minutes", "last 24 hours"
 
         Returns:
-            Window size in milliseconds, or None if cannot parse
+            Window size in milliseconds
         """
         if not time_range:
             return None
@@ -166,8 +159,8 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 logger.debug(f"[_convert_time_range_to_window_size] Parsed {hours} hours = {window_size}ms")
                 return window_size
             elif time_range_lower in ["last few hours", "last hours", "few hours"]:
-                window_size = DEFAULT_TIME_WINDOW_HOURS * MS_PER_HOUR
-                logger.debug(f"[_convert_time_range_to_window_size] Using default {DEFAULT_TIME_WINDOW_HOURS} hours = {window_size}ms")
+                window_size = DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+                logger.debug(f"[_convert_time_range_to_window_size] Using default {DEFAULT_TIME_WINDOW_MINUTES} minutes = {window_size}ms")
                 return window_size
 
         # Extract days
@@ -197,9 +190,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 logger.debug(f"[_convert_time_range_to_window_size] Parsed {months} months = {window_size}ms")
                 return window_size
 
-        # Default to 24 hours
-        window_size = DEFAULT_TIME_WINDOW_HOURS * MS_PER_HOUR
-        logger.debug(f"[_convert_time_range_to_window_size] No match found, using default {DEFAULT_TIME_WINDOW_HOURS} hours = {window_size}ms")
+        # Default to 10 minutes
+        window_size = DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+        logger.debug(f"[_convert_time_range_to_window_size] No match found, using default {DEFAULT_TIME_WINDOW_MINUTES} minutes = {window_size}ms")
         return window_size
 
     def _process_time_range(self, time_range=None, from_time=None, to_time=None):
@@ -231,7 +224,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         if not to_time:
             to_time = current_time_ms
         if not from_time:
-            from_time = to_time - (24 * 60 * 60 * 1000)  # Default to 24 hours
+            from_time = to_time - (DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE)  # Default to 10 minutes
 
         return from_time, to_time
 
