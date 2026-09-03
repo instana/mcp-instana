@@ -1578,16 +1578,22 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         application_id: Optional[str]
     ) -> Dict[str, Any]:
         """Build response when no active windows found."""
-        expired_count = sum(1 for w in all_windows if w.get("state") == "EXPIRED")
-        scheduled_count = sum(1 for w in all_windows if w.get("state") == "SCHEDULED")
+        if application_id:
+            relevant = [w for w in all_windows if self._matches_application_filter(w, application_id)]
+        else:
+            relevant = all_windows
 
+        expired_count = sum(1 for w in relevant if w.get("state") == "EXPIRED")
+        scheduled_count = sum(1 for w in relevant if w.get("state") == "SCHEDULED")
+
+        scope = f" for '{application_id}'" if application_id else ""
         return {
             "operation": "list_active",
             "status": "success",
             "count": 0,
             "windows": [],
             "application_id": application_id,
-            "message": f"No active maintenance windows found. Found {expired_count} expired and {scheduled_count} scheduled windows.",
+            "message": f"No active maintenance windows found{scope}. Found {expired_count} expired and {scheduled_count} scheduled windows{scope}.",
             "suggestion": "Use operation 'list_expired' to see expired windows or 'list_all' to see all windows.",
             "expired_count": expired_count,
             "scheduled_count": scheduled_count
