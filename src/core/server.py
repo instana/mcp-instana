@@ -8,10 +8,12 @@ Supports stdio and Streamable HTTP transports.
 import argparse
 import logging
 import os
+import select as _select
 import signal
 import sys
+import threading as _threading
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -456,15 +458,38 @@ def main():
         # rather than killing the process silently with no record.
         _shutdown_reason: list[str] = ["unknown"]
 
+        # _pipe_w holds the write-end of the stdin proxy pipe used in stdio mode.
+        # Closing it delivers EOF to anyio's readline thread immediately on any signal.
+        _pipe_w: list[int] = [-1]
+        _pipe_w_lock = _threading.Lock()
+
+        def _close_pipe_write_end():
+            """Close the write end of the stdin pipe so anyio's readline unblocks."""
+            with _pipe_w_lock:
+                w = _pipe_w[0]
+                if w != -1:
+                    _pipe_w[0] = -1
+            if w != -1:
+                with suppress(OSError):
+                    os.close(w)
+
         def _handle_sigterm(signum, frame):
             _shutdown_reason[0] = "SIGTERM (Kubernetes asked the pod to stop — rolling restart, scale-down, or node pressure)"
             logger.info("[server] Received SIGTERM — beginning graceful shutdown")
+            _close_pipe_write_end()
+            sys.exit(0)
 
         def _handle_sigint(signum, frame):
             _shutdown_reason[0] = "SIGINT (keyboard interrupt or container stop)"
             logger.info("[server] Received SIGINT — beginning graceful shutdown")
+            _close_pipe_write_end()
+            # Re-raise as KeyboardInterrupt so the event loop unwinds normally.
+            raise KeyboardInterrupt
 
+        # SIGTERM has no Python default handler — it would be silently ignored.
         signal.signal(signal.SIGTERM, _handle_sigterm)
+        # SIGINT: install our handler *before* anyio.run() so anyio doesn't replace it.
+        # We raise KeyboardInterrupt ourselves which anyio handles correctly.
         signal.signal(signal.SIGINT, _handle_sigint)
 
         # Create and configure the MCP server
@@ -569,7 +594,9 @@ def main():
             client_categories = get_client_categories()
             for category, tools in client_categories.items():
                 tool_names = [cls.__name__ for _, cls in tools]
-                logger.info(f"  {category}: {len(tool_names)} tools")
+                count = len(tool_names)
+                label = "tool" if count == 1 else "tools"
+                logger.info(f"  {category}: {count} {label}")
                 for tool_name in tool_names:
                     logger.info(f"    - {tool_name}")
             sys.exit(0)
@@ -603,7 +630,9 @@ def main():
             if category in client_categories:
                 category_tools = [cls.__name__ for _, cls in client_categories[category]]
                 enabled_tool_classes.extend(category_tools)
-                logger.info(f"  - {category}: {len(category_tools)} tools")
+                count = len(category_tools)
+                label = "tool" if count == 1 else "tools"
+                logger.info(f"  - {category}: {count} {label}")
                 for tool_name in category_tools:
                     logger.info(f"    * {tool_name}")
 
@@ -687,17 +716,96 @@ def main():
                 sys.exit(1)
         else:
             logger.info("Starting stdio transport")
+            # ----------------------------------------------------------------
+            # Stdin pipe proxy — makes Ctrl+C / SIGTERM exit instantly.
+            #
+            # anyio wraps fd 0 in a worker thread via to_thread.run_sync with
+            # abandon_on_cancel=False (shielded), so task cancellation cannot
+            # interrupt it.  The only way to unblock it immediately is EOF on
+            # fd 0.  We splice a pipe onto fd 0: our signal handlers close the
+            # write end → EOF on the read end → readline returns immediately.
+            #
+            # We guard with hasattr(sys.stdout, 'buffer') to skip the proxy in
+            # test environments where stdout is a StringIO (no real fds), which
+            # avoids corrupting the test runner's file descriptors.
+            # ----------------------------------------------------------------
+            # Only install the pipe proxy when stdout is backed by the real
+            # fd 1 — i.e. we are running as a proper MCP server process, not
+            # under a test runner (which may have real fds but not fd 1 = stdout).
             try:
+                _proxy_active = (
+                    hasattr(sys.stdout, 'buffer') and
+                    hasattr(sys.stdout.buffer, 'raw') and
+                    getattr(sys.stdout.buffer.raw, 'fileno', lambda: -1)() == 1
+                )
+            except Exception:
+                _proxy_active = False
+            r_fd = -1
+            _fwd = None
+            _fwd_stop = _threading.Event()
+            try:
+                if _proxy_active:
+                    r_fd, w_fd = os.pipe()
+                    _pipe_w[0] = w_fd
+                    orig_stdin_fd = os.dup(0)   # save real stdin fd
+                    os.dup2(r_fd, 0)            # replace fd 0 with pipe read-end
+                    os.close(r_fd)
+                    r_fd = -1
+
+                    def _forward_stdin(in_fd: int, out_fd: int) -> None:
+                        try:
+                            while not _fwd_stop.is_set():
+                                ready, _, _ = _select.select([in_fd], [], [], 0.1)
+                                if not ready:
+                                    continue
+                                chunk = os.read(in_fd, 4096)
+                                if not chunk:  # EOF on real stdin
+                                    break
+                                try:
+                                    os.write(out_fd, chunk)
+                                except OSError:
+                                    break
+                        except OSError:
+                            pass
+                        finally:
+                            with suppress(OSError):
+                                os.close(in_fd)
+                            # Real stdin EOF → also close write end so anyio exits
+                            _close_pipe_write_end()
+
+                    _fwd = _threading.Thread(
+                        target=_forward_stdin,
+                        args=(orig_stdin_fd, w_fd),
+                        daemon=True,
+                    )
+                    _fwd.start()
+
+                logger.info("[server] Instana MCP Server is ready and listening on stdio")
                 app.run(transport="stdio")
+                logger.info("[server] stdio transport stopped cleanly. Reason: %s", _shutdown_reason[0])
+            except (SystemExit, KeyboardInterrupt):
+                if _shutdown_reason[0] == "unknown":
+                    _shutdown_reason[0] = "SIGINT (keyboard interrupt or container stop)"
+                logger.info("[server] stdio transport stopped cleanly. Reason: %s", _shutdown_reason[0])
+                raise
             except AttributeError as e:
                 # Handle the case where sys.stdout is a StringIO object (in tests)
                 if "'_io.StringIO' object has no attribute 'buffer'" in str(e):
                     logger.info("Running in test mode, skipping stdio server")
                 else:
                     raise
+            finally:
+                # Signal the forwarder to stop and close the write end.
+                # The forwarder wakes within 0.1 s (select timeout) and exits.
+                _fwd_stop.set()
+                _close_pipe_write_end()
+                if _fwd is not None:
+                    _fwd.join(timeout=0.5)  # give the forwarder time to exit cleanly
+                if r_fd != -1:
+                    with suppress(OSError):
+                        os.close(r_fd)
 
     except KeyboardInterrupt:
-        logger.info("Server stopped by user")
         sys.exit(0)
     except Exception as e:
         logger.error(f"Server error: {e}", exc_info=True)
