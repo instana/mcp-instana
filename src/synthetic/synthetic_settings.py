@@ -17,7 +17,13 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, decode_response, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 
 class SyntheticSettingsMCPTools(BaseInstanaClient):
@@ -34,6 +40,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         test_name: Optional[str] = None,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a synthetic test by ID or name, returning its id, label, and description.
@@ -58,7 +66,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
             if test_name and not test_id:
                 logger.debug("[get_synthetic_test] Resolving test name '%s' to test ID", test_name)
 
-                list_response = api_client.get_synthetic_tests_without_preload_content()
+                list_response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_synthetic_tests_without_preload_content),
+                    ctx=ctx,
+                    operation_name="get_synthetic_tests_for_name_resolution",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 if list_response.status != 200:
                     error_body = decode_response(list_response)
@@ -87,7 +101,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 test_id = matched_id
 
             # Fetch the single test by ID
-            response = api_client.get_synthetic_test_without_preload_content(id=test_id)
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_test_without_preload_content, id=test_id),
+                ctx=ctx,
+                operation_name="get_synthetic_test",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if response.status != 200:
                 error_body = decode_response(response)
@@ -115,6 +135,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         filter_param: Optional[str] = None,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List synthetic tests, optionally filtered and paginated.
@@ -145,14 +167,21 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 application_id, location_id, credential_name, sort, offset, limit, filter_param,
             )
 
-            response = api_client.get_synthetic_tests_without_preload_content(
-                application_id=application_id,
-                location_id=location_id,
-                credential_name=credential_name,
-                sort=sort,
-                offset=offset,
-                limit=limit,
-                filter=filter_param,
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_synthetic_tests_without_preload_content,
+                    application_id=application_id,
+                    location_id=location_id,
+                    credential_name=credential_name,
+                    sort=sort,
+                    offset=offset,
+                    limit=limit,
+                    filter=filter_param,
+                ),
+                ctx=ctx,
+                operation_name="get_synthetic_tests",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -181,6 +210,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         filter: Optional[str] = None,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List all synthetic monitoring locations.
@@ -215,11 +246,18 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
             # the result set. Server-side limit/offset are only forwarded when no
             # client-side filter is applied.
             needs_full_fetch = bool(location_type or status)
-            response = api_client.get_synthetic_locations_without_preload_content(
-                sort=sort,
-                offset=None if needs_full_fetch else offset,
-                limit=None if needs_full_fetch else limit,
-                filter=filter,
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_synthetic_locations_without_preload_content,
+                    sort=sort,
+                    offset=None if needs_full_fetch else offset,
+                    limit=None if needs_full_fetch else limit,
+                    filter=filter,
+                ),
+                ctx=ctx,
+                operation_name="get_synthetic_locations",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -254,6 +292,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         location_name: Optional[str] = None,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a single synthetic monitoring location by its ID or name.
@@ -285,7 +325,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
             if location_name and not location_id:
                 logger.debug("[get_location_by_id] Resolving location name '%s' to ID", location_name)
 
-                list_response = api_client.get_synthetic_locations_without_preload_content()
+                list_response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_synthetic_locations_without_preload_content),
+                    ctx=ctx,
+                    operation_name="get_synthetic_locations_for_name_resolution",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 if list_response.status != 200:
                     return self.handle_api_error_response(list_response, "list synthetic locations for name resolution", logger)
@@ -317,7 +363,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 location_id = matched_id
 
             # Fetch the single location by ID
-            response = api_client.get_synthetic_location_without_preload_content(id=location_id)
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_location_without_preload_content, id=location_id),
+                ctx=ctx,
+                operation_name="get_synthetic_location",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if response.status != 200:
                 error_body = decode_response(response)
@@ -340,6 +392,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         status: Optional[str] = None,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get all datacenter-backed synthetic monitoring locations (locationType="Managed").
@@ -368,7 +422,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_all_datacenters] Called with status=%s", status)
 
-            response = api_client.get_synthetic_locations_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_locations_without_preload_content),
+                ctx=ctx,
+                operation_name="get_synthetic_locations_datacenters",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if response.status != 200:
                 return self.handle_api_error_response(response, "list synthetic locations", logger)

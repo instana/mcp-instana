@@ -198,7 +198,7 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         """Test get_events passes nested filters to the events client."""
         captured = {}
 
-        async def mock_get_events(filters=None, ctx=None):
+        async def mock_get_events(filters=None, ctx=None, **kwargs):
             captured["filters"] = filters
             return {"events": [], "events_returned": 0, "total_events": 0}
 
@@ -262,7 +262,7 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         """get_events should default max_events to 50 when not specified."""
         captured = {}
 
-        async def mock_get_events(filters=None, ctx=None):
+        async def mock_get_events(filters=None, ctx=None, **kwargs):
             captured["filters"] = filters
             return {"events": [], "events_returned": 0, "total_events": 0}
 
@@ -279,7 +279,7 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         """get_events should forward entity_type and entity_label to the client."""
         captured = {}
 
-        async def mock_get_events(filters=None, ctx=None):
+        async def mock_get_events(filters=None, ctx=None, **kwargs):
             captured["filters"] = filters
             return {"events": [], "events_returned": 0, "total_events": 0}
 
@@ -303,7 +303,7 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         """get_events should forward the rca filter to the client."""
         captured = {}
 
-        async def mock_get_events(filters=None, ctx=None):
+        async def mock_get_events(filters=None, ctx=None, **kwargs):
             captured["filters"] = filters
             return {"events": [], "events_returned": 0, "total_events": 0}
 

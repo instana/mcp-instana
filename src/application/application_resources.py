@@ -25,7 +25,13 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -52,7 +58,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         technologies: Optional[List[str]] = None,
         application_boundary_scope: Optional[str] = None,
         include_snapshot_ids: Optional[bool] = None,
-        ctx=None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Application Resources operations.
@@ -90,17 +98,18 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                     ),
                 }
 
+            _routing = {"resource_type": resource_type, "tool_name": tool_name}
             if operation == "get_applications":
                 return await self.get_applications(
                     name_filter=name_filter,
                     application_boundary_scope=application_boundary_scope,
-                    ctx=ctx
+                    ctx=ctx, **_routing,
                 )
             elif operation == "get_services":
                 return await self.get_services(
                     name_filter=name_filter,
                     include_snapshot_ids=include_snapshot_ids,
-                    ctx=ctx
+                    ctx=ctx, **_routing,
                 )
             elif operation == "get_application_services":
                 return await self.get_application_services(
@@ -109,7 +118,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                     name_filter=name_filter,
                     application_boundary_scope=application_boundary_scope,
                     include_snapshot_ids=include_snapshot_ids,
-                    ctx=ctx
+                    ctx=ctx, **_routing,
                 )
             elif operation == "get_application_endpoints":
                 return await self.get_application_endpoints(
@@ -120,7 +129,7 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                     types=types,
                     technologies=technologies,
                     application_boundary_scope=application_boundary_scope,
-                    ctx=ctx
+                    ctx=ctx, **_routing,
                 )
             else:
                 return {"error": f"Operation '{operation}' not supported"}
@@ -161,21 +170,25 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"_get_applications_internal called with name_filter={name_filter}")
 
-            # Call the get_applications method from the SDK
-            result = api_client.get_applications(
-                name_filter=name_filter,
-                window_size=window_size,
-                to=to_time,
-                page=page,
-                page_size=page_size,
-                application_boundary_scope=application_boundary_scope
+            # Use _without_preload_content to bypass SDK Pydantic model validation,
+            # which fails when the API returns numeric values for string-typed fields
+            # such as businessCriticality (returned as int 0 but typed as str).
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_applications_without_preload_content,
+                    name_filter=name_filter,
+                    window_size=window_size,
+                    to=to_time,
+                    page=page,
+                    page_size=page_size,
+                    application_boundary_scope=application_boundary_scope
+                ),
+                ctx=ctx,
+                operation_name="get_applications"
             )
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                result_dict = result
+            # Parse the raw JSON response
+            result_dict = json.loads(response.data.decode('utf-8'))
 
             logger.debug(f"Result from _get_applications_internal: {result_dict}")
             return result_dict
@@ -195,7 +208,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         technologies: Optional[List[str]] = None,
         application_boundary_scope: Optional[str] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get endpoints for an application service.
@@ -218,14 +233,20 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 endpoint_id = ""
 
             # Use _without_preload_content to avoid SDK validation issues
-            response = api_client.get_application_endpoints_without_preload_content(
-                application_id=application_id,
-                service_id=service_id,
-                endpoint_id=endpoint_id,
-                name_filter=name_filter,
-                types=types,
-                technologies=technologies,
-                application_boundary_scope=application_boundary_scope,
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_application_endpoints_without_preload_content,
+                    application_id=application_id,
+                    service_id=service_id,
+                    endpoint_id=endpoint_id,
+                    name_filter=name_filter,
+                    types=types,
+                    technologies=technologies,
+                    application_boundary_scope=application_boundary_scope,
+                ),
+                ctx=ctx,
+                operation_name="get_application_endpoints",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Parse the raw JSON response
@@ -260,7 +281,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         application_boundary_scope: Optional[str] = None,
         include_snapshot_ids: Optional[bool] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get services for an application perspective.
@@ -278,12 +301,18 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 service_id = ""
 
             # Use _without_preload_content to avoid SDK validation issues
-            response = api_client.get_application_services_without_preload_content(
-                application_id=application_id,
-                service_id=service_id,
-                name_filter=name_filter,
-                application_boundary_scope=application_boundary_scope,
-                include_snapshot_ids=include_snapshot_ids,
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_application_services_without_preload_content,
+                    application_id=application_id,
+                    service_id=service_id,
+                    name_filter=name_filter,
+                    application_boundary_scope=application_boundary_scope,
+                    include_snapshot_ids=include_snapshot_ids,
+                ),
+                ctx=ctx,
+                operation_name="get_application_services",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Parse the raw JSON response
@@ -303,7 +332,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         name_filter: Optional[str] = None,
         application_boundary_scope: Optional[str] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get application perspectives.
@@ -313,17 +344,22 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"get_applications called with name_filter={name_filter}")
 
-            # Call the get_applications method from the SDK without time/pagination params
-            result = api_client.get_applications(
-                name_filter=name_filter,
-                application_boundary_scope=application_boundary_scope
+            # Use _without_preload_content to bypass SDK Pydantic model validation,
+            # which fails when the API returns numeric values for string-typed fields
+            # such as businessCriticality (returned as int 0 but typed as str).
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_applications_without_preload_content,
+                    name_filter=name_filter,
+                    application_boundary_scope=application_boundary_scope
+                ),
+                ctx=ctx,
+                operation_name="get_applications",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
-            # Convert the result to a dictionary
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-            else:
-                result_dict = result
+            # Parse the raw JSON response
+            result_dict = json.loads(response.data.decode('utf-8'))
 
             logger.debug(f"Result from get_applications: {result_dict}")
             return result_dict
@@ -338,7 +374,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         name_filter: Optional[str] = None,
         include_snapshot_ids: Optional[bool] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get services for application monitoring.
@@ -348,9 +386,15 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"get_services called with name_filter={name_filter}")
 
-            response = api_client.get_services_without_preload_content(
-                name_filter=name_filter,
-                include_snapshot_ids=include_snapshot_ids,
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_services_without_preload_content,
+                    name_filter=name_filter,
+                    include_snapshot_ids=include_snapshot_ids,
+                ),
+                ctx=ctx,
+                operation_name="get_services",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Parse the raw JSON response

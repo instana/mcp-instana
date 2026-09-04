@@ -12,7 +12,9 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -58,7 +60,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             logger.debug("Getting custom dashboards from Instana SDK")
 
             # Call the get_custom_dashboards method from the SDK
-            result = api_client.get_custom_dashboards()
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_custom_dashboards), ctx=ctx, operation_name="get_custom_dashboards")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -121,7 +123,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             logger.debug(f"Getting custom dashboard {dashboard_id} from Instana SDK")
 
             # Call the get_custom_dashboard method from the SDK
-            result = api_client.get_custom_dashboard(dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_custom_dashboard, dashboard_id=dashboard_id), ctx=ctx, operation_name="get_custom_dashboard")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -179,7 +181,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             dashboard_obj = CustomDashboard(**custom_dashboard)
 
             # Call the add_custom_dashboard method from the SDK
-            result = api_client.add_custom_dashboard(custom_dashboard=dashboard_obj)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.add_custom_dashboard, custom_dashboard=dashboard_obj), ctx=ctx, operation_name="add_custom_dashboard")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -238,10 +240,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             dashboard_obj = CustomDashboard(**custom_dashboard)
 
             # Call the update_custom_dashboard method from the SDK
-            result = api_client.update_custom_dashboard(
-                dashboard_id=dashboard_id,
-                custom_dashboard=dashboard_obj
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_custom_dashboard, dashboard_id=dashboard_id, custom_dashboard=dashboard_obj), ctx=ctx, operation_name="update_custom_dashboard")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -291,7 +290,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             logger.debug(f"Deleting custom dashboard {dashboard_id} from Instana SDK")
 
             # Call the delete_custom_dashboard method from the SDK
-            result = api_client.delete_custom_dashboard(dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_custom_dashboard, dashboard_id=dashboard_id), ctx=ctx, operation_name="delete_custom_dashboard")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -341,7 +340,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             logger.debug(f"Getting shareable users for dashboard {dashboard_id} from Instana SDK")
 
             # Call the get_shareable_users method from the SDK
-            result = api_client.get_shareable_users(dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_shareable_users, dashboard_id=dashboard_id), ctx=ctx, operation_name="get_shareable_users")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}
@@ -403,7 +402,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             logger.debug(f"Getting shareable API tokens for dashboard {dashboard_id} from Instana SDK")
 
             # Call the get_shareable_api_tokens method from the SDK
-            result = api_client.get_shareable_api_tokens(dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_shareable_api_tokens, dashboard_id=dashboard_id), ctx=ctx, operation_name="get_shareable_api_tokens")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}

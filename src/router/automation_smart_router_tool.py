@@ -259,7 +259,8 @@ Examples:
             # Route to the appropriate catalog operation handler
             if operation == CATALOG_OP_GET_ACTIONS:
                 logger.info("Routing to get_actions")
-                result = await self.action_catalog_client.get_actions(ctx=ctx)
+                result = await self.action_catalog_client.get_actions(ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation")
                 return {
                     "resource_type": RESOURCE_TYPE_CATALOG,
                     "operation": operation,
@@ -286,7 +287,8 @@ Examples:
                 logger.info(f"Routing to get_action_details with action_id: {action_id}")
                 result = await self.action_catalog_client.get_action_details(
                     action_id=action_id,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation",
                 )
                 return {
                     "resource_type": RESOURCE_TYPE_CATALOG,
@@ -318,7 +320,8 @@ Examples:
                 result = await self.action_catalog_client.get_action_matches(
                     payload=payload,
                     target_snapshot_id=target_snapshot_id,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation",
                 )
 
                 return {
@@ -375,7 +378,8 @@ Examples:
                     snapshot_id=snapshot_id,
                     to=to,
                     window_size=window_size,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation",
                 )
 
                 return {
@@ -393,7 +397,8 @@ Examples:
             elif operation == CATALOG_OP_GET_ACTION_TYPES:
                 logger.info("Routing to get_action_types")
 
-                result = await self.action_catalog_client.get_action_types(ctx=ctx)
+                result = await self.action_catalog_client.get_action_types(ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation")
                 return {
                     "resource_type": RESOURCE_TYPE_CATALOG,
                     "operation": operation,
@@ -403,7 +408,8 @@ Examples:
             elif operation == CATALOG_OP_GET_ACTION_TAGS:
                 logger.info("Routing to get_action_tags")
 
-                result = await self.action_catalog_client.get_action_tags(ctx=ctx)
+                result = await self.action_catalog_client.get_action_tags(ctx=ctx,
+                    resource_type=RESOURCE_TYPE_CATALOG, tool_name="manage_automation")
                 return {
                     "resource_type": RESOURCE_TYPE_CATALOG,
                     "operation": operation,
@@ -484,19 +490,22 @@ Examples:
                 logger.info("Routing to list_action_instances with filters")
 
                 result = await self.action_history_client.list_action_instances(
-                    window_size=window_size,
-                    to=to,
-                    page=page,
-                    page_size=page_size,
-                    target_snapshot_id=target_snapshot_id,
-                    event_id=event_id,
-                    event_specification_id=event_specification_id,
-                    search=search,
-                    types=types,
-                    action_statuses=action_statuses,
-                    order_by=order_by,
-                    order_direction=order_direction,
-                    ctx=ctx
+                    filters={
+                        "window_size": window_size,
+                        "to": to,
+                        "page": page,
+                        "page_size": page_size,
+                        "target_snapshot_id": target_snapshot_id,
+                        "event_id": event_id,
+                        "event_specification_id": event_specification_id,
+                        "search": search,
+                        "types": types,
+                        "action_statuses": action_statuses,
+                        "order_by": order_by,
+                        "order_direction": order_direction,
+                    },
+                    ctx=ctx,
+                    resource_type=RESOURCE_TYPE_HISTORY, tool_name="manage_automation",
                 )
 
                 return {
@@ -553,7 +562,8 @@ Examples:
                     action_instance_id=action_instance_id,
                     window_size=window_size,
                     to=to,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=RESOURCE_TYPE_HISTORY, tool_name="manage_automation",
                 )
 
                 return {

@@ -515,7 +515,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             alert_ids=["alert1", "alert2"]
         ))
 
-        self.client._find_active_configs.assert_called_once_with("app1", ["alert1", "alert2"], None)
+        self.client._find_active_configs.assert_called_once_with("app1", ["alert1", "alert2"], None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_invalid_operation(self):
@@ -537,7 +537,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1"
         ))
 
-        self.client._find_config_versions.assert_called_once_with("alert1", None)
+        self.client._find_config_versions.assert_called_once_with("alert1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_find(self):
@@ -551,7 +551,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             valid_on=1234567890
         ))
 
-        self.client._find_config.assert_called_once_with("alert1", 1234567890, None)
+        self.client._find_config.assert_called_once_with("alert1", 1234567890, None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def _valid_alert_payload(self):
@@ -584,7 +584,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             payload=payload
         ))
 
-        self.client._create_config.assert_called_once_with(payload, None)
+        self.client._create_config.assert_called_once_with(payload, None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_create_invalid_payload_returns_elicitation(self):
@@ -611,7 +611,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             payload=payload
         ))
 
-        self.client._update_config.assert_called_once_with("alert1", payload, None)
+        self.client._update_config.assert_called_once_with("alert1", payload, None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_update_invalid_payload_returns_elicitation(self):
@@ -638,7 +638,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1"
         ))
 
-        self.client._delete_config.assert_called_once_with("alert1", None)
+        self.client._delete_config.assert_called_once_with("alert1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_enable(self):
@@ -651,7 +651,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1"
         ))
 
-        self.client._enable_config.assert_called_once_with("alert1", None)
+        self.client._enable_config.assert_called_once_with("alert1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_disable(self):
@@ -664,7 +664,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1"
         ))
 
-        self.client._disable_config.assert_called_once_with("alert1", None)
+        self.client._disable_config.assert_called_once_with("alert1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_restore(self):
@@ -678,7 +678,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             created=1234567890
         ))
 
-        self.client._restore_config.assert_called_once_with("alert1", 1234567890, None)
+        self.client._restore_config.assert_called_once_with("alert1", 1234567890, None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_execute_operation_update_baseline(self):
@@ -691,7 +691,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1"
         ))
 
-        self.client._update_baseline.assert_called_once_with("alert1", None)
+        self.client._update_baseline.assert_called_once_with("alert1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, {"success": True})
 
     def test_find_active_configs_no_application_id(self):
@@ -723,7 +723,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             application_id="app1",
             alert_ids=["alert1"],
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -754,7 +755,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.find_application_alert_config_versions.assert_called_once_with(
             id="alert1",
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -785,7 +787,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.create_application_alert_config.assert_called_once_with(
             payload={"name": "Test Alert"},
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -807,7 +810,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id=None,
             valid_on=None,
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -857,7 +861,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1",
             payload={"name": "Updated Alert"},
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -890,7 +895,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.delete_application_alert_config.assert_called_once_with(
             id="alert1",
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -923,7 +929,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.enable_application_alert_config.assert_called_once_with(
             id="alert1",
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -956,7 +963,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.disable_application_alert_config.assert_called_once_with(
             id="alert1",
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -1006,7 +1014,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
             id="alert1",
             created=1234567890,
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})
@@ -1039,7 +1048,8 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.client.update_application_alert_config_baseline.assert_called_once_with(
             id="alert1",
             ctx=None,
-            api_client=ANY
+            api_client=ANY,
+            resource_type=None, tool_name=None
         )
 
         self.assertEqual(result, {"success": True})

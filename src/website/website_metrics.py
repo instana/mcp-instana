@@ -20,7 +20,13 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -59,9 +65,12 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
             logger.debug(f"get_website_page_load called with page_id={page_id}, timestamp={timestamp}")
 
             # Call the get_page_load method from the SDK
-            result = api_client.get_page_load(
-                id=page_id,
-                timestamp=timestamp
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_page_load,
+                    id=page_id,
+                    timestamp=timestamp),
+                ctx=ctx,
+                operation_name="get_website_page_load"
             )
                         # Convert the result to a list of dictionaries
             if isinstance(result, list):
@@ -222,8 +231,11 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
 
             # Call the get_beacon_metrics_v2 method from the SDK
             logger.debug("Calling get_beacon_metrics_v2 with config object")
-            result = api_client.get_beacon_metrics_v2(
-                get_website_metrics_v2=config_object
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_beacon_metrics_v2,
+                    get_website_metrics_v2=config_object),
+                ctx=ctx,
+                operation_name="get_website_beacon_metrics_v2"
             )
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):

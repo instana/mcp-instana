@@ -11,7 +11,12 @@ from typing import Any, Dict, List, Optional
 from instana_client.api.releases_api import ReleasesApi
 from instana_client.models.release import Release
 
-from src.core.utils import BaseInstanaClient, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +53,9 @@ class ReleasesMCPTools(BaseInstanaClient):
         page_number: Optional[int] = None,
         page_size: Optional[int] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get all releases within a time range with pagination and filtering support.
@@ -81,13 +88,10 @@ class ReleasesMCPTools(BaseInstanaClient):
             # Use without_preload_content to avoid pydantic validation issues
             # Note: The API doesn't support pagination natively, so we fetch all and paginate locally
             # Map our parameter names to API parameter names (var_from, to)
-            response = api_client.get_all_releases_without_preload_content(
-                var_from=from_time,
-                to=to_time
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_releases_without_preload_content, var_from=from_time, to=to_time), ctx=ctx, operation_name="get_all_releases", resource_type=resource_type, tool_name=tool_name)
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             all_releases = json.loads(response_data) if response_data else []
 
             # Apply name filtering if specified
@@ -167,7 +171,9 @@ class ReleasesMCPTools(BaseInstanaClient):
         self,
         release_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a specific release by ID.
@@ -183,12 +189,10 @@ class ReleasesMCPTools(BaseInstanaClient):
             logger.info(f"Getting release with ID: {release_id}")
 
             # Use without_preload_content to avoid pydantic validation issues
-            response = api_client.get_release_without_preload_content(
-                release_id=release_id
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_release_without_preload_content, release_id=release_id), ctx=ctx, operation_name="get_release", resource_type=resource_type, tool_name=tool_name)
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             release_dict = json.loads(response_data) if response_data else None
 
             logger.info(f"Retrieved release: {release_id}")
@@ -214,7 +218,9 @@ class ReleasesMCPTools(BaseInstanaClient):
         applications: Optional[List[Dict[str, str]]] = None,
         services: Optional[List[Dict[str, Any]]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new release.
@@ -253,12 +259,10 @@ class ReleasesMCPTools(BaseInstanaClient):
                 raise ValueError("Failed to create Release object from data")
 
             # Use without_preload_content to avoid pydantic validation issues
-            response = api_client.post_release_without_preload_content(
-                release=release
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.post_release_without_preload_content, release=release), ctx=ctx, operation_name="post_release", resource_type=resource_type, tool_name=tool_name)
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             release_dict = json.loads(response_data) if response_data else None
 
             logger.info(f"Created release: {name}")
@@ -285,7 +289,9 @@ class ReleasesMCPTools(BaseInstanaClient):
         applications: Optional[List[Dict[str, str]]] = None,
         services: Optional[List[Dict[str, Any]]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Update an existing release.
@@ -323,13 +329,10 @@ class ReleasesMCPTools(BaseInstanaClient):
                 raise ValueError("Failed to create Release object from data")
 
             # Use without_preload_content to avoid pydantic validation issues
-            response = api_client.put_release_without_preload_content(
-                release_id=release_id,
-                release=release
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.put_release_without_preload_content, release_id=release_id, release=release), ctx=ctx, operation_name="put_release", resource_type=resource_type, tool_name=tool_name)
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             release_dict = json.loads(response_data) if response_data else None
 
             logger.info(f"Updated release: {release_id}")
@@ -352,7 +355,9 @@ class ReleasesMCPTools(BaseInstanaClient):
         self,
         release_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Delete a release.
@@ -368,12 +373,10 @@ class ReleasesMCPTools(BaseInstanaClient):
             logger.info(f"Deleting release: {release_id}")
 
             # Use without_preload_content to avoid pydantic validation issues
-            response = api_client.delete_release_without_preload_content(
-                release_id=release_id
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_release_without_preload_content, release_id=release_id), ctx=ctx, operation_name="delete_release", resource_type=resource_type, tool_name=tool_name)
 
             # Read the response (delete typically returns empty response)
-            response.read()
+            _ = response.data
 
             logger.info(f"Deleted release: {release_id}")
 

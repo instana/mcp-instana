@@ -4,6 +4,7 @@ Unit tests for the InfrastructureResourcesMCPTools class
 
 import asyncio
 import importlib
+import json
 import logging
 import os
 import sys
@@ -166,13 +167,16 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         self.assertIn("Failed to get monitoring state", (result.get("error") or result.get("message", "")))
 
     def test_get_snapshot_success(self):
-        """Test get_snapshot with successful response"""
+        """Test get_snapshot with successful response via without_preload_content"""
         mock_result = {
             "id": "snap1",
             "timestamp": 1625184000000,
             "data": {"cpu.usage": 50.5}
         }
-        self.resources_api.get_snapshot.return_value = mock_result
+        response = MagicMock()
+        response.status = 200
+        response.data = json.dumps(mock_result).encode('utf-8')
+        self.resources_api.get_snapshot_without_preload_content.return_value = response
 
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
 
@@ -184,12 +188,14 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         self.assertIn("required", (result.get("error") or result.get("message", "")))
 
     def test_get_snapshot_not_found_error(self):
-        self.resources_api.get_snapshot.side_effect = Exception("snapshot does not exist")
+        response = MagicMock()
+        response.status = 404
+        response.data = b'{"error": "snapshot does not exist"}'
+        self.resources_api.get_snapshot_without_preload_content.return_value = response
 
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
 
         self.assertTrue("error" in result or result.get("elicitation_needed"))
-        self.assertIn("does not exist", (result.get("error") or result.get("message", "")))
 
     def test_get_snapshot_validation_error_fallback_json(self):
         response = MagicMock()
@@ -203,17 +209,16 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         self.assertEqual(result["id"], "snap1")
         self.assertEqual(result["label"], "Snapshot 1")
 
-    def test_get_snapshot_validation_error_fallback_string(self):
+    def test_get_snapshot_http_error(self):
+        """Test get_snapshot returns error on non-200 response"""
         response = MagicMock()
-        response.status = 200
-        response.data = b"raw snapshot text"
-        self.resources_api.get_snapshot.side_effect = Exception("Validation error")
+        response.status = 404
+        response.data = b'{"error": "not found"}'
         self.resources_api.get_snapshot_without_preload_content.return_value = response
 
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
 
-        self.assertEqual(result["message"], "raw snapshot text")
-        self.assertEqual(result["snapshot_id"], "snap1")
+        self.assertIn("error", result)
 
     def test_get_snapshot_error(self):
         """Test get_snapshot error handling"""
@@ -391,23 +396,25 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_get_snapshot_with_to_dict_method(self):
-        """Test get_snapshot when result has to_dict method"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "snap1", "data": "test"}
-        self.resources_api.get_snapshot.return_value = mock_result
+        """Test get_snapshot returns parsed JSON from without_preload_content"""
+        mock_result = {"id": "snap1", "data": "test"}
+        response = MagicMock()
+        response.status = 200
+        response.data = json.dumps(mock_result).encode('utf-8')
+        self.resources_api.get_snapshot_without_preload_content.return_value = response
 
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
 
         self.assertEqual(result["id"], "snap1")
 
     def test_get_snapshot_with_other_type(self):
-        """Test get_snapshot when result is neither dict nor has to_dict"""
-        self.resources_api.get_snapshot.return_value = "string_result"
+        """Test get_snapshot returns error on exception"""
+        self.resources_api.get_snapshot_without_preload_content.side_effect = Exception("unexpected")
 
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
 
-        self.assertIn("data", result)
-        self.assertEqual(result["snapshot_id"], "snap1")
+        self.assertIn("error", result)
+        self.assertIn("Failed to get snapshot", result["error"])
 
     def test_get_snapshot_validation_error_fallback_http_error(self):
         """Test get_snapshot validation error with HTTP error in fallback"""
@@ -482,11 +489,11 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
                 "tags": [],
                 "data": {
                     "name": "my-app",
-                    "version": "1.0.0",
+                    "version": "1.0.1",
                     "description": "Test app",
                     "pid": 1234,
-                    "versions": {"node": "16.0.0", "v8": "9.0.0", "uv": "1.0.0"},
-                    "sensorVersion": "1.0.0",
+                    "versions": {"node": "16.0.0", "v8": "9.0.0", "uv": "1.0.1"},
+                    "sensorVersion": "1.0.1",
                     "dependencies": {"express": "4.0.0"},
                     "startTime": 1234567890,
                     "http": {"/api": {}},

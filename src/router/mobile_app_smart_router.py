@@ -18,7 +18,11 @@ from src.core.utils import (
     normalize_beacon_type,
     register_as_tool,
 )
-from src.core.validation import VALID_MOBILE_BEACON_TYPES, StructureValidator
+from src.core.validation import (
+    ENTITY_GUIDANCE_EUM,
+    VALID_MOBILE_BEACON_TYPES,
+    StructureValidator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +265,7 @@ Returns:
 
         Examples:
             resource_type="catalog", operation="get_mobile_app_tag_catalog", params={"beacon_type": "SESSION_START", "use_case": "GROUPING"}
-            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "mobileBeacon.view.name"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
+            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
             resource_type="analyze", operation="get_all_mobile_app_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "SESSION_START", "pagination": {"retrievalSize": 50}, "filter_fields": True}
             resource_type="catalog", operation="get_mobile_app_metric_catalog"
             resource_type="configuration", operation="get_all"
@@ -279,8 +283,10 @@ Returns:
     ) -> Dict[str, Any]:
         """Unified Instana mobile app resource manager for beacon monitoring, catalog, configuration, alert, and session replay operations."""
 
+        TOOL_NAME = "manage_mobile_apps"
+
         try:
-            logger.debug(f"Mobile App Router: resource_type={resource_type}, operation={operation}")
+            logger.info(f"Received: resource_type={resource_type}, operation={operation}, tool={TOOL_NAME}")
 
             # Handle params being passed as a JSON string (MCP framework may serialize it)
             if params is None:
@@ -289,6 +295,7 @@ Returns:
             # Validate resource_type
             valid_types = ["analyze", "catalog", "configuration", "advanced_config", "alert", "session_replay"]
             if resource_type not in valid_types:
+                logger.warning(f"Invalid resource_type: {resource_type}")
                 return {
                     "elicitation_needed": True,
                     "reason": "invalid_resource_type",
@@ -304,17 +311,17 @@ Returns:
 
             # Route to the appropriate resource handler
             if resource_type == "analyze":
-                return await self._handle_analyze(operation, params, ctx)
+                return await self._handle_analyze(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "catalog":
-                return await self._handle_catalog(operation, params, ctx)
+                return await self._handle_catalog(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "configuration":
-                return await self._handle_configuration(operation, params, ctx)
+                return await self._handle_configuration(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "advanced_config":
-                return await self._handle_advanced_config(operation, params, ctx)
+                return await self._handle_advanced_config(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "alert":
-                return await self._handle_alert(operation, params, ctx)
+                return await self._handle_alert(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "session_replay":
-                return await self._handle_session_replay(operation, params, ctx)
+                return await self._handle_session_replay(operation, params, ctx, tool_name=TOOL_NAME)
             else:
                 return {
                     "elicitation_needed": True,
@@ -345,7 +352,8 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handle mobile app analyze operations."""
 
@@ -409,7 +417,7 @@ Returns:
             (StructureValidator.validate_beacon_type, beacon_type,
                 {"valid_types": VALID_MOBILE_BEACON_TYPES}),
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_time_frame, time_frame, {}),
             (StructureValidator.validate_order, order, {}),
@@ -442,6 +450,7 @@ Returns:
             )
 
             # Pass individual parameters to the client
+            logger.info(f"Routing to get_mobile_app_beacon_groups [resource_type=analyze, tool={tool_name}]")
             result = await self.mobile_app_analyze_client.get_mobile_app_beacon_groups(
                 metrics=metrics,
                 group=group,
@@ -451,7 +460,9 @@ Returns:
                 fill_time_series=fill_time_series,
                 order=order,
                 pagination=pagination,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="analyze",
+                tool_name=tool_name,
             )
 
         elif operation == "get_all_mobile_app_beacons":
@@ -463,14 +474,16 @@ Returns:
                 f"order={order}, pagination: {pagination}, filter_fields: {filter_fields}"
             )
 
-            # Pass individual parameters to the client
+            logger.info(f"Routing to get_all_mobile_app_beacons [resource_type=analyze, tool={tool_name}]")
             result = await self.mobile_app_analyze_client.get_all_mobile_app_beacons(
                 tag_filter_expression=tag_filter_expression,
                 time_frame=time_frame,
                 beacon_type=beacon_type,
                 pagination=pagination,
                 filter_fields=filter_fields,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="analyze",
+                tool_name=tool_name,
             )
 
         return {
@@ -483,8 +496,9 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
-        ) -> Dict[str, Any]:
+        ctx,
+        tool_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Handle Mobile App catalog operations"""
 
         # Validate operation
@@ -508,8 +522,9 @@ Returns:
         #Route to specific operation
         if operation == "get_mobile_app_metric_catalog":
             view = (params or {}).get("view", "planner")
-            logger.debug(f"Routing to Mobile App Catalog Metrics | view={view}")
-            result = await self.mobile_app_catalog_client.get_mobile_app_metric_catalog(ctx=ctx, view=view)
+            logger.info(f"Routing to get_mobile_app_metric_catalog [resource_type=catalog, tool={tool_name}]")
+            result = await self.mobile_app_catalog_client.get_mobile_app_metric_catalog(
+                ctx=ctx, view=view, resource_type="catalog", tool_name=tool_name)
 
         elif operation == "get_mobile_app_tag_catalog":
             # Extract required parameters
@@ -548,10 +563,13 @@ Returns:
                 beacon_type = normalized_beacon_type
 
             # Pass parameters to the client
+            logger.info(f"Routing to get_mobile_app_tag_catalog [resource_type=catalog, tool={tool_name}]")
             result = await self.mobile_app_catalog_client.get_mobile_app_tag_catalog(
                 beacon_type=beacon_type,
                 use_case=use_case,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="catalog",
+                tool_name=tool_name,
             )
         else:
             # This should never happen due to validation above, but handle it gracefully
@@ -579,7 +597,8 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handle Mobile App configuration operations"""
 
@@ -602,11 +621,14 @@ Returns:
         mobile_app_name = params.get(PARAM_MOBILE_APP_NAME)
 
         # Route to specific operation
+        logger.info(f"Routing to {operation} [resource_type=configuration, tool={tool_name}]")
         result = await self.mobile_app_configuration_client.execute_mobile_app_operation(
             operation=operation,
             mobile_app_id=mobile_app_id,
             mobile_app_name=mobile_app_name,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="configuration",
+            tool_name=tool_name,
         )
 
         return {
@@ -621,7 +643,8 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx: Optional[Any] = None
+        ctx: Optional[Any] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Handle advanced configuration retrieval operations (read-only).
@@ -648,12 +671,15 @@ Returns:
         config_id = params.get(PARAM_CONFIG_ID)
 
         # Route to the configuration client's advanced config executor
+        logger.info(f"Routing to {operation} [resource_type=advanced_config, tool={tool_name}]")
         result = await self.mobile_app_configuration_client.execute_mobile_app_advanced_config_operation(
             operation=operation,
             mobile_app_id=mobile_app_id,
             mobile_app_name=mobile_app_name,
             config_id=config_id,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="advanced_config",
+            tool_name=tool_name,
         )
 
         return {
@@ -669,8 +695,9 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
-        ) -> Dict[str, Any]:
+        ctx,
+        tool_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Handle Mobile App alert operations"""
 
         # Validate operation
@@ -711,11 +738,13 @@ Returns:
                     "message": "Missing required parameter 'mobile_app_id'. Use configuration/get_all to list available mobile app IDs."
                 }
 
-            logger.debug(f"Routing to find_active_mobile_app_alert_configs with mobile_app_id={mobile_app_id}")
+            logger.info(f"Routing to find_active_mobile_app_alert_configs [resource_type=alert, tool={tool_name}]")
             result = await self.mobile_app_alert_client.find_active_mobile_app_alert_configs(
                 mobile_app_id=mobile_app_id,
                 alert_ids=alert_ids,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="alert",
+                tool_name=tool_name,
             )
         elif operation == "find_mobile_app_alert_config":
             alert_id = params.get(PARAM_ALERT_ID)
@@ -736,11 +765,13 @@ Returns:
                     "message": "Missing required parameter 'id'. Use alert/find_active_mobile_app_alert_configs to list available IDs."
                 }
 
-            logger.debug(f"Routing to find_mobile_app_alert_config with id={alert_id}")
+            logger.info(f"Routing to find_mobile_app_alert_config [resource_type=alert, tool={tool_name}]")
             result = await self.mobile_app_alert_client.find_mobile_app_alert_config(
                 id=alert_id,
                 valid_on=valid_on,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="alert",
+                tool_name=tool_name,
             )
         else:
             # This should never happen due to validation above, but handle it gracefully
@@ -768,8 +799,9 @@ Returns:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx: Optional[Context] = None
-        ) -> Dict[str, Any]:
+        ctx: Optional[Context] = None,
+        tool_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Handle Session Replay operations"""
 
         # Validate operation
@@ -835,13 +867,15 @@ Returns:
                     )
                 }
 
-            logger.debug(f"Routing to get_session_replay_action_beacons with mobile_app_id={mobile_app_id} and session_id={session_id}")
+            logger.info(f"Routing to get_session_replay_action_beacons [resource_type=session_replay, tool={tool_name}]")
             result = await self.mobile_app_session_replay_client.get_session_replay_action_beacons(
                 mobile_app_id=mobile_app_id,
                 session_id=session_id,
                 cursor=cursor,
                 page_size=page_size,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="session_replay",
+                tool_name=tool_name,
             )
         else:
             # This should never happen due to validation above, but handle it gracefully

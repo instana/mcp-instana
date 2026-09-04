@@ -16,7 +16,13 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, parse_payload, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    parse_payload,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -398,16 +404,15 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
         slo_id: Optional[str] = None,
         alert_ids: Optional[List[str]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Find active SLO alert configurations."""
         try:
             logger.debug(f"find_active_alert_configs called with slo_id: {slo_id}")
 
-            result = api_client.find_active_service_levels_alert_configs_without_preload_content(
-                slo_id=slo_id,
-                alert_ids=alert_ids
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_active_service_levels_alert_configs_without_preload_content, slo_id=slo_id, alert_ids=alert_ids), ctx=ctx, operation_name="find_active_service_levels_alert_configs", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -431,7 +436,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
         id: str,
         valid_on: Optional[int] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Find specific SLO alert configuration by ID."""
         try:
@@ -443,10 +450,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if valid_on is not None and not isinstance(valid_on, int):
                 return {"error": "valid_on must be an integer timestamp"}
 
-            result = api_client.find_service_levels_alert_config_without_preload_content(
-                id=id,
-                valid_on=valid_on
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_service_levels_alert_config_without_preload_content, id=id, valid_on=valid_on), ctx=ctx, operation_name="find_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -466,7 +470,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def find_alert_config_versions(self,
         id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Find all versions of an SLO alert configuration."""
         try:
@@ -475,7 +481,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            result = api_client.find_service_levels_alert_config_versions_without_preload_content(id=id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_service_levels_alert_config_versions_without_preload_content, id=id), ctx=ctx, operation_name="find_service_levels_alert_config_versions", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -494,7 +500,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def create_alert_config(self,
         payload: Union[Dict[str, Any], str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create new SLO alert configuration."""
         try:
@@ -518,9 +526,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if isinstance(config_object, dict) and "error" in config_object:
                 return config_object
 
-            result = api_client.create_service_levels_alert_config_without_preload_content(
-                service_levels_alert_config=config_object
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_service_levels_alert_config_without_preload_content, service_levels_alert_config=config_object), ctx=ctx, operation_name="create_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -541,7 +547,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
         id: str,
         payload: Union[Dict[str, Any], str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update existing SLO alert configuration."""
         try:
@@ -574,10 +582,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if isinstance(config_object, dict) and "error" in config_object:
                 return config_object
 
-            result = api_client.update_service_levels_alert_config_without_preload_content(
-                id=id,
-                service_levels_alert_config=config_object
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_service_levels_alert_config_without_preload_content, id=id, service_levels_alert_config=config_object), ctx=ctx, operation_name="update_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -597,7 +602,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def delete_alert_config(self,
         id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delete SLO alert configuration."""
         try:
@@ -606,7 +613,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            api_client.delete_service_levels_alert_config(id=id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_service_levels_alert_config, id=id), ctx=ctx, operation_name="delete_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
             return {"success": True, "message": f"Alert config '{id}' deleted"}
 
         except Exception as e:
@@ -617,7 +624,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def disable_alert_config(self,
         id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Disable SLO alert configuration."""
         try:
@@ -626,7 +635,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            api_client.disable_service_levels_alert_config(id=id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_service_levels_alert_config, id=id), ctx=ctx, operation_name="disable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
             return {"success": True, "message": f"Alert config '{id}' disabled"}
 
         except Exception as e:
@@ -637,7 +646,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
     async def enable_alert_config(self,
         id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Enable SLO alert configuration."""
         try:
@@ -646,7 +657,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            api_client.enable_service_levels_alert_config(id=id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_service_levels_alert_config, id=id), ctx=ctx, operation_name="enable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
             return {"success": True, "message": f"Alert config '{id}' enabled"}
 
         except Exception as e:
@@ -658,7 +669,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
         id: str,
         created: int,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Restore SLO alert configuration to a specific version by creation timestamp."""
         try:
@@ -672,10 +685,7 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if not isinstance(created, int):
                 return {"error": "created must be an integer timestamp"}
 
-            result = api_client.restore_service_levels_alert_config_without_preload_content(
-                id=id,
-                created=created
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_service_levels_alert_config_without_preload_content, id=id, created=created), ctx=ctx, operation_name="restore_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"

@@ -32,7 +32,7 @@ StructureValidator
     * ``validate_metrics_array`` — non-empty list, each entry has non-empty
       ``metric`` string and valid ``aggregation`` enum, list length ≤ max_items.
     * ``validate_order`` — ``by`` non-empty, ``direction`` in {ASC, DESC}.
-    * ``validate_time_frame`` - ``windowSize`` within SDK bounds (0-2678400000 ms).
+    * ``validate_time_frame`` — ``windowSize`` within SDK bounds (0-2 678 400 000 ms).
     * ``validate_granularity_ratio`` — cross-field check that ``windowSize /
       granularity_ms`` does not exceed ``MAX_GRANULARITY_DATA_POINTS`` (1 000) and
       that the granularity value itself does not overflow a 32-bit integer when the
@@ -41,7 +41,7 @@ StructureValidator
       ``granularity_in_ms=True`` for infrastructure (granularity already in ms);
       ``granularity_in_ms=False`` (default) for all other domains (granularity in
       seconds).
-    * ``validate_pagination`` - cursor-based ``retrievalSize`` within 1-200;
+    * ``validate_pagination`` — cursor-based ``retrievalSize`` within 1-200;
       or page-based ``page`` / ``pageSize`` when ``page_based=True``
       (synthetic playback endpoints use ``Pagination`` SDK model).
     * ``validate_synthetic_playback_structure`` — combined preflight for all
@@ -524,6 +524,50 @@ VALID_TAG_FILTER_OPERATORS = frozenset({
 # entity enum — identical across TagFilter, Group, WebsiteBeaconTagGroup,
 # MobileAppBeaconTagGroup (all use the same SDK field_validator).
 VALID_ENTITY_VALUES = frozenset({"NOT_APPLICABLE", "DESTINATION", "SOURCE"})
+
+# ---------------------------------------------------------------------------
+# groupbyTagEntity guidance, selected per domain by the caller.
+#
+# Same pattern as VALID_WEBSITE_BEACON_TYPES / VALID_MOBILE_BEACON_TYPES: the
+# text lives here so every domain's message stays consistently formatted, and
+# each router passes the constant that fits its data model.
+#
+# `entity_guidance=None` reproduces _ENTITY_GUIDANCE_DEFAULT, which is the
+# message this validator emitted before the parameter existed — so any call
+# site that does not opt in is unchanged.
+# ---------------------------------------------------------------------------
+
+_ENTITY_GUIDANCE_DEFAULT = (
+    f"Valid values: {sorted(VALID_ENTITY_VALUES)}. "
+    f"Example: \"groupbyTagEntity\": \"DESTINATION\""
+)
+
+# Website / Mobile App beacon groups. A beacon tag describes one beacon and has
+# no source/destination pair: every tag in both EUM catalogs reports
+# canApplyToSource = canApplyToDestination = false (verified across all beacon
+# types and both use cases, 2026-08-09), so NOT_APPLICABLE is the only value
+# that carries meaning here.
+ENTITY_GUIDANCE_EUM = (
+    "For Website and Mobile beacon tags use \"NOT_APPLICABLE\" — a beacon tag "
+    "describes a single beacon and has no source/destination pair. "
+    f"Valid values: {sorted(VALID_ENTITY_VALUES)}."
+)
+
+# Application call/trace groups, where the value genuinely changes results.
+# Condensed from the ENTITY FIELD VALUES block in application_smart_router_tool.py
+# so the elicitation message and the tool description say the same thing. Keep the
+# two in sync; do not add claims here that the tool description does not make.
+ENTITY_GUIDANCE_CALL_SEMANTICS = (
+    f"Valid values: {sorted(VALID_ENTITY_VALUES)}.\n"
+    "      \"SOURCE\" / \"DESTINATION\" -> the tag identifies an infrastructure "
+    "or service component (hosts, services, containers, databases, endpoints); "
+    "catalog hint: canApplyToSource / canApplyToDestination = true.\n"
+    "      \"NOT_APPLICABLE\" -> the tag describes call behaviour or metadata "
+    "(call metrics, trace properties, geo data, business context); "
+    "catalog hint: canApplyToSource / canApplyToDestination = false.\n"
+    "      Examples: {\"groupbyTag\": \"service.name\", \"groupbyTagEntity\": \"DESTINATION\"} · "
+    "{\"groupbyTag\": \"call.latency\", \"groupbyTagEntity\": \"NOT_APPLICABLE\"}"
+)
 
 # order.direction enum from Order.field_validator('direction')
 VALID_ORDER_DIRECTIONS = frozenset({"ASC", "DESC"})
@@ -1190,6 +1234,7 @@ class StructureValidator:
         group: Optional[Any],
         field_name: str = "group",
         required: bool = False,
+        entity_guidance: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Validate a group object ``{"groupbyTag": "...", "groupbyTagEntity": "..."}``.
@@ -1203,6 +1248,16 @@ class StructureValidator:
         groups).  Domain-specific tag name checks belong in the service file.
 
         Returns ``None`` when *group* is ``None`` (and not required) or valid.
+
+        Parameters
+        ----------
+        entity_guidance:
+            Domain-appropriate advice appended to the "groupbyTagEntity is
+            required" error. Pass ``ENTITY_GUIDANCE_EUM`` from the Website and
+            Mobile App routers, ``ENTITY_GUIDANCE_CALL_SEMANTICS`` from
+            Application. ``None`` (the default) reproduces the message this
+            validator emitted before the parameter existed, so an un-updated
+            caller is unchanged.
         """
         if group is None:
             if required:
@@ -1244,8 +1299,7 @@ class StructureValidator:
         if not groupby_tag_entity or not isinstance(groupby_tag_entity, str):
             errors.append(
                 f"{field_name}.groupbyTagEntity: required. "
-                f"Valid values: {sorted(VALID_ENTITY_VALUES)}. "
-                f"Example: \"groupbyTagEntity\": \"DESTINATION\""
+                + (entity_guidance or _ENTITY_GUIDANCE_DEFAULT)
             )
         elif groupby_tag_entity not in VALID_ENTITY_VALUES:
             errors.append(

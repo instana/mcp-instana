@@ -24,7 +24,13 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 
 class LogAlertConfigurationMCPTools(BaseInstanaClient):
@@ -87,7 +93,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API
-                result = api_client.create_log_alert_config(log_alert_config=log_alert_config)
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_log_alert_config, log_alert_config=log_alert_config), ctx=ctx, operation_name="create_log_alert_config")
                 logger.debug(f"Result from create_log_alert_config: {result}")
 
                 return self._convert_to_dict(result)
@@ -118,7 +124,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_log_alert_config called with id={id}")
 
             try:
-                api_client.delete_log_alert_config(id=id)
+                await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_log_alert_config, id=id), ctx=ctx, operation_name="delete_log_alert_config")
                 logger.debug(f"Successfully deleted log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} deleted successfully"}
             except Exception as e:
@@ -148,7 +154,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"disable_log_alert_config called with id={id}")
 
             try:
-                api_client.disable_log_alert_config(id=id)
+                await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_log_alert_config, id=id), ctx=ctx, operation_name="disable_log_alert_config")
                 logger.debug(f"Successfully disabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} disabled successfully"}
             except Exception as e:
@@ -178,7 +184,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"enable_log_alert_config called with id={id}")
 
             try:
-                api_client.enable_log_alert_config(id=id)
+                await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_log_alert_config, id=id), ctx=ctx, operation_name="enable_log_alert_config")
                 logger.debug(f"Successfully enabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} enabled successfully"}
             except Exception as e:
@@ -209,7 +215,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API with raw JSON response to avoid Pydantic validation issues
-                result = api_client.find_active_log_alert_configs_without_preload_content(alert_ids=alert_ids)
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_active_log_alert_configs_without_preload_content, alert_ids=alert_ids), ctx=ctx, operation_name="find_active_log_alert_configs")
                 logger.debug(f"Result from find_active_log_alert_configs: {result}")
 
                 # Parse the JSON response manually
@@ -252,7 +258,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API with raw JSON response to avoid Pydantic validation issues
-                result = api_client.find_log_alert_config_without_preload_content(id=id, valid_on=valid_on)
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_log_alert_config_without_preload_content, id=id, valid_on=valid_on), ctx=ctx, operation_name="find_log_alert_config")
                 logger.debug(f"Result from find_log_alert_config: {result}")
 
                 # Parse the JSON response manually
@@ -294,7 +300,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API with raw JSON response to avoid Pydantic validation issues
-                result = api_client.find_log_alert_config_versions_without_preload_content(id=id)
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_log_alert_config_versions_without_preload_content, id=id), ctx=ctx, operation_name="find_log_alert_config_versions")
                 logger.debug(f"Result from find_log_alert_config_versions: {result}")
 
                 # Parse the JSON response manually
@@ -336,7 +342,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"restore_log_alert_config called with id={id}, created={created}")
 
             try:
-                api_client.restore_log_alert_config(id=id, created=created)
+                await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_log_alert_config, id=id, created=created), ctx=ctx, operation_name="restore_log_alert_config")
                 logger.debug(f"Successfully restored log alert configuration with ID {id}")
                 return {
                     "success": True,
@@ -378,7 +384,7 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
             try:
                 # Call the API
-                result = api_client.update_log_alert_config(id=id, log_alert_config=log_alert_config)
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_log_alert_config, id=id, log_alert_config=log_alert_config), ctx=ctx, operation_name="update_log_alert_config")
                 logger.debug(f"Result from update_log_alert_config: {result}")
                 return self._convert_to_dict(result)
             except Exception as e:

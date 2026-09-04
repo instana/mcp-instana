@@ -39,7 +39,13 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, decode_response, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.core.validation import ValidationError, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -145,13 +151,16 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
 
         return None
 
-    def _execute_action_beacons_call(
+    async def _execute_action_beacons_call(
         self,
         mobile_app_id: Optional[str] = None,
         session_id: Optional[str] = None,
         cursor: Optional[int] = None,
         page_size: Optional[int] = None,
-        api_client = None
+        api_client = None,
+        ctx = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Call the session replay action-beacons endpoint directly.
@@ -170,11 +179,18 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
 
         try:
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_action_beacons_without_preload_content(
-                mobile_app_id=mobile_app_id,
-                session_id=session_id,
-                cursor=cursor,
-                page_size=page_size
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_action_beacons_without_preload_content,
+                    mobile_app_id=mobile_app_id,
+                    session_id=session_id,
+                    cursor=cursor,
+                    page_size=page_size,
+                ),
+                ctx=ctx,
+                operation_name="get_action_beacons",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             # Check if the response was successful
@@ -199,7 +215,9 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
         cursor: Optional[int] = None,
         page_size: Optional[int] = None,
         ctx: Optional[Context] = None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Retrieve a page of session replay action beacons for a session.
@@ -249,7 +267,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
                 logger.debug("[get_session_replay_action_beacons] Default page_size applied since page_size not provided")
 
             #STEP 4: Pull beacons
-            response = self._execute_action_beacons_call(mobile_app_id, session_id, cursor, page_size, api_client)
+            response = await self._execute_action_beacons_call(mobile_app_id, session_id, cursor, page_size, api_client, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
             if "error" in response:
                 logger.debug(

@@ -49,11 +49,16 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.core.validation import VALID_WEBSITE_BEACON_TYPES, StructureValidator
+from src.core.validation import (
+    VALID_WEBSITE_BEACON_TYPES,
+    StructureValidator,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -99,12 +104,15 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         }
         return beacon_type, time_frame, metrics, group, tag_filter_expression
 
-    def _validate_group_metrics_if_needed(
+    async def _validate_group_metrics_if_needed(
         self,
         user_provided_metrics: bool,
         metrics: List[Dict[str, Any]],
         beacon_type: str,
         api_client,
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         if not user_provided_metrics:
             return None
@@ -125,10 +133,13 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         if beacon_type_error:
             return beacon_type_error
 
-        catalog_result = fetch_metric_catalog_internal(
+        catalog_result = await fetch_metric_catalog_internal(
             api_client=api_client,
             catalog_api_class=WebsiteCatalogApi,
             fetch_method_name="get_website_catalog_metrics_without_preload_content",
+            ctx=ctx,
+            resource_type=resource_type,
+            tool_name=tool_name,
         )
         if isinstance(catalog_result, dict) and "error" in catalog_result:
             return catalog_result
@@ -275,7 +286,9 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
     order: Optional[Dict[str, str]] = None,
     pagination: Optional[Dict[str, int]] = None,
     ctx=None,
-    api_client=None) -> Dict[str, Any]:
+    api_client=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get grouped website beacon metrics.
 
@@ -350,11 +363,14 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 tag_filter_expression,
             )
 
-            compatibility_error = self._validate_group_metrics_if_needed(
+            compatibility_error = await self._validate_group_metrics_if_needed(
                 user_provided_metrics,
                 metrics,
                 beacon_type,
                 api_client,
+                ctx=ctx,
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
             if compatibility_error:
                 return compatibility_error
@@ -391,9 +407,13 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 logger.debug(f"[get_website_beacon_groups] Final API payload: {json.dumps(final_payload, indent=2)}")
 
                 # Use without_preload_content to bypass Pydantic validation and handle NaN values manually
-                response = api_client.get_beacon_groups_without_preload_content(
-                    get_website_beacon_groups=config_object,
-                    fill_time_series=fill_time_series
+                response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_beacon_groups_without_preload_content,
+                        get_website_beacon_groups=config_object,
+                        fill_time_series=fill_time_series),
+                    ctx=ctx,
+                    operation_name="get_website_beacon_groups",
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 logger.debug("[get_website_beacon_groups] Successfully received response from get_beacon_groups")
 
@@ -576,7 +596,9 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         beacon_type: Optional[str] = None,
         pagination: Optional[Dict[str, int]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get website beacon metrics with pagination support.
@@ -658,7 +680,13 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
             # Make API call
             logger.debug("[get_website_beacons] Making API call to get website beacons")
-            result = api_client.get_beacons_without_preload_content(get_website_beacons=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_beacons_without_preload_content,
+                    get_website_beacons=config_object),
+                ctx=ctx,
+                operation_name="get_website_beacons",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Process results
             response_text = decode_response(result)

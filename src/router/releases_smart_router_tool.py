@@ -184,7 +184,9 @@ Examples:
                     name_filter=name_filter,
                     page_number=page_number,
                     page_size=page_size,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type="releases",
+                    tool_name="manage_releases",
                 )
 
             elif operation == OPERATION_GET_RELEASE:
@@ -206,7 +208,9 @@ Examples:
 
                 result = await self.releases_client.get_release(
                     release_id=release_id,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type="releases",
+                    tool_name="manage_releases",
                 )
 
             elif operation == OPERATION_CREATE_RELEASE:
@@ -257,7 +261,9 @@ Examples:
                     start=start,
                     applications=applications,
                     services=services,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type="releases",
+                    tool_name="manage_releases",
                 )
 
             elif operation == OPERATION_UPDATE_RELEASE:
@@ -312,7 +318,9 @@ Examples:
                     start=start,
                     applications=applications,
                     services=services,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type="releases",
+                    tool_name="manage_releases",
                 )
 
             elif operation == OPERATION_DELETE_RELEASE:
@@ -334,7 +342,9 @@ Examples:
 
                 result = await self.releases_client.delete_release(
                     release_id=release_id,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type="releases",
+                    tool_name="manage_releases",
                 )
 
             else:

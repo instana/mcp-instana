@@ -45,11 +45,17 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.core.validation import VALID_MOBILE_BEACON_TYPES, StructureValidator
+from src.core.validation import (
+    ENTITY_GUIDANCE_EUM,
+    VALID_MOBILE_BEACON_TYPES,
+    StructureValidator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +191,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         errors: List[str] = []
         for validator_fn, field_val, kwargs in [
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_time_frame, time_frame, {}),
             (StructureValidator.validate_order, order, {}),
@@ -211,11 +217,14 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             ),
         }
 
-    @staticmethod
-    def _validate_metric_compatibility_for_beacon_groups(
+    async def _validate_metric_compatibility_for_beacon_groups(
+        self,
         metrics: List[Dict[str, Any]],
         beacon_type: str,
         api_client: Any,
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Validate metric/beacon-type compatibility; return an error dict or None."""
         from instana_client.api.mobile_app_catalog_api import MobileAppCatalogApi
@@ -234,10 +243,13 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         if beacon_type_error:
             return beacon_type_error
 
-        catalog_result = fetch_metric_catalog_internal(
+        catalog_result = await fetch_metric_catalog_internal(
             api_client=api_client,
             catalog_api_class=MobileAppCatalogApi,
             fetch_method_name="get_mobile_app_metric_catalog_without_preload_content",
+            ctx=ctx,
+            resource_type=resource_type,
+            tool_name=tool_name,
         )
         if isinstance(catalog_result, dict) and "error" in catalog_result:
             return catalog_result
@@ -261,7 +273,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
     order: Optional[Dict[str, str]] = None,
     pagination: Optional[Dict[str, int]] = None,
     ctx=None,
-    api_client=None) -> Dict[str, Any]:
+    api_client=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get grouped mobile app beacon metrics.
 
@@ -350,8 +364,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                     return tag_validation
 
             if user_provided_metrics:
-                compatibility_error = self._validate_metric_compatibility_for_beacon_groups(
-                    metrics, beacon_type, api_client
+                compatibility_error = await self._validate_metric_compatibility_for_beacon_groups(
+                    metrics, beacon_type, api_client, ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 if compatibility_error:
                     return compatibility_error
@@ -362,7 +377,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             if "error" in query_params:
                 return query_params
 
-            return await self._execute_beacon_groups_api_call(query_params, fill_time_series, api_client)
+            return await self._execute_beacon_groups_api_call(query_params, fill_time_series, api_client, ctx, resource_type=resource_type, tool_name=tool_name)
 
         except Exception as e:
             logger.error(f"[get_mobile_app_beacon_groups] Error: {e}", exc_info=True)
@@ -372,7 +387,10 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         self,
         query_params: Dict[str, Any],
         fill_time_series: bool,
-        api_client
+        api_client,
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute the beacon groups API call and handle response."""
         try:
@@ -394,9 +412,16 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             }
             logger.debug(f"[get_mobile_app_beacon_groups] Final API payload: {json.dumps(final_payload, indent=2)}")
 
-            response = api_client.get_mobile_app_beacon_groups_without_preload_content(
-                get_mobile_app_beacon_groups=config_object,
-                fill_time_series=fill_time_series
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_mobile_app_beacon_groups_without_preload_content,
+                    get_mobile_app_beacon_groups=config_object,
+                    fill_time_series=fill_time_series,
+                ),
+                ctx=ctx,
+                operation_name="get_mobile_app_beacon_groups",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
             logger.debug("[get_mobile_app_beacon_groups] Successfully received response from get_beacon_groups")
 
@@ -508,7 +533,8 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         self,
         tag_filter_expression: Dict[str, Any]
     ) -> Union[List[Any], Dict[str, Any]]:
-        """Convert tag filter expression to deprecated tag filters.
+        """
+        Convert tag filter expression to deprecated tag filters.
 
         Returns:
             - List[DeprecatedTagFilter]: Successfully converted filters
@@ -601,7 +627,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         pagination: Optional[Dict[str, int]] = None,
         filter_fields: bool = True,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get mobile app beacon metrics with pagination support.
@@ -708,7 +736,14 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
 
             # Make API call
             logger.debug("[get_mobile_app_beacons] Making API call to get mobile app beacons")
-            result = api_client.get_mobile_app_beacons_without_preload_content(get_mobile_app_beacons=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_beacons_without_preload_content,
+                    get_mobile_app_beacons=config_object),
+                ctx=ctx,
+                operation_name="get_mobile_app_beacons",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             # Process and return results
             return self._process_beacons_response(result, filter_fields)
@@ -842,7 +877,8 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         metrics: Optional[List[Dict[str, Any]]],
         user_provided: bool
     ) -> Optional[Dict[str, Any]]:
-        """Validate metric names to catch invalid metrics before API call.
+        """
+        Validate metric names to catch invalid metrics before API call.
 
         Args:
             metrics: List of metric configurations to validate

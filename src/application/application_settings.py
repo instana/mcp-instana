@@ -16,9 +16,11 @@ from typing import Any, Dict, List, Optional, Union
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     parse_payload,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -102,7 +104,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         id: Optional[str] = None,
         payload: Optional[Union[Dict[str, Any], str]] = None,
         request_body: Optional[List[str]] = None,
-        ctx=None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Application Settings CRUD operations.
@@ -151,51 +155,52 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             # --- End pre-flight ---
 
             # Route based on resource_subtype and operation
+            _rt, _tn = resource_type, tool_name
             if resource_subtype == "application":
                 if operation == "get_all":
-                    return await self._get_all_applications_configs(ctx)
+                    return await self._get_all_applications_configs(ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "get":
-                    return await self._get_application_config(id, ctx)
+                    return await self._get_application_config(id, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "create":
-                    return await self._add_application_config(payload, ctx)
+                    return await self._add_application_config(payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "update":
-                    return await self._update_application_config(id, payload, ctx)
+                    return await self._update_application_config(id, payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "delete":
-                    return await self._delete_application_config(id, ctx)
+                    return await self._delete_application_config(id, ctx, resource_type=_rt, tool_name=_tn)
 
             elif resource_subtype == "endpoint":
                 if operation == "get_all":
-                    return await self._get_all_endpoint_configs(ctx)
+                    return await self._get_all_endpoint_configs(ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "get":
-                    return await self._get_endpoint_config(id, ctx)
+                    return await self._get_endpoint_config(id, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "create":
-                    return await self._create_endpoint_config(payload, ctx)
+                    return await self._create_endpoint_config(payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "update":
-                    return await self._update_endpoint_config(id, payload, ctx)
+                    return await self._update_endpoint_config(id, payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "delete":
-                    return await self._delete_endpoint_config(id, ctx)
+                    return await self._delete_endpoint_config(id, ctx, resource_type=_rt, tool_name=_tn)
 
             elif resource_subtype == "service":
                 if operation == "get_all":
-                    return await self._get_all_service_configs(ctx)
+                    return await self._get_all_service_configs(ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "get":
-                    return await self._get_service_config(id, ctx)
+                    return await self._get_service_config(id, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "create":
-                    return await self._add_service_config(payload, ctx)
+                    return await self._add_service_config(payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "update":
-                    return await self._update_service_config(id, payload, ctx)
+                    return await self._update_service_config(id, payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "delete":
-                    return await self._delete_service_config(id, ctx)
+                    return await self._delete_service_config(id, ctx, resource_type=_rt, tool_name=_tn)
 
             elif resource_subtype == "manual_service":
                 if operation == "get_all":
-                    return await self._get_all_manual_service_configs(ctx)
+                    return await self._get_all_manual_service_configs(ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "create":
-                    return await self._add_manual_service_config(payload, ctx)
+                    return await self._add_manual_service_config(payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "update":
-                    return await self._update_manual_service_config(id, payload, ctx)
+                    return await self._update_manual_service_config(id, payload, ctx, resource_type=_rt, tool_name=_tn)
                 elif operation == "delete":
-                    return await self._delete_manual_service_config(id, ctx)
+                    return await self._delete_manual_service_config(id, ctx, resource_type=_rt, tool_name=_tn)
 
             return {"error": f"Operation '{operation}' not supported for resource_subtype '{resource_subtype}'"}
 
@@ -206,7 +211,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_applications_configs(self,
                                            ctx=None,
-                                           api_client=None) -> List[Dict[str, Any]]:
+                                           api_client=None,
+                                           resource_type: Optional[str] = None,
+                                           tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         All Application Perspectives Configuration
         Get a list of all Application Perspectives with their configuration settings.
@@ -220,7 +227,12 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             logger.debug("Fetching all applications and their settings")
             # Use raw JSON response to avoid Pydantic validation issues
-            result = api_client.get_application_configs_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_application_configs_without_preload_content),
+                ctx=ctx,
+                operation_name="get_application_configs",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             try:
                 response_text = decode_response(result)
                 json_data = json.loads(response_text)
@@ -338,6 +350,15 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             ]
             logger.debug("Applied default accessRules: READ_WRITE GLOBAL")
 
+        # businessCriticality is intentionally NOT defaulted here.
+        # The SDK model types it as Optional[StrictStr] with enum values like 'NOT_DEFINED',
+        # but the Instana API actually stores and returns it as an integer (e.g. 0).
+        # Sending any string value causes a 400 from the API. Omitting the field entirely
+        # lets the API apply its own default without conflict.
+        if 'businessCriticality' in request_body and isinstance(request_body['businessCriticality'], str):
+            del request_body['businessCriticality']
+            logger.debug("Removed businessCriticality string value — API expects integer; omitting lets API apply default")
+
         # The API requires either tagFilterExpression OR matchSpecification
         if 'tagFilterExpression' not in request_body and 'matchSpecification' not in request_body:
             request_body['tagFilterExpression'] = TagFilterExpression(
@@ -384,6 +405,73 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             return error
 
         return {"payload": request_body}
+
+    @staticmethod
+    def _build_serializable_body(request_body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build a plain dict body, omitting businessCriticality entirely.
+
+        Rationale: the SDK model types businessCriticality as StrictStr ('NOT_DEFINED' etc.)
+        but the Instana API actually stores/returns it as an integer (e.g. 0), and rejects any
+        string value with HTTP 400.
+        """
+        serializable_body = {}
+        for k, v in request_body.items():
+            if k == 'businessCriticality':
+                continue  # omit — API rejects any string value for this field
+            if hasattr(v, 'to_dict'):
+                serializable_body[k] = v.to_dict()
+            elif isinstance(v, list):
+                serializable_body[k] = [
+                    item.to_dict() if hasattr(item, 'to_dict') else item for item in v
+                ]
+            else:
+                serializable_body[k] = v
+        return serializable_body
+
+    @staticmethod
+    def _build_add_application_response(
+        result_dict: Dict[str, Any],
+        request_body: Dict[str, Any],
+        payload: Union[Dict[str, Any], str, None],
+    ) -> Dict[str, Any]:
+        """Format the successful response dict for add_application_config."""
+        payload_dict = payload if isinstance(payload, dict) else {}
+        access_rules = "Custom" if (payload_dict and 'accessRules' in payload_dict) else "READ_WRITE GLOBAL"
+        return {
+            **result_dict,
+            "message": f"Application perspective '{request_body.get('label')}' created successfully",
+            "applied_defaults": {
+                "scope": request_body.get('scope'),
+                "boundaryScope": request_body.get('boundaryScope'),
+                "accessRules": access_rules,
+            },
+        }
+
+    @staticmethod
+    def _parse_payload_string(payload: Union[Dict[str, Any], str]) -> Union[Dict[str, Any], Dict[str, str], Any]:
+        """Parse string payload to dict, handling both JSON and Python literal dicts."""
+        if not isinstance(payload, str):
+            return payload
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            try:
+                return ast.literal_eval(payload)
+            except (SyntaxError, ValueError) as e:
+                return {"error": f"Invalid payload format: {e}"}
+
+    def _prepare_update_application_body(self, payload: Dict[str, Any], id: Optional[str] = None) -> Dict[str, Any]:
+        """Prepare and serialize update payload for SDK API call."""
+        request_body = dict(payload)  # shallow copy to avoid mutating the original
+        # The Instana PUT endpoint requires 'id' in the request body as well as the URL path.
+        if id and not request_body.get("id"):
+            request_body["id"] = id
+        if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
+            request_body['tagFilterExpression'] = self._convert_tag_filter_expression(
+                request_body['tagFilterExpression']
+            )
+        return self._build_serializable_body(request_body)
 
     # ------------------------------------------------------------------
     # Pre-flight validation helpers (return elicitation dict or None)
@@ -528,7 +616,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _add_application_config(self,
                                       payload: Union[Dict[str, Any], str],
                                       ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Add a new Application Perspective configuration.
 
@@ -562,31 +652,36 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = validation_result["payload"]
 
-            # Debug: Log the request body before creating the config object
-            logger.debug(f"request_body before NewApplicationConfig: {request_body}")
+            # Build a plain dict body, omitting businessCriticality entirely.
+            # Rationale: the SDK model types it as StrictStr ('NOT_DEFINED' etc.) but the
+            # Instana API actually stores/returns it as an integer (e.g. 0), and rejects any
+            # string value with HTTP 400.  We bypass both the method-level Pydantic validation
+            # (which requires a NewApplicationConfig object) and the model's field requirement
+            # by calling the internal _serialize + call_api directly with a plain dict.
+            serializable_body = self._build_serializable_body(request_body)
+            logger.debug(f"serializable_body for add_application_config: {serializable_body}")
 
-            # Create the NewApplicationConfig object - SDK will handle model conversion
-            config_object = NewApplicationConfig(**request_body)
+            def _do_add_sync(ac=api_client):
+                _param = ac._add_application_config_serialize(
+                    new_application_config=serializable_body,
+                    _request_auth=None,
+                    _content_type=None,
+                    _headers=None,
+                    _host_index=0,
+                )
+                rest_response = ac.api_client.call_api(*_param)
+                rest_response.read()  # populate .data from underlying urllib3 response
+                return rest_response
 
-            # Debug: Log what the config object looks like after creation
-            if hasattr(config_object, 'to_dict'):
-                logger.debug(f"config_object.to_dict(): {config_object.to_dict()}")
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(_do_add_sync),
+                ctx=ctx,
+                operation_name="add_application_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
-            result = api_client.add_application_config(new_application_config=config_object)
-
-            if hasattr(result, 'to_dict'):
-                result_dict = result.to_dict()
-                # Add helpful information about what was created
-                return {
-                    **result_dict,
-                    "message": f"Application perspective '{request_body.get('label')}' created successfully",
-                    "applied_defaults": {
-                        "scope": request_body.get('scope'),
-                        "boundaryScope": request_body.get('boundaryScope'),
-                        "accessRules": "READ_WRITE GLOBAL" if not payload or 'accessRules' not in (payload if isinstance(payload, dict) else {}) else "Custom"
-                    }
-                }
-            return result or {"success": True, "message": "Application config created"}
+            result_dict = json.loads(response.data.decode('utf-8'))
+            return self._build_add_application_response(result_dict, request_body, payload)
         except Exception as e:
             logger.error(f"Error in _add_application_config: {e}", exc_info=True)
             return {"error": f"Failed to add application config: {e!s}"}
@@ -595,7 +690,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _get_application_config(self,
                                       id: str,
                                       ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get an Application Perspective configuration by ID.
 
@@ -615,10 +712,19 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             if not id:
                 return {"error": "id is required"}
 
-            result = api_client.get_application_config(id=id)
-            if hasattr(result, 'to_dict'):
-                return result.to_dict()
-            return result
+            # Use _without_preload_content to bypass SDK Pydantic model validation,
+            # which fails when the API returns numeric values for string-typed fields
+            # such as businessCriticality (returned as int 0 but typed as str).
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_application_config_without_preload_content,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="get_application_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
+            return json.loads(response.data.decode('utf-8'))
         except Exception as e:
             logger.error(f"Error in _get_application_config: {e}", exc_info=True)
             return {"error": f"Failed to get application config: {e!s}"}
@@ -628,38 +734,44 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                          id: str,
                                          payload: Union[Dict[str, Any], str],
                                          ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         api_client=None,
+                                         resource_type: Optional[str] = None,
+                                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Update an existing Application Perspective configuration."""
         try:
-            # Parse string payload early so validation can inspect the dict
-            if isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except json.JSONDecodeError:
-                    try:
-                        payload = ast.literal_eval(payload)
-                    except (SyntaxError, ValueError) as e:
-                        return {"error": f"Invalid payload format: {e}"}
+            parsed = self._parse_payload_string(payload)
+            if isinstance(parsed, dict) and "error" in parsed:
+                return parsed
+            payload = parsed
 
-            # --- Pre-flight validation ---
             _elicitation = self._validate_settings_payload("application", "update", payload, id=id)
             if _elicitation:
                 return _elicitation
 
-            request_body = payload
+            serializable_body = self._prepare_update_application_body(payload, id=id)
 
-            # Convert nested tagFilterExpression dict to SDK model objects if present
-            if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
-                request_body['tagFilterExpression'] = self._convert_tag_filter_expression(
-                    request_body['tagFilterExpression']
+            def _do_update_sync(ac=api_client, _id=id):
+                _param = ac._put_application_config_serialize(
+                    id=_id,
+                    application_config=serializable_body,
+                    _request_auth=None,
+                    _content_type=None,
+                    _headers=None,
+                    _host_index=0,
                 )
+                rest_response = ac.api_client.call_api(*_param)
+                rest_response.read()  # populate .data from underlying urllib3 response
+                return rest_response
 
-            config_object = ApplicationConfig(**request_body)
-            result = api_client.put_application_config(id=id, application_config=config_object)
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(_do_update_sync),
+                ctx=ctx,
+                operation_name="put_application_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
-            if hasattr(result, 'to_dict'):
-                return result.to_dict()
-            return result or {"success": True, "message": f"Application config '{id}' updated"}
+            result_dict = json.loads(response.data.decode('utf-8'))
+            return result_dict or {"success": True, "message": f"Application config '{id}' updated"}
         except Exception as e:
             logger.error(f"Error in _update_application_config: {e}", exc_info=True)
             return {"error": f"Failed to update application config: {e!s}"}
@@ -668,13 +780,23 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _delete_application_config(self,
                                          id: str,
                                          ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         api_client=None,
+                                         resource_type: Optional[str] = None,
+                                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Delete an Application Perspective configuration."""
         try:
             if not id:
                 return {"error": "id is required"}
 
-            api_client.delete_application_config(id=id)
+            await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.delete_application_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="delete_application_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             return {"success": True, "message": f"Application config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_application_config: {e}", exc_info=True)
@@ -684,10 +806,17 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_endpoint_configs(self,
                                         ctx=None,
-                                        api_client=None) -> List[Dict[str, Any]]:
+                                        api_client=None,
+                                        resource_type: Optional[str] = None,
+                                        tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all Endpoint Perspectives Configuration."""
         try:
-            result = api_client.get_endpoint_configs_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_endpoint_configs_without_preload_content),
+                ctx=ctx,
+                operation_name="get_endpoint_configs",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -699,12 +828,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _get_endpoint_config(self,
                                    id: str,
                                    ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+                                   api_client=None,
+                                   resource_type: Optional[str] = None,
+                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Get an Endpoint configuration by ID."""
         try:
             if not id:
                 return {"error": "id is required"}
-            result = api_client.get_endpoint_config(id=id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_endpoint_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="get_endpoint_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result
@@ -716,7 +855,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _create_endpoint_config(self,
                                       payload: Union[Dict[str, Any], str],
                                       ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Create or update endpoint configuration for a service."""
         try:
             if isinstance(payload, str):
@@ -732,7 +873,15 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = EndpointConfig(**request_body)
-            result = api_client.create_endpoint_config(endpoint_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.create_endpoint_config,
+                    endpoint_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="create_endpoint_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": "Endpoint config created"}
@@ -745,7 +894,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                       id: str,
                                       payload: Union[Dict[str, Any], str],
                                       ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Update an endpoint configuration."""
         try:
             if isinstance(payload, str):
@@ -761,7 +912,16 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = EndpointConfig(**request_body)
-            result = api_client.update_endpoint_config(id=id, endpoint_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.update_endpoint_config,
+                    id=id,
+                    endpoint_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="update_endpoint_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": f"Endpoint config '{id}' updated"}
@@ -773,12 +933,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _delete_endpoint_config(self,
                                       id: str,
                                       ctx=None,
-                                      api_client=None) -> Dict[str, Any]:
+                                      api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Delete an endpoint configuration."""
         try:
             if not id:
                 return {"error": "id is required"}
-            api_client.delete_endpoint_config(id=id)
+            await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.delete_endpoint_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="delete_endpoint_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             return {"success": True, "message": f"Endpoint config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_endpoint_config: {e}", exc_info=True)
@@ -788,10 +958,17 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_service_configs(self,
                                        ctx=None,
-                                       api_client=None) -> List[Dict[str, Any]]:
+                                       api_client=None,
+                                       resource_type: Optional[str] = None,
+                                       tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all Service configurations."""
         try:
-            result = api_client.get_service_configs_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_service_configs_without_preload_content),
+                ctx=ctx,
+                operation_name="get_service_configs",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -803,12 +980,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _get_service_config(self,
                                   id: str,
                                   ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Get a Service configuration by ID."""
         try:
             if not id:
                 return {"error": "id is required"}
-            result = api_client.get_service_config(id=id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_service_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="get_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result
@@ -820,7 +1007,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _add_service_config(self,
                                   payload: Union[Dict[str, Any], str],
                                   ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Add a new Service configuration."""
         try:
             if isinstance(payload, str):
@@ -836,7 +1025,15 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = ServiceConfig(**request_body)
-            result = api_client.add_service_config(service_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.add_service_config,
+                    service_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="add_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": "Service config created"}
@@ -849,7 +1046,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                      id: str,
                                      payload: Union[Dict[str, Any], str],
                                      ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     api_client=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Update a Service configuration."""
         try:
             if isinstance(payload, str):
@@ -865,7 +1064,16 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = ServiceConfig(**request_body)
-            result = api_client.update_service_config(id=id, service_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.update_service_config,
+                    id=id,
+                    service_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="update_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": f"Service config '{id}' updated"}
@@ -877,12 +1085,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _delete_service_config(self,
                                      id: str,
                                      ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     api_client=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Delete a Service configuration."""
         try:
             if not id:
                 return {"error": "id is required"}
-            api_client.delete_service_config(id=id)
+            await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.delete_service_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="delete_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             return {"success": True, "message": f"Service config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_service_config: {e}", exc_info=True)
@@ -892,10 +1110,17 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationSettingsApi)
     async def _get_all_manual_service_configs(self,
                                               ctx=None,
-                                              api_client=None) -> List[Dict[str, Any]]:
+                                              api_client=None,
+                                              resource_type: Optional[str] = None,
+                                              tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all Manual Service configurations."""
         try:
-            result = api_client.get_all_manual_service_configs_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_all_manual_service_configs_without_preload_content),
+                ctx=ctx,
+                operation_name="get_all_manual_service_configs",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -907,7 +1132,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _add_manual_service_config(self,
                                          payload: Union[Dict[str, Any], str],
                                          ctx=None,
-                                         api_client=None) -> Dict[str, Any]:
+                                         api_client=None,
+                                         resource_type: Optional[str] = None,
+                                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Add a new Manual Service configuration."""
         try:
             if isinstance(payload, str):
@@ -923,7 +1150,15 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = NewManualServiceConfig(**request_body)
-            result = api_client.add_manual_service_config(new_manual_service_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.add_manual_service_config,
+                    new_manual_service_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="add_manual_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": "Manual service config created"}
@@ -936,7 +1171,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                             id: str,
                                             payload: Union[Dict[str, Any], str],
                                             ctx=None,
-                                            api_client=None) -> Dict[str, Any]:
+                                            api_client=None,
+                                            resource_type: Optional[str] = None,
+                                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Update a Manual Service configuration."""
         try:
             if isinstance(payload, str):
@@ -952,7 +1189,16 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = payload
             config_object = ManualServiceConfig(**request_body)
-            result = api_client.update_manual_service_config(id=id, manual_service_config=config_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.update_manual_service_config,
+                    id=id,
+                    manual_service_config=config_object
+                ),
+                ctx=ctx,
+                operation_name="update_manual_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             if hasattr(result, 'to_dict'):
                 return result.to_dict()
             return result or {"success": True, "message": f"Manual service config '{id}' updated"}
@@ -964,12 +1210,22 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
     async def _delete_manual_service_config(self,
                                             id: str,
                                             ctx=None,
-                                            api_client=None) -> Dict[str, Any]:
+                                            api_client=None,
+                                            resource_type: Optional[str] = None,
+                                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Delete a Manual Service configuration."""
         try:
             if not id:
                 return {"error": "id is required"}
-            api_client.delete_manual_service_config(id=id)
+            await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.delete_manual_service_config,
+                    id=id
+                ),
+                ctx=ctx,
+                operation_name="delete_manual_service_config",
+                resource_type=resource_type, tool_name=tool_name,
+            )
             return {"success": True, "message": f"Manual service config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_manual_service_config: {e}", exc_info=True)

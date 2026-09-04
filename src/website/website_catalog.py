@@ -20,10 +20,12 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     process_tag_catalog_response,
     project_metric_card,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -45,6 +47,8 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
         ctx=None,
         api_client=None,
         view: str = "planner",
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get website monitoring metrics catalog.
@@ -70,7 +74,12 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
                 }
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_website_catalog_metrics_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_website_catalog_metrics_without_preload_content),
+                ctx=ctx,
+                operation_name="get_website_catalog_metrics",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check if the response was successful
             if response.status != 200:
@@ -118,7 +127,9 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get website catalog metrics: {e!s}"}
 
     @with_header_auth(WebsiteCatalogApi)
-    async def get_website_catalog_tags(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website_catalog_tags(self, ctx=None, api_client=None,
+                                        resource_type: Optional[str] = None,
+                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get website monitoring tags catalog.
 
@@ -135,7 +146,12 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             logger.debug("[get_website_catalog_tags] Called")
 
             # Call the get_website_catalog_tags method from the SDK
-            result = api_client.get_website_catalog_tags()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_website_catalog_tags),
+                ctx=ctx,
+                operation_name="get_website_catalog_tags",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Convert the result to a list of dictionaries
             if isinstance(result, list):
@@ -168,7 +184,9 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
     async def get_website_tag_catalog(self,
                                     beacon_type: str,
                                     use_case: str,
-                                    ctx=None, api_client=None) -> Dict[str, Any]:
+                                    ctx=None, api_client=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get website monitoring tag catalog.
 
@@ -192,9 +210,13 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
                 return {"error": "use_case parameter is required"}
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_website_tag_catalog_without_preload_content(
-                beacon_type=beacon_type,
-                use_case=use_case
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_website_tag_catalog_without_preload_content,
+                    beacon_type=beacon_type,
+                    use_case=use_case),
+                ctx=ctx,
+                operation_name="get_website_tag_catalog",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Check if the response was successful

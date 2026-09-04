@@ -115,10 +115,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertEqual(self.client.base_url, self.base_url)
 
     def test_get_applications_internal_success_with_to_dict(self):
-        """Test _get_applications_internal with successful response that has to_dict method"""
-        # Mock the API response with to_dict method
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        """Test _get_applications_internal with successful response"""
+        data = {
             "items": [
                 {
                     "id": "app-123",
@@ -127,17 +125,17 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
                 }
             ]
         }
-        self.resources_api.get_applications.return_value = mock_result
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client._get_applications_internal(
             name_filter="Test Application",
             window_size=3600000,
             to_time=1234567890000
         ))
 
-        # Verify API was called with correct parameters
-        self.resources_api.get_applications.assert_called_once_with(
+        self.resources_api.get_applications_without_preload_content.assert_called_once_with(
             name_filter="Test Application",
             window_size=3600000,
             to=1234567890000,
@@ -145,16 +143,13 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             page_size=None,
             application_boundary_scope=None
         )
-
-        # Verify result
         self.assertIn("items", result)
         self.assertEqual(len(result["items"]), 1)
         self.assertEqual(result["items"][0]["label"], "Test Application")
 
     def test_get_applications_internal_success_without_to_dict(self):
-        """Test _get_applications_internal with response that doesn't have to_dict method"""
-        # Mock the API response as a plain dict
-        mock_result = {
+        """Test _get_applications_internal with response returned as raw JSON bytes"""
+        data = {
             "items": [
                 {
                     "id": "app-456",
@@ -162,29 +157,27 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
                 }
             ]
         }
-        self.resources_api.get_applications.return_value = mock_result
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client._get_applications_internal(
             name_filter="Another Application"
         ))
 
-        # Verify result
         self.assertIn("items", result)
         self.assertEqual(result["items"][0]["label"], "Another Application")
 
     def test_get_applications_internal_with_all_none_params(self):
         """Test _get_applications_internal with all None parameters"""
-        # Mock the API response
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"items": []}
-        self.resources_api.get_applications.return_value = mock_result
+        data = {"items": []}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method with no parameters
         result = asyncio.run(self.client._get_applications_internal())
 
-        # Verify API was called with None values
-        self.resources_api.get_applications.assert_called_once_with(
+        self.resources_api.get_applications_without_preload_content.assert_called_once_with(
             name_filter=None,
             window_size=None,
             to=None,
@@ -192,145 +185,117 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             page_size=None,
             application_boundary_scope=None
         )
-
-        # Verify result
         self.assertIn("items", result)
 
     def test_get_applications_internal_error_handling(self):
         """Test _get_applications_internal error handling"""
-        # Mock the API to raise an exception
-        self.resources_api.get_applications.side_effect = Exception("Test error")
+        self.resources_api.get_applications_without_preload_content.side_effect = Exception("Test error")
 
-        # Call the method
         result = asyncio.run(self.client._get_applications_internal(
             name_filter="Test"
         ))
 
-        # Check that error is returned
         self.assertIn("error", result)
         self.assertIn("Failed to get applications", result["error"])
         self.assertIn("Test error", result["error"])
 
     def test_get_applications_internal_debug_logs_called(self):
         """Test that debug logs are called in _get_applications_internal"""
-        # Mock the API response
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
-            "items": [{"id": "app-1", "label": "App1"}]
-        }
-        self.resources_api.get_applications.return_value = mock_result
+        data = {"items": [{"id": "app-1", "label": "App1"}]}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Patch the logger to verify it's called
         with patch('src.application.application_resources.logger') as mock_logger:
-            # Call the method
             result = asyncio.run(self.client._get_applications_internal(
                 name_filter="App1"
             ))
 
-            # Verify the first debug log was called (line 63)
             mock_logger.debug.assert_any_call(
                 "_get_applications_internal called with name_filter=App1"
             )
 
-            # Verify the second debug log was called (line 81)
-            # The exact format depends on the result_dict
             calls = [str(call) for call in mock_logger.debug.call_args_list]
             self.assertTrue(
                 any("Result from _get_applications_internal" in str(call) for call in calls),
                 "Second debug log should be called"
             )
-
-            # Verify the method completed successfully
             self.assertIn("items", result)
 
     def test_get_applications_internal_with_empty_result(self):
         """Test _get_applications_internal with empty result"""
-        # Mock the API response with empty items
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"items": []}
-        self.resources_api.get_applications.return_value = mock_result
+        data = {"items": []}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client._get_applications_internal(
             name_filter="NonExistent"
         ))
 
-        # Verify result has empty items
         self.assertIn("items", result)
         self.assertEqual(len(result["items"]), 0)
 
     def test_get_applications_internal_with_multiple_applications(self):
         """Test _get_applications_internal with multiple applications"""
-        # Mock the API response with multiple applications
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        data = {
             "items": [
                 {"id": "app-1", "label": "App1"},
                 {"id": "app-2", "label": "App2"},
                 {"id": "app-3", "label": "App3"}
             ]
         }
-        self.resources_api.get_applications.return_value = mock_result
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client._get_applications_internal())
 
-        # Verify result has all applications
         self.assertIn("items", result)
         self.assertEqual(len(result["items"]), 3)
 
     def test_get_applications_internal_with_specific_window_size(self):
         """Test _get_applications_internal with specific window_size"""
-        # Mock the API response
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"items": []}
-        self.resources_api.get_applications.return_value = mock_result
+        data = {"items": []}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method with specific window_size
         asyncio.run(self.client._get_applications_internal(
             window_size=7200000  # 2 hours
         ))
 
-        # Verify API was called with correct window_size
-        self.resources_api.get_applications.assert_called_once()
-        call_args = self.resources_api.get_applications.call_args
+        self.resources_api.get_applications_without_preload_content.assert_called_once()
+        call_args = self.resources_api.get_applications_without_preload_content.call_args
         self.assertEqual(call_args[1]['window_size'], 7200000)
 
     def test_get_applications_internal_with_specific_to_time(self):
         """Test _get_applications_internal with specific to_time"""
-        # Mock the API response
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"items": []}
-        self.resources_api.get_applications.return_value = mock_result
+        data = {"items": []}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
-        # Call the method with specific to_time
         to_time = 1609459200000  # 2021-01-01 00:00:00 UTC
         asyncio.run(self.client._get_applications_internal(
             to_time=to_time
         ))
 
-        # Verify API was called with correct to_time
-        self.resources_api.get_applications.assert_called_once()
-        call_args = self.resources_api.get_applications.call_args
+        self.resources_api.get_applications_without_preload_content.assert_called_once()
+        call_args = self.resources_api.get_applications_without_preload_content.call_args
         self.assertEqual(call_args[1]['to'], to_time)
 
     def test_get_applications_internal_error_log_called(self):
         """Test that error log is called when exception occurs"""
-        # Mock the API to raise an exception
-        self.resources_api.get_applications.side_effect = Exception("API Error")
+        self.resources_api.get_applications_without_preload_content.side_effect = Exception("API Error")
 
-        # Patch the logger to verify error log is called
         with patch('src.application.application_resources.logger') as mock_logger:
-            # Call the method
             result = asyncio.run(self.client._get_applications_internal())
 
-            # Verify error log was called (line 85)
             mock_logger.error.assert_called_once()
             error_call = mock_logger.error.call_args
             self.assertIn("Error in _get_applications_internal", str(error_call))
             self.assertIn("API Error", str(error_call))
-
-            # Verify error is returned
             self.assertIn("error", result)
 
     def test_execute_resources_operation_dispatches_get_applications(self):
@@ -345,7 +310,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             mock_get_apps.assert_called_once_with(
                 name_filter="Test Application",
                 application_boundary_scope=None,
-                ctx=None
+                ctx=None,
+                resource_type=None, tool_name=None
             )
             self.assertEqual(result, expected)
 
@@ -362,7 +328,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
             mock_get_services.assert_called_once_with(
                 name_filter="My Service",
                 include_snapshot_ids=True,
-                ctx=None
+                ctx=None,
+                resource_type=None, tool_name=None
             )
             self.assertEqual(result, expected)
 
@@ -385,7 +352,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
                 name_filter="Test Service",
                 application_boundary_scope="ALL",
                 include_snapshot_ids=False,
-                ctx=None
+                ctx=None,
+                resource_type=None, tool_name=None
             )
             self.assertEqual(result, expected)
 
@@ -412,7 +380,8 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
                 types=["HTTP"],
                 technologies=["python"],
                 application_boundary_scope="ALL",
-                ctx=None
+                ctx=None,
+                resource_type=None, tool_name=None
             )
             self.assertEqual(result, expected)
 
@@ -559,21 +528,23 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertEqual(result, payload)
 
     def test_get_applications_success_without_to_dict(self):
-        """Test get_applications returns plain dict responses unchanged"""
+        """Test get_applications returns parsed JSON from raw response"""
         payload = {"items": [{"id": "app-789", "label": "Plain App"}]}
-        self.resources_api.get_applications.return_value = payload
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(payload).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.client.get_applications(name_filter="Plain App"))
 
         self.assertEqual(result, payload)
-        self.resources_api.get_applications.assert_called_once_with(
+        self.resources_api.get_applications_without_preload_content.assert_called_once_with(
             name_filter="Plain App",
             application_boundary_scope=None
         )
 
     def test_get_applications_error_handling(self):
         """Test get_applications returns a meaningful error message on exception"""
-        self.resources_api.get_applications.side_effect = Exception("Get applications failed")
+        self.resources_api.get_applications_without_preload_content.side_effect = Exception("Get applications failed")
 
         result = asyncio.run(self.client.get_applications())
 

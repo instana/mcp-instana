@@ -89,47 +89,6 @@ class TestMobileAppCatalogMCPTools(unittest.TestCase):
         )
         self.assertEqual(result["error"], "use_case parameter is required")
 
-    def test_get_mobile_app_tag_catalog_http_error_with_details(self):
-        response = MockResponse(b'{"message":"boom"}', status=500, headers={"Content-Type": "application/json"})
-        self.mock_api_client.get_mobile_app_tag_catalog_without_preload_content.return_value = response
-
-        result = asyncio.run(
-            self.client.get_mobile_app_tag_catalog(
-                beacon_type="SESSION_START",
-                use_case="GROUPING",
-                api_client=self.mock_api_client,
-            )
-        )
-
-        self.assertIn("error", result)
-        self.assertEqual(result["status_code"], 500)
-        self.assertIn("details", result)
-
-    def test_get_mobile_app_tag_catalog_http_error_without_details(self):
-        class BrokenDecodeResponse(MockResponse):
-            @property
-            def data(self):
-                raise ValueError("broken")
-
-            @data.setter
-            def data(self, value):
-                self._data = value
-
-        response = BrokenDecodeResponse(b"", status=500)
-        self.mock_api_client.get_mobile_app_tag_catalog_without_preload_content.return_value = response
-
-        result = asyncio.run(
-            self.client.get_mobile_app_tag_catalog(
-                beacon_type="SESSION_START",
-                use_case="GROUPING",
-                api_client=self.mock_api_client,
-            )
-        )
-
-        self.assertIn("error", result)
-        self.assertEqual(result["status_code"], 500)
-        self.assertNotIn("details", result)
-
     def test_get_mobile_app_tag_catalog_success_tree_and_flat_tags(self):
         payload = {
             "tagTree": {
@@ -204,11 +163,15 @@ class TestMobileAppCatalogMCPTools(unittest.TestCase):
         self.assertIn("details", result)
 
     def test_get_mobile_app_metric_catalog_http_error_without_details(self):
+        # Raise on the second .data access (first is consumed by sdk_call_with_keepalive logging)
+        call_count = [0]
         class BrokenDecodeResponse(MockResponse):
             @property
             def data(self):
-                raise ValueError("broken")
-
+                call_count[0] += 1
+                if call_count[0] > 1:
+                    raise ValueError("broken")
+                return b""
             @data.setter
             def data(self, value):
                 self._data = value

@@ -94,7 +94,7 @@ RECOMMENDED WORKFLOW FOR ANALYZE:
        - Combines get_metrics + get_tag_catalog into ONE efficient call
        - IMPORTANT: Plugin ID must be from get_plugins - invalid IDs return HTTP 400
        - Returns: {"metrics": ["memory.usage", ...], "tags": ["tag.name", ...]}
-       - tagFilterExpression is OPTIONAL — only add a filter when the user explicitly names a specific entity to filter by
+       - tagFilterExpression is REQUIRED by the Instana API — omitting it causes HTTP 422. Always provide one; use an empty EXPRESSION to match all entities
 
     3. THIRD: Use the discovered entity types, metrics, and tags in analyze operations
        - Build queries with proper type, metrics, and tagFilterExpression
@@ -121,7 +121,7 @@ ANALYZE (resource_type="analyze"):
         - timeFrame (required): Time range for query
             - windowSize (required): Duration in milliseconds (e.g., 3600000 for 1 hour)
             - to (optional): End timestamp in milliseconds (default: now)
-        - tagFilterExpression (optional): Filter expression for entities
+        - tagFilterExpression (REQUIRED): Filter expression for entities — API returns HTTP 422 if omitted. Use {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []} to match all entities
             - type: "TAG_FILTER" for single filter, "EXPRESSION" for multiple
             - entity: "NOT_APPLICABLE" (required for TAG_FILTER)
             - name: Tag name from get_tag_catalog
@@ -342,15 +342,16 @@ Examples:
         )
 
         # Route to the correct operation based on payload content
+        _routing = {"resource_type": "analyze", "tool_name": "manage_infrastructure"}
         if actual_operation == "get_entity_groups":
             result = await self.infrastructure_analyze_client.get_aggregated_entity_groups(
                 payload=payload,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
         else:
             result = await self.infrastructure_analyze_client.get_entities(
                 payload=payload,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         # Return structured response
@@ -384,9 +385,10 @@ Examples:
             }
 
         # Route to specific operation
+        _routing = {"resource_type": "catalog", "tool_name": "manage_infrastructure"}
         if operation == "get_plugins":
             logger.debug("Routing to Infrastructure Catalog Plugins")
-            result = await self.infrastructure_catalog_client.get_infrastructure_catalog_plugins(ctx=ctx)
+            result = await self.infrastructure_catalog_client.get_infrastructure_catalog_plugins()
 
         elif operation == "get_metrics":
             plugin = params.get(PARAM_PLUGIN)
@@ -410,7 +412,7 @@ Examples:
             result = await self.infrastructure_catalog_client.get_infrastructure_catalog_metrics(
                 plugin=plugin,
                 filter=filter_type,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         elif operation == "get_tag_catalog":
@@ -433,7 +435,7 @@ Examples:
             logger.debug(f"Routing to Infrastructure Tag Catalog | plugin={plugin}")
             result = await self.infrastructure_catalog_client.get_tag_catalog(
                 plugin=plugin,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         elif operation == "get_plugin_schema":
@@ -458,7 +460,7 @@ Examples:
             result = await self.infrastructure_catalog_client.get_plugin_schema(
                 plugin=plugin,
                 filter=filter_type,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         # Return structured response
@@ -492,6 +494,7 @@ Examples:
             }
 
         # Route to specific operation
+        _routing = {"resource_type": "resources", "tool_name": "manage_infrastructure"}
         if operation == "get_snapshot":
             snapshot_id = params.get(PARAM_SNAPSHOT_ID)
             to_time = params.get(PARAM_TO_TIME)
@@ -516,7 +519,7 @@ Examples:
                 snapshot_id=snapshot_id,
                 to_time=to_time,
                 window_size=window_size,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         elif operation == "get_snapshots":
@@ -537,7 +540,7 @@ Examples:
                 plugin=plugin,
                 offline=offline,
                 detailed=detailed,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         # Return structured response

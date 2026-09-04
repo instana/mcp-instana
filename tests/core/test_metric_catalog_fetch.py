@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -21,14 +21,14 @@ def _make_response(payload, status=200, content_type="application/json"):
     return resp
 
 
-class TestFetchMetricCatalogInternal(unittest.TestCase):
+class TestFetchMetricCatalogInternal(unittest.IsolatedAsyncioTestCase):
 
     def _make_api_client(self):
         api_client = MagicMock()
         api_client.api_client = MagicMock()
         return api_client
 
-    def test_successful_fetch(self):
+    async def test_successful_fetch(self):
         api_client = self._make_api_client()
         raw_catalog = [
             {
@@ -43,11 +43,11 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.get_website_catalog_metrics_without_preload_content.return_value = (
-            _make_response(raw_catalog)
+        mock_catalog_instance.get_website_catalog_metrics_without_preload_content = AsyncMock(
+            return_value=_make_response(raw_catalog)
         )
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "get_website_catalog_metrics_without_preload_content"
         )
 
@@ -57,11 +57,11 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("aggregations", result[0])
         self.assertIn("beaconTypes", result[0])
 
-    def test_missing_underlying_api_client(self):
+    async def test_missing_underlying_api_client(self):
         api_client = MagicMock(spec=[])  # no api_client attribute
         mock_catalog_api = MagicMock()
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "some_method"
         )
 
@@ -71,16 +71,16 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         # Must NOT be elicitation_needed — this is an infrastructure error
         self.assertNotIn("elicitation_needed", result)
 
-    def test_non_200_response(self):
+    async def test_non_200_response(self):
         api_client = self._make_api_client()
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(
             {"error": "Internal Server Error"}, status=500
-        )
+        ))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -88,7 +88,7 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("HTTP 500", result["error"])
 
-    def test_malformed_response_body(self):
+    async def test_malformed_response_body(self):
         api_client = self._make_api_client()
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
@@ -98,9 +98,9 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         resp.status = 200
         resp.data = b"not json at all"
         resp.headers = {"Content-Type": "application/json"}
-        mock_catalog_instance.fetch_method.return_value = resp
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=resp)
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -108,7 +108,7 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("parse", result["error"].lower())
 
-    def test_projected_entry_with_none_metric_id(self):
+    async def test_projected_entry_with_none_metric_id(self):
         api_client = self._make_api_client()
         raw_catalog = [
             {
@@ -121,9 +121,9 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(raw_catalog)
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(raw_catalog))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -131,7 +131,7 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("malformed", result["error"].lower())
 
-    def test_projected_entry_with_non_list_beacon_types(self):
+    async def test_projected_entry_with_non_list_beacon_types(self):
         api_client = self._make_api_client()
         raw_catalog = [
             {
@@ -144,9 +144,9 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(raw_catalog)
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(raw_catalog))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -154,7 +154,7 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("malformed", result["error"].lower())
 
-    def test_projected_entry_with_non_list_aggregations(self):
+    async def test_projected_entry_with_non_list_aggregations(self):
         api_client = self._make_api_client()
         raw_catalog = [
             {
@@ -167,9 +167,9 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(raw_catalog)
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(raw_catalog))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -177,13 +177,13 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("malformed", result["error"].lower())
 
-    def test_fetch_method_not_found(self):
+    async def test_fetch_method_not_found(self):
         api_client = self._make_api_client()
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock(spec=[])
         mock_catalog_api.return_value = mock_catalog_instance
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "nonexistent_method"
         )
 
@@ -191,11 +191,11 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("no method", result["error"].lower())
 
-    def test_catalog_api_instantiation_failure(self):
+    async def test_catalog_api_instantiation_failure(self):
         api_client = self._make_api_client()
         mock_catalog_api = MagicMock(side_effect=Exception("instantiation failed"))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "some_method"
         )
 
@@ -203,16 +203,16 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("instantiate", result["error"].lower())
 
-    def test_response_not_a_list(self):
+    async def test_response_not_a_list(self):
         api_client = self._make_api_client()
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(
             {"metrics": "should be a list"}
-        )
+        ))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 
@@ -220,8 +220,7 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("not a list", result["error"].lower())
 
-
-    def test_non_dict_raw_catalog_entry(self):
+    async def test_non_dict_raw_catalog_entry(self):
         api_client = self._make_api_client()
         raw_catalog = [
             "not_a_dict",
@@ -230,9 +229,9 @@ class TestFetchMetricCatalogInternal(unittest.TestCase):
         mock_catalog_api = MagicMock()
         mock_catalog_instance = MagicMock()
         mock_catalog_api.return_value = mock_catalog_instance
-        mock_catalog_instance.fetch_method.return_value = _make_response(raw_catalog)
+        mock_catalog_instance.fetch_method = AsyncMock(return_value=_make_response(raw_catalog))
 
-        result = fetch_metric_catalog_internal(
+        result = await fetch_metric_catalog_internal(
             api_client, mock_catalog_api, "fetch_method"
         )
 

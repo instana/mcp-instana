@@ -152,7 +152,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": "rel-2", "name": "release-2", "start": 2000000},
             {"id": "rel-3", "name": "release-3", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -171,7 +171,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1500000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method with time range
@@ -199,7 +199,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": "rel-2", "name": "backend-release-2", "start": 2000000},
             {"id": "rel-3", "name": "frontend-release-3", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method with name filter
@@ -221,7 +221,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method with pagination - page 1
@@ -248,7 +248,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method with pagination - page 2
@@ -274,7 +274,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method with pagination - last page
@@ -294,7 +294,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test pagination with invalid page number"""
         # Mock response
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps([]).encode('utf-8')
+        mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call with invalid page number (0)
@@ -311,7 +311,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test pagination with invalid page size"""
         # Mock response
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps([]).encode('utf-8')
+        mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call with invalid page size (0)
@@ -335,7 +335,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": "rel-4", "name": "frontend-release-4", "start": 1800000},
             {"id": "rel-5", "name": "backend-release-5", "start": 1900000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call with time range, name filter, and pagination
@@ -358,7 +358,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with no results"""
         # Mock empty response
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps([]).encode('utf-8')
+        mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -378,7 +378,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": "rel-2", "name": "FRONTEND-APP", "start": 2000000},
             {"id": "rel-3", "name": "backend-release", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call with lowercase filter
@@ -412,7 +412,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             "start": 1000000,
             "applications": [{"name": "app1"}]
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         self.mock_api.get_release_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -449,7 +449,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             "name": "new-release",
             "start": 1000000
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         self.mock_api.post_release_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -472,7 +472,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         # Mock response
         mock_response = MagicMock()
         release_data = {"id": "rel-new", "name": "new-release", "start": 1000000}
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         self.mock_api.post_release_without_preload_content.return_value = mock_response
 
         # Call the method with services
@@ -513,7 +513,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             "name": "updated-release",
             "start": 2000000
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         self.mock_api.put_release_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -548,7 +548,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test deleting a release successfully"""
         # Mock response
         mock_response = MagicMock()
-        mock_response.read.return_value = b''
+        mock_response.data = b''
         self.mock_api.delete_release_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -580,7 +580,7 @@ class TestReleasesMCPTools(unittest.TestCase):
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 101)  # 100 releases
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
         # Call without pagination

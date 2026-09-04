@@ -6,11 +6,14 @@ This module provides agent monitoring events-specific MCP tools for Instana moni
 """
 
 import ast
+import functools
 import json
 import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
+
+import anyio
 
 try:
     from instana_client.api.events_api import (
@@ -24,7 +27,14 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -552,7 +562,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         return summary
 
     @with_header_auth(EventsApi)
-    async def get_event(self, event_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_event(self, event_id: str, ctx=None, api_client=None,
+                        resource_type: Optional[str] = None,
+                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a specific event by ID.
 
@@ -593,7 +605,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             # rejects the flat primitive shapes the API actually returns for
             # fields like `metrics`, `recentEvents`, and `probableCause.found`.
             try:
-                response_data = api_client.get_event_without_preload_content(event_id=event_id)
+                response_data = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_event_without_preload_content, event_id=event_id),
+                    ctx=ctx,
+                    operation_name="get_event",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 if response_data.status == 404:
                     return {"error": f"Event with ID {event_id} not found", "event_id": event_id}
@@ -635,7 +653,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                                          to_time: Optional[int] = None,
                                          time_range: Optional[str] = None,
                                          max_events: Optional[int] = 50,
-                                         ctx=None, api_client=None) -> Dict[str, Any]:
+                                         ctx=None, api_client=None,
+                                         resource_type: Optional[str] = None,
+                                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get Kubernetes info events based on the provided parameters and return a detailed analysis.
 
@@ -678,10 +698,17 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             )
 
             try:
-                result = api_client.kubernetes_info_events(
-                    **time_params["api_params"],
-                    filter_event_updates=None,
-                    exclude_triggered_before=None
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(
+                        api_client.kubernetes_info_events,
+                        **time_params["api_params"],
+                        filter_event_updates=None,
+                        exclude_triggered_before=None,
+                    ),
+                    ctx=ctx,
+                    operation_name="get_kubernetes_info_events",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
                 logger.debug(
                     f"[get_kubernetes_info_events] API call successful - "
@@ -805,7 +832,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                                           size: Optional[int] = 100,
                                           max_events: Optional[int] = 50,
                                           time_range: Optional[str] = None,
-                                          ctx=None, api_client=None) -> Dict[str, Any]:
+                                          ctx=None, api_client=None,
+                                          resource_type: Optional[str] = None,
+                                          tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get agent monitoring events from Instana and return a detailed analysis.
 
@@ -842,10 +871,17 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             to_date = datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')
 
             try:
-                result = api_client.agent_monitoring_events(
-                    **time_params["api_params"],
-                    filter_event_updates=None,
-                    exclude_triggered_before=None
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(
+                        api_client.agent_monitoring_events,
+                        **time_params["api_params"],
+                        filter_event_updates=None,
+                        exclude_triggered_before=None,
+                    ),
+                    ctx=ctx,
+                    operation_name="get_agent_monitoring_events",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
                 logger.debug(f"Raw API result type: {type(result)}")
                 logger.debug(f"Raw API result length: {len(result) if isinstance(result, list) else 'not a list'}")
@@ -944,7 +980,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         self,
         filters: Optional[Dict[str, Any]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get events from Instana with flexible filtering options.
@@ -993,17 +1031,30 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 extracted["to_time"]
             )
 
-            response_data = await self._fetch_events_api(
-                api_client,
-                time_params["api_params"],
-                extracted["filter_event_updates"],
-                extracted["exclude_triggered_before"],
-                extracted["event_type_filters"]
+            response_data = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_events_without_preload_content,
+                    **time_params["api_params"],
+                    filter_event_updates=extracted["filter_event_updates"],
+                    exclude_triggered_before=extracted["exclude_triggered_before"],
+                    event_type_filters=extracted["event_type_filters"] or None,
+                ),
+                ctx=ctx,
+                operation_name="get_events",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
-            result = self._parse_events_response(response_data)
-
-            optimized = self._optimize_and_limit(result, extracted, extracted["max_events"])
+            # _parse_events_response (json.loads on potentially 30k+ events) and
+            # _optimize_and_limit (per-event dict building loop) are synchronous
+            # CPU-bound work.  Running them directly on the event loop freezes the
+            # entire async scheduler — no other requests, log lines, or keepalives
+            # can progress until they complete.  Offload to a worker thread so the
+            # event loop stays responsive throughout.
+            result, optimized = await anyio.to_thread.run_sync(
+                functools.partial(self._parse_and_optimize, response_data, extracted),
+                abandon_on_cancel=True,
+            )
 
             return {
                 "events": optimized,
@@ -1084,31 +1135,37 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             ),
         }
 
-    async def _fetch_events_api(
-        self,
-        api_client,
-        api_params,
-        filter_event_updates,
-        exclude_triggered_before,
-        event_type_filters
-    ):
-        result = api_client.get_events_without_preload_content(
-            **api_params,
-            filter_event_updates=filter_event_updates,
-            exclude_triggered_before=exclude_triggered_before,
-            event_type_filters=event_type_filters or None,
-        )
-        # Handle both sync and async (for testing with AsyncMock)
-        import inspect
-        if inspect.iscoroutine(result):
-            return await result
-        return result
+    def _parse_and_optimize(self, response_data, extracted):
+        """Parse HTTP response and optimize events in a single thread-safe call.
+
+        Designed to be called via ``anyio.to_thread.run_sync`` so that the
+        CPU-bound json.loads + per-event dict building never blocks the event loop.
+
+        Returns:
+            Tuple of (raw_events_list, optimized_events_list).
+        """
+        result = self._parse_events_response(response_data)
+        optimized = self._optimize_and_limit(result, extracted, extracted["max_events"])
+        return result, optimized
 
     def _parse_events_response(self, response_data):
         if response_data.status != 200:
             raise ValueError(f"HTTP {response_data.status}")
 
-        result = json.loads(response_data.data.decode("utf-8"))
+        text = decode_response(response_data)
+
+        if not text:
+            return []
+
+        try:
+            result = json.loads(text)
+        except json.JSONDecodeError as exc:
+            # The body was truncated or malformed.  A simple rfind("}") cannot
+            # reliably find a real object boundary — it would match "}" inside
+            # string values and produce different malformed JSON.  Return an
+            # empty list with a warning instead of risking a misleading result.
+            logger.warning("[get_events] Could not parse response as JSON: %s", exc)
+            return []
 
         if not isinstance(result, list):
             return []
@@ -1211,7 +1268,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
     async def get_events_by_ids(
         self,
         event_ids: list[str] | str,
-        ctx=None, api_client=None) -> Dict[str, Any]:
+        ctx=None, api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get events by their IDs.
         This tool retrieves multiple events at once using their unique IDs.
@@ -1264,7 +1323,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             # Use the batch API to retrieve all events at once
             try:
                 logger.debug("Retrieving events using batch API")
-                events_result = api_client.get_events_by_ids(request_body=event_ids)
+                events_result = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_events_by_ids, request_body=event_ids),
+                    ctx=ctx,
+                    operation_name="get_events_by_ids",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 all_events = []
                 for event in events_result:
@@ -1296,7 +1361,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 for event_id in event_ids:
                     try:
                         logger.debug(f"Retrieving event ID: {event_id}")
-                        response_data = api_client.get_events_by_ids_without_preload_content(request_body=[event_id])
+                        response_data = await sdk_call_with_keepalive(
+                            call_sdk_fn(api_client.get_events_by_ids_without_preload_content, request_body=[event_id]),
+                            ctx=ctx,
+                            operation_name="get_events_by_ids_fallback",
+                            resource_type=resource_type,
+                            tool_name=tool_name,
+                        )
 
                         # Check if the response was successful
                         if response_data.status != 200:

@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Mock the logger before importing any modules that use it
 mock_logger = MagicMock()
+sys.modules['logging'] = MagicMock()
+sys.modules['logging'].getLogger = MagicMock(return_value=mock_logger)
 
 # Create a mock for the with_header_auth decorator
 def mock_with_header_auth(api_class, allow_mock=False):

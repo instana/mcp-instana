@@ -14,7 +14,9 @@ from pydantic import StrictBool
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -122,10 +124,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
 
 
             # Call the get_infrastructure_metrics method from the SDK
-            result = api_client.get_infrastructure_metrics(
-                offline=offline,
-                get_combined_metrics=get_combined_metrics
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_infrastructure_metrics, offline=offline, get_combined_metrics=get_combined_metrics), ctx=ctx, operation_name="get_infrastructure_metrics")
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}

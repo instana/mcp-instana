@@ -1878,47 +1878,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = self.client._optimize_and_limit([], f=f, max_events=50)
         self.assertEqual(result, [])
 
-    def test_fetch_events_api_passes_params(self):
-        """_fetch_events_api should pass all parameters to the API client."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'[]'
-        self.events_api.get_events_without_preload_content.return_value = mock_response
-
-        result = asyncio.run(self.client._fetch_events_api(
-            api_client=self.events_api,
-            api_params={"var_from": 100, "to": 200},
-            filter_event_updates=True,
-            exclude_triggered_before=False,
-            event_type_filters=["INCIDENT"],
-        ))
-
-        self.events_api.get_events_without_preload_content.assert_called_once_with(
-            var_from=100, to=200,
-            filter_event_updates=True,
-            exclude_triggered_before=False,
-            event_type_filters=["INCIDENT"],
-        )
-        self.assertEqual(result, mock_response)
-
-    def test_fetch_events_api_with_none_event_type_filters(self):
-        """event_type_filters=None should be forwarded as None."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'[]'
-        self.events_api.get_events_without_preload_content.return_value = mock_response
-
-        asyncio.run(self.client._fetch_events_api(
-            api_client=self.events_api,
-            api_params={"var_from": 100, "to": 200},
-            filter_event_updates=None,
-            exclude_triggered_before=None,
-            event_type_filters=None,
-        ))
-
-        call_kwargs = self.events_api.get_events_without_preload_content.call_args[1]
-        self.assertIsNone(call_kwargs["event_type_filters"])
-
     @patch('src.event.events_tools.datetime')
     def test_get_events_success_with_no_filters(self, mock_datetime):
         """get_events with empty filters should return events from API."""

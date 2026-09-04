@@ -22,8 +22,17 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
-from src.core.validation import BooleanCoercer, StructureValidator
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
+from src.core.validation import (
+    BooleanCoercer,
+    StructureValidator,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -165,7 +174,9 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         pagination: Optional[Dict[str, int]] = None,
         fill_time_series: Optional[bool] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get grouped calls metrics.
@@ -253,12 +264,24 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
             logger.debug("=" * 80)
 
             logger.debug("Calling get_call_group with GetCallGroups object")
-            result = api_client.get_call_group(
-                get_call_groups=get_call_groups,
-                fill_time_series=fill_time_series,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_call_group,
+                    get_call_groups=get_call_groups,
+                    fill_time_series=fill_time_series
+                ),
+                ctx=ctx,
+                operation_name="get_call_group",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
-            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+
+            # Convert the result to a dictionary
+            if hasattr(result, 'to_dict'):
+                result_dict = result.to_dict()
+            else:
+                result_dict = result
+
             self._log_call_group_response(result_dict)
 
             processed_result = self._process_metrics_response(result_dict)

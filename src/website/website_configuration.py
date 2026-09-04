@@ -18,7 +18,13 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -37,7 +43,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         website_name: Optional[str] = None,
         name: Optional[str] = None,
         payload: Optional[Union[Dict, str]] = None,
-        ctx = None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute website CRUD operations.
@@ -55,16 +63,17 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             Operation result dictionary
         """
         try:
+            _r = {"resource_type": resource_type, "tool_name": tool_name}
             if operation == "get_all":
-                return await self._get_all_websites(ctx)
+                return await self._get_all_websites(ctx, **_r)
             elif operation == "get":
-                return await self._get_website(website_id, website_name, ctx)
+                return await self._get_website(website_id, website_name, ctx, **_r)
             elif operation == "create":
-                return await self._create_website(name, payload, ctx)
+                return await self._create_website(name, payload, ctx, **_r)
             elif operation == "delete":
-                return await self._delete_website(website_id, ctx)
+                return await self._delete_website(website_id, ctx, **_r)
             elif operation == "rename":
-                return await self._rename_website(website_id, name, ctx)
+                return await self._rename_website(website_id, name, ctx, **_r)
             else:
                 return {"error": f"Invalid operation: {operation}"}
         except Exception as e:
@@ -76,7 +85,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         operation: str,
         website_id: Optional[str] = None,
         website_name: Optional[str] = None,
-        ctx = None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute advanced configuration retrieval operations (read-only).
@@ -122,12 +133,13 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                 return {"error": "Either website_id or website_name must be provided"}
 
             # Route to appropriate GET operation
+            _r = {"resource_type": resource_type, "tool_name": tool_name}
             if operation == "get_geo_config":
-                return await self.get_website_geo_location_configuration(website_id, ctx)
+                return await self.get_website_geo_location_configuration(website_id, ctx, **_r)
             elif operation == "get_ip_masking":
-                return await self.get_website_ip_masking_configuration(website_id, ctx)
+                return await self.get_website_ip_masking_configuration(website_id, ctx, **_r)
             elif operation == "get_geo_rules":
-                return await self.get_website_geo_mapping_rules(website_id, ctx)
+                return await self.get_website_geo_mapping_rules(website_id, ctx, **_r)
             else:
                 return {"error": f"Invalid advanced config operation: {operation}. Valid operations: get_geo_config, get_ip_masking, get_geo_rules"}
         except Exception as e:
@@ -135,8 +147,11 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to execute advanced config operation: {e!s}"}
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def _get_all_websites(self, ctx=None, api_client=None) -> Dict[str, Any]:
-        return await self.get_websites(ctx=ctx, api_client=api_client)
+    async def _get_all_websites(self, ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
+        return await self.get_websites(ctx=ctx, api_client=api_client,
+                                       resource_type=resource_type, tool_name=tool_name)
 
     @with_header_auth(WebsiteConfigurationApi)
     async def _get_website(
@@ -144,7 +159,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         website_id: Optional[str],
         website_name: Optional[str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get a specific website by ID or name."""
         # If website_name is provided but not website_id, resolve it
@@ -152,7 +169,8 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"[_get_website] Resolving website name '{website_name}' to website ID")
 
             # Get all websites
-            all_websites_result = await self.get_websites(ctx=ctx, api_client=api_client)
+            all_websites_result = await self.get_websites(ctx=ctx, api_client=api_client,
+                                                          resource_type=resource_type, tool_name=tool_name)
             logger.debug(f"[_get_website] get_websites returned type: {type(all_websites_result)}, value: {all_websites_result}")
 
             # Handle both list and dict responses
@@ -203,7 +221,8 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         if not website_id:
             return {"error": "website_id or website_name is required for get operation"}
 
-        return await self.get_website(website_id=website_id, ctx=ctx, api_client=api_client)
+        return await self.get_website(website_id=website_id, ctx=ctx, api_client=api_client,
+                                      resource_type=resource_type, tool_name=tool_name)
 
     @with_header_auth(WebsiteConfigurationApi)
     async def _create_website(
@@ -211,7 +230,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         name: Optional[str],
         payload: Optional[Union[Dict, str]],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """ Create a new website. """
 
@@ -225,7 +246,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         self,
         website_id: Optional[str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """ Delete a website. """
 
@@ -240,7 +263,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         website_id: Optional[str],
         name: Optional[str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Rename a website."""
         if not website_id:
@@ -251,7 +276,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         return await self.rename_website(website_id=website_id, name=name, ctx=ctx, api_client=api_client)
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def get_websites(self, ctx=None, api_client=None) -> List[Dict[str, Any]]:
+    async def get_websites(self, ctx=None, api_client=None,
+                           resource_type: Optional[str] = None,
+                           tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get all websites.
 
@@ -267,7 +294,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug("[get_websites] Called")
 
             # Call the get_websites method from the SDK
-            result = api_client.get_websites()
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_websites), ctx=ctx, operation_name="get_websites", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -283,7 +310,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             return [{"error": f"Failed to get websites: {e!s}"}]
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def get_website(self, website_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website(self, website_id: str, ctx=None, api_client=None,
+                          resource_type: Optional[str] = None,
+                          tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a specific website by ID.
 
@@ -300,7 +329,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"[get_website] Called with website_id={website_id}")
 
             # Call the get_website method from the SDK
-            result = api_client.get_website(website_id=website_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website, website_id=website_id), ctx=ctx, operation_name="get_website", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -320,7 +349,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                             name: str,
                             payload: Optional[list[Dict[str, Any]] | str] = None,
                             ctx=None,
-                            api_client=None) -> Dict[str, Any]:
+                            api_client=None,
+                            resource_type: Optional[str] = None,
+                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new website configuration.
 
@@ -398,10 +429,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Call the create_website method from the SDK
             logger.debug(f"Calling create_website with name={name}, team_tags={len(create_website_request_inner) if create_website_request_inner else 0}")
-            result = api_client.create_website(
-                name=name,
-                create_website_request_inner=create_website_request_inner
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_website, name=name, create_website_request_inner=create_website_request_inner), ctx=ctx, operation_name="create_website", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -420,7 +448,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to create website: {e!s}"}
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def delete_website(self, website_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def delete_website(self, website_id: str, ctx=None, api_client=None,
+                             resource_type: Optional[str] = None,
+                             tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Delete a website configuration.
 
@@ -437,7 +467,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_website called with website_id={website_id}")
 
             # Call the delete_website method from the SDK
-            api_client.delete_website(website_id=website_id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_website, website_id=website_id), ctx=ctx, operation_name="delete_website", resource_type=resource_type, tool_name=tool_name)
 
             logger.debug("Website deleted successfully")
             return {"success": True, "message": f"Website {website_id} deleted successfully"}
@@ -450,7 +480,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                             website_id: str,
                             name: Optional[str] = None,
                             ctx=None,
-                            api_client=None) -> Dict[str, Any]:
+                            api_client=None,
+                            resource_type: Optional[str] = None,
+                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Rename a website configuration.
 
@@ -472,7 +504,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                 return {"error": "website_id parameter is required"}
 
             # Call the rename_website method from the SDK
-            result = api_client.rename_website(website_id=website_id,name=name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.rename_website, website_id=website_id, name=name), ctx=ctx, operation_name="rename_website", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -491,7 +523,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
     async def get_website_geo_location_configuration(self,
                                                     website_id: str,
                                                     ctx=None,
-                                                    api_client=None) -> Dict[str, Any]:
+                                                    api_client=None,
+                                                    resource_type: Optional[str] = None,
+                                                    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get geo-location configuration for a website.
 
@@ -508,7 +542,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"get_website_geo_location_configuration called with website_id={website_id}")
 
             # Call the get_website_geo_location_configuration method from the SDK
-            result = api_client.get_website_geo_location_configuration(website_id=website_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_geo_location_configuration, website_id=website_id), ctx=ctx, operation_name="get_website_geo_location_configuration", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -527,7 +561,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
     async def update_website_geo_location_configuration(self,
                                                         website_id: str,
                                                         payload: Union[Dict[str, Any], str],
-                                                        ctx=None, api_client=None) -> Dict[str, Any]:
+                                                        ctx=None, api_client=None,
+                                                        resource_type: Optional[str] = None,
+                                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Update geo-location configuration for a website.
 
@@ -618,10 +654,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Call the update_website_geo_location_configuration method from the SDK
             logger.debug("Calling update_website_geo_location_configuration with config object")
-            result = api_client.update_website_geo_location_configuration(
-                website_id=website_id,
-                geo_location_configuration=config_object,
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_website_geo_location_configuration, website_id=website_id, geo_location_configuration=config_object), ctx=ctx, operation_name="update_website_geo_location_configuration", resource_type=resource_type, tool_name=tool_name)
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -639,7 +672,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to update website geo-location configuration: {e!s}"}
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def get_website_ip_masking_configuration(self, website_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_website_ip_masking_configuration(self, website_id: str, ctx=None, api_client=None,
+                                                   resource_type: Optional[str] = None,
+                                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get IP masking configuration for a website.
 
@@ -656,7 +691,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"get_website_ip_masking_configuration called with website_id={website_id}")
 
             # Call the get_website_ip_masking_configuration method from the SDK
-            result = api_client.get_website_ip_masking_configuration(website_id=website_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_ip_masking_configuration, website_id=website_id), ctx=ctx, operation_name="get_website_ip_masking_configuration", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -675,7 +710,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
     async def update_website_ip_masking_configuration(self,
                                                         website_id: str,
                                                         payload: Optional[Dict[str, Any]] = None,
-                                                        ctx=None, api_client=None) -> Dict[str, Any]:
+                                                        ctx=None, api_client=None,
+                                                        resource_type: Optional[str] = None,
+                                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Update IP masking configuration for a website.
 
@@ -763,10 +800,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Call the update_website_geo_location_configuration method from the SDK
             logger.debug("Calling update_website_ip_masking_configuration with config object")
-            result = api_client.update_website_ip_masking_configuration(
-                website_id=website_id,
-                ip_masking_configuration=config_object,
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_website_ip_masking_configuration, website_id=website_id, ip_masking_configuration=config_object), ctx=ctx, operation_name="update_website_ip_masking_configuration", resource_type=resource_type, tool_name=tool_name)
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -784,9 +818,11 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to update website ip-masking configuration: {e!s}"}
 
     @with_header_auth(WebsiteConfigurationApi)
-    async def get_website_geo_mapping_rules(self, website_id: str, ctx=None, api_client=None) -> List[Dict[str, Any]]:
+    async def get_website_geo_mapping_rules(self, website_id: str, ctx=None, api_client=None,
+                                            resource_type: Optional[str] = None,
+                                            tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-       Get custom geo mapping rules for website
+        Get custom geo mapping rules for website
 
         This API endpoint retrieves custom geo mapping rules for a specific website.
 
@@ -799,58 +835,55 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"get_website_geo_mapping_rules called with website_id={website_id}")
-
-            # Call the get_website_geo_mapping_rules method from the SDK
-            # Use the raw response method to get the actual CSV data
-            try:
-                result = api_client.get_website_geo_mapping_rules(website_id=website_id)
-
-                # If the high-level method returns None, try the raw response
-                if result is None:
-                    response = api_client.get_website_geo_mapping_rules_without_preload_content(website_id=website_id)
-                    # Get the raw response data
-                    if hasattr(response, 'data'):
-                        csv_data = response.data.decode('utf-8') if isinstance(response.data, bytes) else str(response.data)
-                    else:
-                        csv_data = str(response)
-                else:
-                    csv_data = str(result)
-
-            except Exception as api_error:
-                logger.warning(f"High-level API call failed: {api_error}, trying raw response")
-                # Fallback to raw HTTP response
-                response = api_client.get_website_geo_mapping_rules_without_preload_content(website_id=website_id)
-                if hasattr(response, 'data'):
-                    csv_data = response.data.decode('utf-8') if isinstance(response.data, bytes) else str(response.data)
-                else:
-                    csv_data = str(response)
-
-            # Handle CSV response format
-            result_list: List[Dict[str, Any]] = []
-
-            if csv_data and ',' in csv_data:
-                # Parse CSV response
-                import csv
-                import io
-
-                csv_reader = csv.DictReader(io.StringIO(csv_data))
-                for row in csv_reader:
-                    result_list.append(dict(row))
-            elif csv_data:
-                # If it's not CSV but has data, return as single item
-                result_list.append({"data": csv_data})
-
+            csv_data = await self._fetch_geo_mapping_csv(api_client, website_id, ctx, resource_type, tool_name)
+            result_list = self._parse_geo_mapping_response(csv_data)
             logger.debug(f"Result from get_website_geo_mapping_rules: {result_list}")
             return result_list
         except Exception as e:
             logger.error(f"Error in get_website_geo_mapping_rules: {e}", exc_info=True)
             return [{"error": f"Failed to get website geo mapping rules: {e!s}"}]
 
+    async def _fetch_geo_mapping_csv(self, api_client, website_id: str, ctx,
+                                     resource_type: Optional[str], tool_name: Optional[str]) -> str:
+        """Fetch raw CSV data via the high-level SDK call, falling back to the raw-response endpoint."""
+        kw = {"ctx": ctx, "resource_type": resource_type, "tool_name": tool_name}
+        try:
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_website_geo_mapping_rules, website_id=website_id),
+                operation_name="get_website_geo_mapping_rules", **kw,
+            )
+            if result is not None:
+                return str(result)
+        except Exception as api_error:
+            logger.warning(f"High-level API call failed: {api_error}, trying raw response")
+
+        # Fallback: raw HTTP response (also used when the high-level call returns None)
+        response = await sdk_call_with_keepalive(
+            call_sdk_fn(api_client.get_website_geo_mapping_rules_without_preload_content, website_id=website_id),
+            operation_name="get_website_geo_mapping_rules_without_preload_content", **kw,
+        )
+        if hasattr(response, 'data'):
+            return response.data.decode('utf-8') if isinstance(response.data, bytes) else str(response.data)
+        return str(response)
+
+    def _parse_geo_mapping_response(self, csv_data: str) -> List[Dict[str, Any]]:
+        """Parse a CSV (or plain-text) geo-mapping payload into a list of row dicts."""
+        import csv
+        import io
+
+        if csv_data and ',' in csv_data:
+            return [dict(row) for row in csv.DictReader(io.StringIO(csv_data))]
+        if csv_data:
+            return [{"data": csv_data}]
+        return []
+
     @with_header_auth(WebsiteConfigurationApi)
     async def set_website_geo_mapping_rules(self,
                                             website_id: str,
                                             body: Optional[str] = None,
-                                            ctx=None, api_client=None) -> Dict[str, Any]:
+                                            ctx=None, api_client=None,
+                                            resource_type: Optional[str] = None,
+                                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Set custom geo mapping rules for website
 
@@ -872,10 +905,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Call the set_website_geo_mapping_rules method from the SDK
             # The API automatically sets content-type to text/csv
-            result = api_client.set_website_geo_mapping_rules(
-                website_id=website_id,
-                body=body
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.set_website_geo_mapping_rules, website_id=website_id, body=body), ctx=ctx, operation_name="set_website_geo_mapping_rules", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -897,7 +927,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                                         file_format: Optional[str] = None,
                                         source_map: Optional[str] = None,
                                         url: Optional[str] = None,
-                                        ctx=None, api_client=None) -> Dict[str, Any]:
+                                        ctx=None, api_client=None,
+                                        resource_type: Optional[str] = None,
+                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Upload source map file for a website.
 
@@ -924,13 +956,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Call the upload_source_map_file method from the SDK
             logger.debug("Calling upload_source_map_file with config object")
-            result = api_client.upload_source_map_file(
-                website_id=website_id,
-                source_map_config_id=source_map_config_id,
-                file_format=file_format,
-                source_map=source_map,
-                url=url,
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.upload_source_map_file, website_id=website_id, source_map_config_id=source_map_config_id, file_format=file_format, source_map=source_map, url=url), ctx=ctx, operation_name="upload_source_map_file", resource_type=resource_type, tool_name=tool_name)
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -951,7 +977,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
     async def clear_source_map_upload_configuration(self,
                                                     website_id: str,
                                                     source_map_config_id: str,
-                                                    ctx=None, api_client=None) -> Dict[str, Any]:
+                                                    ctx=None, api_client=None,
+                                                    resource_type: Optional[str] = None,
+                                                    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
        Clear source map upload configuration for a website.
 
@@ -974,9 +1002,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"clear_source_map_upload_configuration called with website_id={website_id} and source_map_config_id={source_map_config_id}")
 
             # Call the clear_source_map_upload_configuration method from the SDK
-            result = api_client.clear_source_map_upload_configuration(
-                website_id=website_id,
-                source_map_config_id=source_map_config_id)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.clear_source_map_upload_configuration, website_id=website_id, source_map_config_id=source_map_config_id), ctx=ctx, operation_name="clear_source_map_upload_configuration", resource_type=resource_type, tool_name=tool_name)
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -997,7 +1023,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         website_id: str,
         source_map_config_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a specific source map upload configuration for a website.
@@ -1015,10 +1043,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Try using without_preload_content to handle authentication properly
             try:
-                response = api_client.get_website_source_map_upload_configuration_without_preload_content(
-                    website_id=website_id,
-                    source_map_config_id=source_map_config_id
-                )
+                response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configuration_without_preload_content, website_id=website_id, source_map_config_id=source_map_config_id), ctx=ctx, operation_name="get_website_source_map_upload_configuration_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
                 # Check response status
                 if response.status != 200:
@@ -1041,10 +1066,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             except Exception as api_error:
                 logger.warning(f"without_preload_content failed: {api_error}, trying standard method")
                 # Fallback to standard method
-                result = api_client.get_website_source_map_upload_configuration(
-                    website_id=website_id,
-                    source_map_config_id=source_map_config_id
-                )
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configuration, website_id=website_id, source_map_config_id=source_map_config_id), ctx=ctx, operation_name="get_website_source_map_upload_configuration", resource_type=resource_type, tool_name=tool_name)
 
                 if hasattr(result, 'to_dict'):
                     result_dict = result.to_dict()
@@ -1062,7 +1084,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         self,
         website_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get all source map upload configurations for a website.
@@ -1079,9 +1103,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
 
             # Try using without_preload_content to handle authentication properly
             try:
-                response = api_client.get_website_source_map_upload_configurations_without_preload_content(
-                    website_id=website_id
-                )
+                response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configurations_without_preload_content, website_id=website_id), ctx=ctx, operation_name="get_website_source_map_upload_configurations_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
                 # Check response status
                 if response.status != 200:
@@ -1104,9 +1126,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             except Exception as api_error:
                 logger.warning(f"without_preload_content failed: {api_error}, trying standard method")
                 # Fallback to standard method
-                result = api_client.get_website_source_map_upload_configurations(
-                    website_id=website_id
-                )
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configurations, website_id=website_id), ctx=ctx, operation_name="get_website_source_map_upload_configurations", resource_type=resource_type, tool_name=tool_name)
 
                 if hasattr(result, 'to_dict'):
                     result_dict = result.to_dict()

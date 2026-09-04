@@ -214,17 +214,18 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         ctx: Any,
     ) -> Dict[str, Any]:
         """Route a validated events operation to the appropriate client method."""
+        _routing = {"resource_type": "events", "tool_name": "manage_events"}
         if operation == OPERATION_GET_EVENT:
-            return await self.events_client.get_event(event_id=filters[PARAM_EVENT_ID], ctx=ctx)
+            return await self.events_client.get_event(event_id=filters[PARAM_EVENT_ID], ctx=ctx, **_routing)
         if operation == OPERATION_GET_KUBERNETES_INFO_EVENTS:
             return await self.events_client.get_kubernetes_info_events(
                 from_time=from_time, to_time=to_time,
-                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS], ctx=ctx,
+                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS], ctx=ctx, **_routing,
             )
         if operation == OPERATION_GET_AGENT_MONITORING_EVENTS:
             return await self.events_client.get_agent_monitoring_events(
                 query=filters[PARAM_QUERY], from_time=from_time, to_time=to_time,
-                max_events=filters[PARAM_MAX_EVENTS], time_range=filters[PARAM_TIME_RANGE], ctx=ctx,
+                max_events=filters[PARAM_MAX_EVENTS], time_range=filters[PARAM_TIME_RANGE], ctx=ctx, **_routing,
             )
         if operation == OPERATION_GET_EVENTS:
             return await self.events_client.get_events(filters={
@@ -237,9 +238,9 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
                 "entity_label": filters[PARAM_ENTITY_LABEL], "state": filters[PARAM_STATE],
                 "problem": filters[PARAM_PROBLEM], "severity": filters[PARAM_SEVERITY],
                 "event_specification_id": filters[PARAM_EVENT_SPECIFICATION_ID], "rca": filters[PARAM_RCA],
-            }, ctx=ctx)
+            }, ctx=ctx, **_routing)
         if operation == OPERATION_GET_EVENTS_BY_IDS:
-            return await self.events_client.get_events_by_ids(event_ids=filters[PARAM_EVENT_IDS], ctx=ctx)
+            return await self.events_client.get_events_by_ids(event_ids=filters[PARAM_EVENT_IDS], ctx=ctx, **_routing)
         return {"error": f"Unrouted operation '{operation}'", "operation": operation}
 
     @register_as_tool(

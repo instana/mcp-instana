@@ -21,8 +21,10 @@ except ImportError as e:
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     extract_tag_names_from_tree,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -90,8 +92,11 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             # Try using the standard SDK method
             try:
                 # Call the get_available_payload_keys_by_plugin_id method from the SDK
-                result = api_client.get_available_payload_keys_by_plugin_id(
-                    plugin_id=plugin_id
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_available_payload_keys_by_plugin_id,
+                        plugin_id=plugin_id,
+                    ),
+                    ctx=ctx, operation_name="get_available_payload_keys_by_plugin_id"
                 )
 
                 # Convert the result to a dictionary
@@ -124,8 +129,11 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
                 # Use the without_preload_content version to get the raw response
                 try:
-                    response_data = api_client.get_available_payload_keys_by_plugin_id_without_preload_content(
-                        plugin_id=plugin_id
+                    response_data = await sdk_call_with_keepalive(
+                        call_sdk_fn(api_client.get_available_payload_keys_by_plugin_id_without_preload_content,
+                            plugin_id=plugin_id,
+                        ),
+                        ctx=ctx, operation_name="get_available_payload_keys_by_plugin_id_fallback"
                     )
 
                     # Check if the response was successful
@@ -214,7 +222,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
     async def get_infrastructure_catalog_metrics(self,
                                                  plugin: str,
                                                  filter: Optional[str] = None,
-                                                 ctx=None, api_client=None) -> Dict[str, Any]:
+                                                 ctx=None, api_client=None,
+                                                 resource_type: Optional[str] = None,
+                                                 tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get metric catalog for a specific plugin in Instana. This tool retrieves all available metric definitions for a requested plugin type.
         Use this when you need to understand what metrics are available for a specific technology, want to explore the monitoring capabilities for a plugin,
@@ -250,9 +260,13 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 }
 
             # Call the get_infrastructure_catalog_metrics method from the SDK
-            response = api_client.get_infrastructure_catalog_metrics_without_preload_content(
-                plugin=plugin,
-                filter=filter  # Pass the filter parameter to the SDK
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_infrastructure_catalog_metrics_without_preload_content,
+                    plugin=plugin,
+                    filter=filter,
+                ),
+                ctx=ctx, operation_name="get_infrastructure_catalog_metrics",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Check if the response was successful
@@ -280,7 +294,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
 
     # @register_as_tool(...)  # Disabled for future reference
-    async def get_infrastructure_catalog_plugins(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_infrastructure_catalog_plugins(self) -> Dict[str, Any]:
         """
         Get plugin catalog from Instana. This tool retrieves ALL available plugin IDs for your monitored system, showing what types of entities Instana is monitoring in your environment.
         Use this when you need to understand what technologies are being monitored, want to explore the monitoring capabilities of your Instana installation,
@@ -291,9 +305,6 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         Returns ALL plugins (422) without pagination limits.
 
         NOTE: This returns a static cached list since the plugin catalog is constant across all Instana installations.
-
-        Args:
-            ctx: The MCP context (optional)
 
         Returns:
             Dictionary with complete plugin list and metadata
@@ -431,7 +442,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_infrastructure_catalog_plugins_with_custom_metrics called")
 
             # Call the get_infrastructure_catalog_plugins_with_custom_metrics method from the SDK
-            response = api_client.get_infrastructure_catalog_plugins_with_custom_metrics_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_infrastructure_catalog_plugins_with_custom_metrics_without_preload_content),
+                ctx=ctx, operation_name="get_infrastructure_catalog_plugins_with_custom_metrics"
+            )
 
             # Check if the response was successful
             if response.status != 200:
@@ -458,9 +472,52 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get plugins with custom metrics: {e!s}"}
 
 
+    @staticmethod
+    def _is_tag_catalog_retryable_error(sdk_error: Exception) -> bool:
+        """Return True if *sdk_error* warrants a raw-response fallback call."""
+        if hasattr(sdk_error, 'status') and sdk_error.status == 406:
+            return True
+        if "406" in str(sdk_error) and "Not Acceptable" in str(sdk_error):
+            return True
+        try:
+            from pydantic import (
+                ValidationError as _PydanticValidationError,  # type: ignore
+            )
+            if isinstance(sdk_error, _PydanticValidationError):
+                return True
+        except Exception:
+            pass
+        err_str = str(sdk_error).lower()
+        return ("pydantic" in err_str and "validation" in err_str) or "validation error" in err_str
+
+    async def _get_tag_catalog_fallback(self, plugin: str, api_client, ctx,
+                                        resource_type: Optional[str],
+                                        tool_name: Optional[str]) -> Dict[str, Any]:
+        """Fallback: fetch tag catalog via raw HTTP with a permissive Accept header."""
+        response_data = await sdk_call_with_keepalive(
+            call_sdk_fn(api_client.get_tag_catalog_without_preload_content,
+                plugin=plugin,
+                _headers={"Accept": "*/*"},
+            ),
+            ctx=ctx, operation_name="get_tag_catalog_fallback",
+            resource_type=resource_type, tool_name=tool_name,
+        )
+        if response_data.status != 200:
+            error_message = f"Failed to get tag catalog: HTTP {response_data.status}"
+            logger.error(error_message)
+            return {"error": error_message}
+        try:
+            result_dict = json.loads(response_data.data.decode('utf-8'))
+            logger.debug(f"Result from SDK with custom headers: {result_dict}")
+            return result_dict
+        except json.JSONDecodeError as json_err:
+            return {"error": f"Failed to parse JSON response: {json_err}"}
+
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureCatalogApi)
-    async def get_tag_catalog(self, plugin: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_tag_catalog(self, plugin: str, ctx=None, api_client=None,
+                              resource_type: Optional[str] = None,
+                              tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get available tags for a particular plugin. This tool retrieves the tag catalog filtered by plugin.
 
@@ -471,98 +528,29 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         Returns:
             Dictionary containing available tags for the plugin or error information
         """
+        if not plugin:
+            return {
+                "elicitation_needed": True,
+                "reason": "missing_required_params",
+                "api_error": [{"field": "plugin", "issue": "plugin is required to get tag catalog", "hint": _HINT_GET_PLUGINS}],
+                "message": _MSG_PLUGIN_MISSING
+            }
         try:
             logger.debug(f"get_tag_catalog called with plugin={plugin}")
-
-            if not plugin:
-                return {
-                    "elicitation_needed": True,
-                    "reason": "missing_required_params",
-                    "api_error": [
-                        {
-                            "field": "plugin",
-                            "issue": "plugin is required to get tag catalog",
-                            "hint": _HINT_GET_PLUGINS
-                        }
-                    ],
-                    "message": _MSG_PLUGIN_MISSING
-                }
-
-            # Try calling the SDK method first
-            try:
-                # Call the get_tag_catalog method from the SDK
-                result = api_client.get_tag_catalog(
-                    plugin=plugin
-                )
-
-                # Convert the result to a dictionary
-                if hasattr(result, 'to_dict'):
-                    result_dict = result.to_dict()
-                else:
-                    # If it's already a dict or another format, use it as is
-                    result_dict = result
-
-                logger.debug(f"Result from get_tag_catalog: {result_dict}")
-                return result_dict
-
-            except Exception as sdk_error:
-                logger.error(f"SDK method failed: {sdk_error}, evaluating fallback conditions")
-
-                # Check if it's a 406 error
-                is_406_error = False
-                if hasattr(sdk_error, 'status') and sdk_error.status == 406 or "406" in str(sdk_error) and "Not Acceptable" in str(sdk_error):
-                    is_406_error = True
-
-                # Check for Pydantic ValidationError (SDK model deserialization issues)
-                is_pydantic_error = False
-                try:
-                    from pydantic import (
-                        ValidationError as _PydanticValidationError,  # type: ignore
-                    )
-                    is_pydantic_error = isinstance(sdk_error, _PydanticValidationError)
-                except Exception:
-                    # Fallback to string inspection if pydantic not importable in runtime
-                    err_str = str(sdk_error).lower()
-                    is_pydantic_error = ("pydantic" in err_str and "validation" in err_str) or ("validation error" in err_str)
-
-                if is_406_error or is_pydantic_error:
-                    # Try using the SDK's method with custom headers
-                    # The SDK should have a method that allows setting custom headers
-                    custom_headers = {
-                        "Accept": "*/*"  # More permissive Accept header
-                    }
-
-                    # Use the without_preload_content version to get the raw response
-                    response_data = api_client.get_tag_catalog_without_preload_content(
-                        plugin=plugin,
-                        _headers=custom_headers  # Pass custom headers to the SDK method
-                    )
-
-                    # Check if the response was successful
-                    if response_data.status != 200:
-                        error_message = f"Failed to get tag catalog: HTTP {response_data.status}"
-                        logger.error(error_message)
-                        return {"error": error_message}
-
-                    # Read the response content
-                    response_text = response_data.data.decode('utf-8')
-
-                    # Parse the JSON manually
-                    try:
-                        result_dict = json.loads(response_text)
-                        logger.debug(f"Result from SDK with custom headers: {result_dict}")
-                        return result_dict
-                    except json.JSONDecodeError as json_err:
-                        error_message = f"Failed to parse JSON response: {json_err}"
-                        logger.error(error_message)
-                        return {"error": error_message}
-                else:
-                    # Re-raise if it's not a 406 or Pydantic validation error
-                    raise
-
-        except Exception as e:
-            logger.error(f"Error in get_tag_catalog: {e}", exc_info=True)
-            return {"error": f"Failed to get tag catalog: {e!s}"}
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_tag_catalog, plugin=plugin),
+                ctx=ctx, operation_name="get_tag_catalog",
+                resource_type=resource_type, tool_name=tool_name,
+            )
+            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+            logger.debug(f"Result from get_tag_catalog: {result_dict}")
+            return result_dict
+        except Exception as sdk_error:
+            logger.error(f"SDK method failed: {sdk_error}, evaluating fallback conditions")
+            if self._is_tag_catalog_retryable_error(sdk_error):
+                return await self._get_tag_catalog_fallback(plugin, api_client, ctx, resource_type, tool_name)
+            logger.error(f"Error in get_tag_catalog: {sdk_error}", exc_info=True)
+            return {"error": f"Failed to get tag catalog: {sdk_error!s}"}
 
 
 
@@ -571,7 +559,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
     async def get_plugin_schema(self,
                                 plugin: str,
                                 filter: Optional[str] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get complete schema (metrics + tags) for a specific plugin in a single call.
         This combines get_infrastructure_catalog_metrics and get_tag_catalog to reduce API calls.
@@ -655,7 +645,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                         plugin=plugin,
                         filter=filter,
                         ctx=ctx,
-                        api_client=api_client
+                        api_client=api_client,
+                        resource_type=resource_type,
+                        tool_name=tool_name,
                     )
 
                     # Check if metrics call returned an error
@@ -677,7 +669,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 tags_response = await self.get_tag_catalog(
                     plugin=plugin,
                     ctx=ctx,
-                    api_client=api_client
+                    api_client=api_client,
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
 
                 # Check if tags call returned an error
@@ -735,7 +729,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
             # Try using the standard SDK method first
             try:
-                result = api_client.get_tag_catalog_all()
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_tag_catalog_all),
+                    ctx=ctx, operation_name="get_tag_catalog_all"
+                )
 
                 # Convert the result to a dictionary
                 if hasattr(result, 'to_dict'):
@@ -754,7 +751,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 logger.error(f"Standard SDK method failed: {sdk_error}, trying fallback")
 
                 # Fallback to using the without_preload_content method
-                response_data = api_client.get_tag_catalog_all_without_preload_content()
+                response_data = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_tag_catalog_all_without_preload_content),
+                    ctx=ctx, operation_name="get_tag_catalog_all_fallback"
+                )
 
                 # Check if the response was successful
                 if response_data.status != 200:
@@ -851,7 +851,10 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_infrastructure_catalog_search_fields called")
 
             # Call the get_infrastructure_catalog_search_fields method from the SDK
-            response = api_client.get_infrastructure_catalog_search_fields_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_infrastructure_catalog_search_fields_without_preload_content),
+                ctx=ctx, operation_name="get_infrastructure_catalog_search_fields"
+            )
 
             # Check if the response was successful
             if response.status != 200:

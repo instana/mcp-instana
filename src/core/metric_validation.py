@@ -174,11 +174,35 @@ def validate_metric_compatibility(
 # Catalog fetch helper (I/O, requires ApiClient)
 # ---------------------------------------------------------------------------
 
-def fetch_metric_catalog_internal(
+def _validate_raw_and_project(raw_metrics: Any) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    """Validate raw catalog list and project to metric cards. Returns error dict on failure."""
+    if not isinstance(raw_metrics, list):
+        return {"error": "Metric catalog response is not a list — cannot validate"}
+    if any(not isinstance(m, dict) for m in raw_metrics):
+        return {"error": "Metric catalog response contains non-dict entries — cannot validate"}
+    projected = [project_metric_card(m) for m in raw_metrics]
+    for entry in projected:
+        metric_id = entry.get("metricId")
+        if (
+            not metric_id
+            or not isinstance(metric_id, str)
+            or not isinstance(entry.get("beaconTypes"), list)
+            or not isinstance(entry.get("aggregations"), list)
+        ):
+            return {"error": "Metric catalog response contains malformed entries — cannot validate"}
+    return projected
+
+
+async def fetch_metric_catalog_internal(
     api_client: Any,
     catalog_api_class: Any,
     fetch_method_name: str,
+    ctx=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    from src.core.utils import call_sdk_fn, sdk_call_with_keepalive
+
     underlying = getattr(api_client, "api_client", None)
     if underlying is None:
         return {"error": "Cannot access underlying ApiClient for catalog fetch"}
@@ -193,7 +217,13 @@ def fetch_metric_catalog_internal(
         return {"error": f"Catalog API has no method '{fetch_method_name}'"}
 
     try:
-        response = fetch_method()
+        response = await sdk_call_with_keepalive(
+            call_sdk_fn(fetch_method),
+            ctx=ctx,
+            operation_name=fetch_method_name,
+            resource_type=resource_type,
+            tool_name=tool_name,
+        )
     except Exception as e:
         return {"error": f"Failed to fetch metric catalog: {e}"}
 
@@ -201,27 +231,8 @@ def fetch_metric_catalog_internal(
         return {"error": f"Failed to fetch metric catalog for pre-flight validation: HTTP {response.status}"}
 
     try:
-        response_text = decode_response(response)
-        raw_metrics = json.loads(response_text)
+        raw_metrics = json.loads(decode_response(response))
     except Exception as e:
         return {"error": f"Failed to parse metric catalog response: {e}"}
 
-    if not isinstance(raw_metrics, list):
-        return {"error": "Metric catalog response is not a list — cannot validate"}
-
-    for m in raw_metrics:
-        if not isinstance(m, dict):
-            return {"error": "Metric catalog response contains non-dict entries — cannot validate"}
-
-    projected = [project_metric_card(m) for m in raw_metrics]
-
-    for entry in projected:
-        metric_id = entry.get("metricId")
-        if not metric_id or not isinstance(metric_id, str):
-            return {"error": "Metric catalog response contains malformed entries — cannot validate"}
-        if not isinstance(entry.get("beaconTypes"), list):
-            return {"error": "Metric catalog response contains malformed entries — cannot validate"}
-        if not isinstance(entry.get("aggregations"), list):
-            return {"error": "Metric catalog response contains malformed entries — cannot validate"}
-
-    return projected
+    return _validate_raw_and_project(raw_metrics)

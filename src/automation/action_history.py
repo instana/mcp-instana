@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.prompts import mcp
 
 # Import the necessary classes from the SDK
@@ -42,7 +48,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
     async def submit_automation_action(self,
                                      payload: Union[Dict[str, Any], str],
                                      ctx=None,
-                                     api_client=None) -> Dict[str, Any]:
+                                     api_client=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Submit an automation action for execution on an agent.
         The automation action to execute and the agent on which to execute the action must be specified as actionId and hostId. For more details on the request payload see the request sample.
@@ -148,8 +156,12 @@ class ActionHistoryMCPTools(BaseInstanaClient):
 
             # Call the add_action_instance method from the SDK
             logger.debug("Calling add_action_instance with config object")
-            result = api_client.add_action_instance(
-                action_instance_request=config_object,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.add_action_instance,
+                    action_instance_request=config_object,
+                ),
+                ctx=ctx, operation_name="add_action_instance",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Convert the result to a dictionary
@@ -174,7 +186,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                                         window_size: Optional[int] = None,
                                         to: Optional[int] = None,
                                         ctx=None,
-                                        api_client=None) -> Dict[str, Any]:
+                                        api_client=None,
+                                        resource_type: Optional[str] = None,
+                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get the details of an automation action run result by ID from action run history.
 
@@ -230,10 +244,14 @@ class ActionHistoryMCPTools(BaseInstanaClient):
             # --- End pre-flight ---
 
             logger.debug(f"Getting action instance details for ID: {action_instance_id}")
-            result = api_client.get_action_instance(
-                action_instance_id=action_instance_id,
-                window_size=window_size,
-                to=to,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_action_instance,
+                    action_instance_id=action_instance_id,
+                    window_size=window_size,
+                    to=to,
+                ),
+                ctx=ctx, operation_name="get_action_instance",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Convert the result to a dictionary
@@ -254,37 +272,28 @@ class ActionHistoryMCPTools(BaseInstanaClient):
 
     @with_header_auth(ActionHistoryApi)
     async def list_action_instances(self,
-                                  window_size: Optional[int] = None,
-                                  to: Optional[int] = None,
-                                  page: Optional[int] = None,
-                                  page_size: Optional[int] = None,
-                                  target_snapshot_id: Optional[str] = None,
-                                  event_id: Optional[str] = None,
-                                  event_specification_id: Optional[str] = None,
-                                  search: Optional[str] = None,
-                                  types: Optional[List[str]] = None,
-                                  action_statuses: Optional[List[str]] = None,
-                                  order_by: Optional[str] = None,
-                                  order_direction: Optional[str] = None,
+                                  filters: Optional[Dict[str, Any]] = None,
                                   ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get the details of automation action run results from action run history.
 
         Args:
-            window_size: Window size filter in milliseconds (to compute the from date) to get the action run result details
-            to: To date filter in milliseconds (13-digit) to get the action run result details
-            page: Page to fetch -- used for paging the action run result records
-            page_size: Number of records to return in each page -- used for paging the action run result records
-            target_snapshot_id: Target snapshot ID filter to get the action run result details
-            event_id: Event ID filter to get the action run result details
-            event_specification_id: Event specification ID filter to get the action run result details
-            search: Text in action run result name, description and event name filter to get the action run result details
-            types: Action type filter to get the action run result details
-            action_statuses: Action status filter to get the action run result details
-            order_by: Action run result column to order the result set
-            order_direction: Sort order direction
-
+            filters: Dictionary containing all filter parameters:
+                - window_size: Window size filter in milliseconds (to compute the from date)
+                - to: To date filter in milliseconds (13-digit)
+                - page: Page to fetch -- used for paging the action run result records
+                - page_size: Number of records to return in each page
+                - target_snapshot_id: Target snapshot ID filter
+                - event_id: Event ID filter
+                - event_specification_id: Event specification ID filter
+                - search: Text in action run result name, description and event name filter
+                - types: Action type filter
+                - action_statuses: Action status filter
+                - order_by: Action run result column to order the result set
+                - order_direction: Sort order direction
             ctx: Optional[Dict[str, Any]]: The context for the action instances retrieval
             api_client: Optional[ActionHistoryApi]: The API client for action history
 
@@ -292,6 +301,20 @@ class ActionHistoryMCPTools(BaseInstanaClient):
             Dict[str, Any]: The paginated list of automation action run results
         """
         try:
+            filters = filters or {}
+            window_size = filters.get("window_size")
+            to = filters.get("to")
+            page = filters.get("page")
+            page_size = filters.get("page_size")
+            target_snapshot_id = filters.get("target_snapshot_id")
+            event_id = filters.get("event_id")
+            event_specification_id = filters.get("event_specification_id")
+            search = filters.get("search")
+            types = filters.get("types")
+            action_statuses = filters.get("action_statuses")
+            order_by = filters.get("order_by")
+            order_direction = filters.get("order_direction")
+
             errors = self._preflight_list_action_instances(
                 page=page,
                 page_size=page_size,
@@ -311,19 +334,23 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 }
 
             logger.debug("Getting action instances with parameters")
-            result = api_client.get_action_instances(
-                window_size=window_size,
-                to=to,
-                page=page,
-                page_size=page_size,
-                target_snapshot_id=target_snapshot_id,
-                event_id=event_id,
-                event_specification_id=event_specification_id,
-                search=search,
-                types=types,
-                action_statuses=action_statuses,
-                order_by=order_by,
-                order_direction=order_direction
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_action_instances,
+                    window_size=window_size,
+                    to=to,
+                    page=page,
+                    page_size=page_size,
+                    target_snapshot_id=target_snapshot_id,
+                    event_id=event_id,
+                    event_specification_id=event_specification_id,
+                    search=search,
+                    types=types,
+                    action_statuses=action_statuses,
+                    order_by=order_by,
+                    order_direction=order_direction,
+                ),
+                ctx=ctx, operation_name="get_action_instances",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Convert the result to a dictionary
@@ -394,7 +421,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                                    from_time: int,
                                    to_time: int,
                                    ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+                                   api_client=None,
+                                   resource_type: Optional[str] = None,
+                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Delete an automation action run result from the action run history by ID.
 
@@ -417,10 +446,14 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 return {"error": "to_time is required"}
 
             logger.debug(f"Deleting action instance with ID: {action_instance_id}")
-            result = api_client.delete_action_instance(
-                action_instance_id=action_instance_id,
-                var_from=from_time,
-                to=to_time,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.delete_action_instance,
+                    action_instance_id=action_instance_id,
+                    var_from=from_time,
+                    to=to_time,
+                ),
+                ctx=ctx, operation_name="delete_action_instance",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Convert the result to a dictionary

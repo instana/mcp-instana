@@ -15,7 +15,9 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.prompts import mcp
@@ -46,7 +48,9 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
                                           use_case: Optional[str] = None,
                                           data_source: Optional[str] = None,
                                           var_from: Optional[int] = None,
-                                          ctx = None, api_client=None) -> Dict[str, Any]:
+                                          ctx=None, api_client=None,
+                                          resource_type: Optional[str] = None,
+                                          tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get application tag catalog data from Instana Server.
         This tool retrieves application tag catalog data for a specific use case and data source.
@@ -68,11 +72,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
             if not var_from:
                 var_from = int((datetime.now() - timedelta(hours=1)).timestamp() * 1000)
 
-            raw_response = api_client.get_application_tag_catalog_without_preload_content(
-                use_case=use_case,
-                data_source=data_source,
-                var_from=var_from,
-            )
+            raw_response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_application_tag_catalog_without_preload_content, use_case=use_case, data_source=data_source, var_from=var_from), ctx=ctx, operation_name="get_application_tag_catalog_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
             raw_data = raw_response.data
             parsed = json.loads(raw_data)
@@ -109,7 +109,9 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
 
 
     @with_header_auth(ApplicationCatalogApi)
-    async def get_application_metric_catalog(self, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_application_metric_catalog(self, ctx=None, api_client=None,
+                                             resource_type: Optional[str] = None,
+                                             tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         This API endpoint retrieves  all available metric definitions for application monitoring.
         This tool allows you to discover what metrics are available for monitoring different components in your application environment.
@@ -124,7 +126,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_application_metric_catalog called")
 
             # Call the API to get application metric catalog data
-            result = api_client.get_application_catalog_metrics()
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_application_catalog_metrics), ctx=ctx, operation_name="get_application_catalog_metrics", resource_type=resource_type, tool_name=tool_name)
 
             # Handle different result types
             if hasattr(result, "to_dict"):
