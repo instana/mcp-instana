@@ -3,6 +3,7 @@ Unit tests for the MCP Server module
 """
 
 import asyncio
+import contextlib
 import io
 import os
 import sys
@@ -247,6 +248,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -280,6 +282,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.debug = False
         mock_args.tools = None
         mock_args.help = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function
@@ -303,6 +306,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = "unknown"
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
         mock_app = MagicMock()
         mock_create_app.return_value = (mock_app, 0, 0)
@@ -326,7 +330,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
-        mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
         with patch('src.core.server.sys.exit'):
             main()
@@ -352,15 +356,15 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
-        # Patch logger.info instead of capturing stderr
-        with patch('src.core.server.logger.info') as mock_logger_info:
+        # KeyboardInterrupt now logs "stdio transport stopped cleanly" from the
+        # inner except block and then calls sys.exit(0) via the outer except.
+        with patch('src.core.server.logger.info'):
             with patch('src.core.server.sys.exit') as mock_exit:
-                # Reset mock_exit to clear any previous calls
                 mock_exit.reset_mock()
                 main()
-                mock_logger_info.assert_any_call("Server stopped by user")
                 mock_exit.assert_called_once_with(0)
 
     @patch('src.core.server.argparse.ArgumentParser')
@@ -375,6 +379,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch both print and logger.error since the implementation might use either
@@ -612,7 +617,12 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_action2.help = 'Enable debug mode'
         mock_action2.metavar = None
 
-        mock_parser._actions = [mock_action1, mock_action2]
+        mock_action3 = MagicMock()
+        mock_action3.option_strings = ['--verify-ssl']
+        mock_action3.help = 'Enable SSL certificate verification. Equivalent to INSTANA_SSL_VERIFY=true.'
+        mock_action3.metavar = None
+
+        mock_parser._actions = [mock_action1, mock_action2, mock_action3]
 
         # Patch logger.info instead of capturing stdout
         with patch('src.core.server.logger.info') as mock_logger_info:
@@ -621,6 +631,13 @@ class TestMCPServerAsync(unittest.TestCase):
 
             # Check that logger.info was called with "Available options:"
             mock_logger_info.assert_any_call("Available options:")
+
+            # Check that --verify-ssl appears in the help output
+            logged_lines = [str(call) for call in mock_logger_info.call_args_list]
+            self.assertTrue(
+                any('--verify-ssl' in line for line in logged_lines),
+                "--verify-ssl must appear in the help output"
+            )
 
             # Check that sys.exit was called with 0
             mock_exit.assert_called_with(0)
@@ -643,6 +660,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -673,6 +691,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.error instead of capturing stderr
@@ -707,6 +726,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -777,6 +797,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = "app"
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -807,6 +828,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = "infra"
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -837,6 +859,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = "app,infra"
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -883,6 +906,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.tools = "app,events"
         mock_args.help = False
         mock_args.list_tools = False
+        mock_args.verify_ssl = False
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -901,10 +925,10 @@ class TestMCPServerAsync(unittest.TestCase):
             # Verify specific category logs - use a more flexible approach that doesn't depend on order
             category_logs = [
                 call_args[0][0] for call_args in mock_logger_info.call_args_list
-                if call_args[0][0].startswith("  - ") and "tools" in call_args[0][0]
+                if call_args[0][0].startswith("  - ") and " tool" in call_args[0][0]
             ]
             self.assertIn("  - app: 2 tools", category_logs)
-            self.assertIn("  - events: 1 tools", category_logs)
+            self.assertIn("  - events: 1 tool", category_logs)
 
             # Check that logger.info was called multiple times
             self.assertTrue(mock_logger_info.call_count >= 5)
@@ -1047,7 +1071,7 @@ class TestHTTPServerShutdownBehaviour(unittest.TestCase):
     @patch('src.core.server.create_app')
     @patch('src.core.server.sys.argv', ['mcp_server.py', '--transport', 'streamable-http'])
     def test_sigint_updates_shutdown_reason(self, mock_create_app, mock_arg_parser):
-        """SIGINT handler must update _shutdown_reason and log a graceful-shutdown message."""
+        """SIGINT handler must update _shutdown_reason, close the pipe, and raise KeyboardInterrupt."""
         import signal as signal_module
 
         captured_handlers = {}
@@ -1060,7 +1084,8 @@ class TestHTTPServerShutdownBehaviour(unittest.TestCase):
         def run_and_fire_sigint(*args, **kwargs):
             handler = captured_handlers.get(signal_module.SIGINT)
             if handler:
-                handler(signal_module.SIGINT, None)
+                with contextlib.suppress(KeyboardInterrupt):
+                    handler(signal_module.SIGINT, None)
 
         mock_app.run.side_effect = run_and_fire_sigint
         mock_create_app.return_value = (mock_app, 1, 8600)
@@ -1236,4 +1261,318 @@ class TestHTTPServerShutdownBehaviour(unittest.TestCase):
         self.assertTrue(
             any("unknown" in m for m in error_messages),
             f"Expected 'unknown' reason in error log. Got: {error_messages}"
+        )
+
+
+class TestStdioShutdownBehaviour(unittest.TestCase):
+    """Tests for stdio transport: ready message, clean shutdown, and signal handling."""
+
+    def setUp(self):
+        self._original_env = os.environ.copy()
+        os.environ["INSTANA_API_TOKEN"] = "test_token"
+        os.environ["INSTANA_BASE_URL"] = "https://test.instana.io"
+        self._log_level_patcher = patch('src.core.server.set_log_level')
+        self._log_level_patcher.start()
+
+    def tearDown(self):
+        self._log_level_patcher.stop()
+        os.environ.clear()
+        os.environ.update(self._original_env)
+
+    def _make_args(self, transport=None, debug=False, tools=None):
+        args = MagicMock()
+        args.transport = transport  # None defaults to stdio
+        args.debug = debug
+        args.tools = tools
+        args.help = False
+        args.list_tools = False
+        args.log_level = "INFO"
+        args.api_token = None
+        args.base_url = None
+        args.port = 8080
+        args.verify_ssl = False
+        return args
+
+    def _setup_parser(self, mock_arg_parser, args):
+        mock_parser = MagicMock()
+        mock_arg_parser.return_value = mock_parser
+        mock_parser.parse_args.return_value = args
+        return mock_parser
+
+    # ------------------------------------------------------------------
+    # 1. "Server ready" message is logged before app.run() in stdio mode
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_ready_message_logged(self, mock_create_app, mock_arg_parser):
+        """A 'ready' log must be emitted before app.run() is called in stdio mode."""
+        mock_app = MagicMock()
+        mock_app.run.return_value = None
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.sys.exit'):
+            with patch('src.core.server.signal.signal'):
+                with patch('src.core.server.logger.info') as mock_info:
+                    main()
+
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("ready" in m.lower() and "stdio" in m.lower() for m in info_messages),
+            f"Expected a 'ready … stdio' log before app.run(). Got: {info_messages}"
+        )
+
+        # The ready log must appear BEFORE app.run() is called — verify ordering
+        ready_idx = next(
+            (i for i, c in enumerate(mock_info.call_args_list)
+             if "ready" in str(c).lower() and "stdio" in str(c).lower()),
+            None,
+        )
+        self.assertIsNotNone(ready_idx, "Ready message not found in logger.info calls")
+
+    # ------------------------------------------------------------------
+    # 2. Clean return from app.run() logs the stopped-cleanly message
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_clean_return_logs_stopped(self, mock_create_app, mock_arg_parser):
+        """When app.run() returns normally, 'stdio transport stopped cleanly' must be logged."""
+        mock_app = MagicMock()
+        mock_app.run.return_value = None
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.sys.exit'):
+            with patch('src.core.server.signal.signal'):
+                with patch('src.core.server.logger.info') as mock_info:
+                    main()
+
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("stdio transport stopped cleanly" in m for m in info_messages),
+            f"Expected 'stdio transport stopped cleanly' log. Got: {info_messages}"
+        )
+
+    # ------------------------------------------------------------------
+    # 3. SIGTERM causes sys.exit(0) in stdio mode
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_sigterm_calls_sys_exit_zero(self, mock_create_app, mock_arg_parser):
+        """SIGTERM handler must call sys.exit(0) so the stdio process stops cleanly."""
+        import signal as signal_module
+
+        captured_handlers = {}
+
+        def capture_signal(sig, handler):
+            captured_handlers[sig] = handler
+
+        mock_app = MagicMock()
+
+        def run_and_fire_sigterm(*args, **kwargs):
+            handler = captured_handlers.get(signal_module.SIGTERM)
+            if handler:
+                handler(signal_module.SIGTERM, None)
+
+        mock_app.run.side_effect = run_and_fire_sigterm
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.sys.exit') as mock_exit:
+            with patch('src.core.server.signal.signal', side_effect=capture_signal):
+                with patch('src.core.server.logger.info'):
+                    main()
+
+        # sys.exit(0) must be called (from the SIGTERM handler)
+        mock_exit.assert_called_with(0)
+
+    # ------------------------------------------------------------------
+    # 4. SIGINT handler closes the pipe and raises KeyboardInterrupt
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_sigint_raises_keyboard_interrupt(self, mock_create_app, mock_arg_parser):
+        """SIGINT handler must log, close the pipe write-end, and raise KeyboardInterrupt
+        so anyio's event loop unwinds cleanly and instantly."""
+        import signal as signal_module
+
+        captured_handlers = {}
+
+        def capture_signal(sig, handler):
+            captured_handlers[sig] = handler
+
+        mock_app = MagicMock()
+
+        def run_and_fire_sigint(*args, **kwargs):
+            handler = captured_handlers.get(signal_module.SIGINT)
+            if handler:
+                try:
+                    handler(signal_module.SIGINT, None)
+                except KeyboardInterrupt:
+                    raise  # propagate so the except block in main fires
+
+        mock_app.run.side_effect = run_and_fire_sigint
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.sys.exit') as mock_exit:
+            with patch('src.core.server.signal.signal', side_effect=capture_signal):
+                with patch('src.core.server.logger.info'):
+                    with patch('src.core.server.os.pipe', return_value=(3, 4)):
+                        with patch('src.core.server.os.dup', return_value=5):
+                            with patch('src.core.server.os.dup2'):
+                                with patch('src.core.server.os.close'):
+                                    main()
+
+        mock_exit.assert_called_with(0)
+
+    # ------------------------------------------------------------------
+    # 5. SIGTERM handler logs graceful-shutdown message in stdio mode
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_sigterm_logs_graceful_shutdown(self, mock_create_app, mock_arg_parser):
+        """SIGTERM must be logged as 'beginning graceful shutdown'."""
+        import signal as signal_module
+
+        captured_handlers = {}
+
+        def capture_signal(sig, handler):
+            captured_handlers[sig] = handler
+
+        mock_app = MagicMock()
+
+        def run_and_fire_sigterm(*args, **kwargs):
+            handler = captured_handlers.get(signal_module.SIGTERM)
+            if handler:
+                handler(signal_module.SIGTERM, None)
+
+        mock_app.run.side_effect = run_and_fire_sigterm
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.sys.exit'):
+            with patch('src.core.server.signal.signal', side_effect=capture_signal):
+                with patch('src.core.server.logger.info') as mock_info:
+                    main()
+
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("SIGTERM" in m and "graceful shutdown" in m for m in info_messages),
+            f"Expected SIGTERM graceful-shutdown log. Got: {info_messages}"
+        )
+
+    # ------------------------------------------------------------------
+    # 6. Both SIGTERM and SIGINT handlers are registered
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_both_signal_handlers_registered(self, mock_create_app, mock_arg_parser):
+        """Both SIGTERM and SIGINT handlers must be registered."""
+        import signal as signal_module
+
+        mock_app = MagicMock()
+        mock_app.run.return_value = None
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        registered_signals = []
+
+        def capture(sig, handler):
+            registered_signals.append(sig)
+
+        with patch('src.core.server.sys.exit'):
+            with patch('src.core.server.signal.signal', side_effect=capture):
+                with patch('src.core.server.logger.info'):
+                    main()
+
+        self.assertIn(signal_module.SIGTERM, registered_signals)
+        self.assertIn(signal_module.SIGINT, registered_signals)
+
+    # ------------------------------------------------------------------
+    # 7. SystemExit from signal handler in stdio is caught and re-raised
+    # ------------------------------------------------------------------
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['mcp_server.py'])
+    def test_stdio_systemexit_from_signal_logs_stopped(self, mock_create_app, mock_arg_parser):
+        """When app.run() raises SystemExit(0) (signal-triggered), the stopped-cleanly
+        message must still be logged and the exit code must be re-raised."""
+        mock_app = MagicMock()
+        mock_app.run.side_effect = SystemExit(0)
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        self._setup_parser(mock_arg_parser, self._make_args())
+
+        with patch('src.core.server.signal.signal'):
+            with patch('src.core.server.logger.info') as mock_info:
+                with self.assertRaises(SystemExit) as cm:
+                    main()
+
+        self.assertEqual(cm.exception.code, 0)
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("stdio transport stopped cleanly" in m for m in info_messages),
+            f"Expected 'stdio transport stopped cleanly' log. Got: {info_messages}"
+        )
+
+
+class TestListToolsGrammar(unittest.TestCase):
+    """Tests that --list-tools uses correct singular/plural grammar."""
+
+    def setUp(self):
+        self._log_level_patcher = patch('src.core.server.set_log_level')
+        self._log_level_patcher.start()
+
+    def tearDown(self):
+        self._log_level_patcher.stop()
+
+    @patch('src.core.server.get_client_categories')
+    @patch('src.core.server.sys.argv', ['mcp_server.py', '--list-tools'])
+    def test_single_tool_uses_singular(self, mock_get_categories):
+        """A category with 1 tool must log '1 tool' (not '1 tools')."""
+        mock_cls = MagicMock()
+        mock_cls.__name__ = 'SomeSmartRouterMCPTool'
+        mock_get_categories.return_value = {
+            "app": [('smart_router_client', mock_cls)],
+        }
+
+        with patch('src.core.server.logger.info') as mock_info:
+            with patch('src.core.server.sys.exit'):
+                main()
+
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("1 tool" in m and "1 tools" not in m for m in info_messages),
+            f"Expected '1 tool' (singular) in --list-tools output. Got: {info_messages}"
+        )
+
+    @patch('src.core.server.get_client_categories')
+    @patch('src.core.server.sys.argv', ['mcp_server.py', '--list-tools'])
+    def test_multiple_tools_uses_plural(self, mock_get_categories):
+        """A category with multiple tools must log 'N tools' (plural)."""
+        mock_cls1 = MagicMock()
+        mock_cls1.__name__ = 'ToolOne'
+        mock_cls2 = MagicMock()
+        mock_cls2.__name__ = 'ToolTwo'
+        mock_get_categories.return_value = {
+            "app": [
+                ('client1', mock_cls1),
+                ('client2', mock_cls2),
+            ],
+        }
+
+        with patch('src.core.server.logger.info') as mock_info:
+            with patch('src.core.server.sys.exit'):
+                main()
+
+        info_messages = [str(c) for c in mock_info.call_args_list]
+        self.assertTrue(
+            any("2 tools" in m for m in info_messages),
+            f"Expected '2 tools' (plural) in --list-tools output. Got: {info_messages}"
         )
