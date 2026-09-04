@@ -1375,7 +1375,7 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+        mock_api_client.get_events_without_preload_content = MagicMock(return_value=mock_response)
 
         # Create the client
         client = AgentMonitoringEventsMCPTools(
@@ -1670,7 +1670,7 @@ class TestAgentMonitoringEventsE2E:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
-        mock_api_client.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+        mock_api_client.get_events_without_preload_content = MagicMock(return_value=mock_response)
 
         # Create the client
         client = AgentMonitoringEventsMCPTools(

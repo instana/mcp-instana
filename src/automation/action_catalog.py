@@ -20,7 +20,13 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -118,7 +124,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                             payload: Union[Dict[str, Any], str],
                             target_snapshot_id: Optional[str] = None,
                             ctx=None,
-                            api_client=None) -> Dict[str, Any]:
+                            api_client=None,
+                            resource_type: Optional[str] = None,
+                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get action matches for a given action search space and target snapshot ID.
         Args:
@@ -157,9 +165,13 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 return config_object
 
             logger.debug("Calling get_action_matches_without_preload_content with config object")
-            result = api_client.get_action_matches_without_preload_content(
-                action_search_space=config_object,
-                target_snapshot_id=target_snapshot_id,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_action_matches_without_preload_content,
+                    action_search_space=config_object,
+                    target_snapshot_id=target_snapshot_id,
+                ),
+                ctx=ctx, operation_name="get_action_matches",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             try:
@@ -223,7 +235,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     @with_header_auth(ActionCatalogApi)
     async def get_actions(self,
                          ctx=None,
-                         api_client=None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+                         api_client=None,
+                         resource_type: Optional[str] = None,
+                         tool_name: Optional[str] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         Get a list of available automation actions from the action catalog.
 
@@ -249,7 +263,11 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_actions called")
 
             # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
-            result = api_client.get_actions_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_actions_without_preload_content),
+                ctx=ctx, operation_name="get_actions",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Parse the JSON response manually
             try:
@@ -288,7 +306,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     async def get_action_details(self,
                                 action_id: str,
                                 ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get detailed information about a specific automation action by ID.
 
@@ -319,7 +339,11 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.debug(f"get_action_details called with action_id: {action_id}")
 
             # Call the get_action_by_id_without_preload_content method from the SDK to avoid Pydantic validation issues
-            result = api_client.get_action_by_id_without_preload_content(id=action_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_action_by_id_without_preload_content, id=action_id),
+                ctx=ctx, operation_name="get_action_by_id",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Parse the JSON response manually
             try:
@@ -345,7 +369,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     @with_header_auth(ActionCatalogApi)
     async def get_action_types(self,
                               ctx=None,
-                              api_client=None) -> Dict[str, Any]:
+                              api_client=None,
+                              resource_type: Optional[str] = None,
+                              tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a list of available action types in the action catalog.
 
@@ -360,7 +386,11 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_action_types called")
 
             # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
-            result = api_client.get_actions_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_actions_without_preload_content),
+                ctx=ctx, operation_name="get_action_types",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Parse the JSON response manually
             try:
@@ -396,7 +426,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
     @with_header_auth(ActionCatalogApi)
     async def get_action_tags(self,
                              ctx=None,
-                             api_client=None) -> Dict[str, Any]:
+                             api_client=None,
+                             resource_type: Optional[str] = None,
+                             tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a list of available action tags from the action catalog.
 
@@ -413,7 +445,11 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             logger.debug("get_action_tags called")
 
             # Call the get_actions_without_preload_content method from the SDK to avoid Pydantic validation issues
-            result = api_client.get_actions_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_actions_without_preload_content),
+                ctx=ctx, operation_name="get_action_tags",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Parse the JSON response manually
             try:
@@ -562,7 +598,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                                                        to: Optional[int] = None,
                                                        window_size: Optional[int] = None,
                                                        ctx=None,
-                                                       api_client=None) -> Dict[str, Any]:
+                                                       api_client=None,
+                                                       resource_type: Optional[str] = None,
+                                                       tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get automation actions that match based on application ID or snapshot ID within a specified time window.
 
@@ -592,11 +630,15 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 return preflight
 
             logger.debug("[get_action_matches_by_id_and_time_window] Calling SDK method")
-            result = api_client.get_action_matches_by_id_and_time_window_without_preload_content(
-                application_id=application_id,
-                snapshot_id=snapshot_id,
-                to=to,
-                window_size=window_size,
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_action_matches_by_id_and_time_window_without_preload_content,
+                    application_id=application_id,
+                    snapshot_id=snapshot_id,
+                    to=to,
+                    window_size=window_size,
+                ),
+                ctx=ctx, operation_name="get_action_matches_by_id_and_time_window",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             try:

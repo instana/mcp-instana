@@ -29,7 +29,14 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -59,7 +66,10 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             logger.info("get_monitoring_state called")
 
             # Call the get_monitoring_state method from the SDK
-            result = api_client.get_monitoring_state()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_monitoring_state),
+                ctx=ctx, operation_name="get_monitoring_state"
+            )
 
             logger.debug(f"Result from get_monitoring_state: {result}")
             return result
@@ -95,11 +105,14 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             logger.debug(f"get_plugin_payload called with snapshot_id={snapshot_id}, payload_key={payload_key}")
 
             # Call the get_plugin_payload method from the SDK
-            result = api_client.get_plugin_payload(
-                snapshot_id=snapshot_id,
-                payload_key=payload_key,
-                to=to_time,
-                window_size=window_size
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_plugin_payload,
+                    snapshot_id=snapshot_id,
+                    payload_key=payload_key,
+                    to=to_time,
+                    window_size=window_size,
+                ),
+                ctx=ctx, operation_name="get_plugin_payload"
             )
 
             logger.debug(f"Result from get_plugin_payload: {result}")
@@ -114,7 +127,9 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                            snapshot_id: str,
                            to_time: Optional[int] = None,
                            window_size: Optional[int] = None,
-                           ctx=None, api_client=None) -> Dict[str, Any]:
+                           ctx=None, api_client=None,
+                           resource_type: Optional[str] = None,
+                           tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get detailed information about a specific snapshot in Instana using its ID.
 
@@ -154,73 +169,31 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                     "message": "Missing required parameter 'snapshot_id'. Use get_snapshots to discover available snapshot IDs."
                 }
 
-            # Try using the standard SDK method
-            try:
-                # Call the get_snapshot method from the SDK
-                result = api_client.get_snapshot(
+            # Use get_snapshot_without_preload_content directly — get_snapshot attempts
+            # to deserialize the response into a SnapshotItem SDK model which raises a
+            # validation error that anyio's TaskGroup wraps, preventing clean handling.
+            logger.debug("Calling API method get_snapshot_without_preload_content")
+            response_data = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_snapshot_without_preload_content,
                     id=snapshot_id,
                     to=to_time,
-                    window_size=window_size
-                )
+                    window_size=window_size,
+                ),
+                ctx=ctx, operation_name="get_snapshot",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
-                # Convert the result to a dictionary
-                if hasattr(result, 'to_dict'):
-                    result_dict = result.to_dict()
-                elif isinstance(result, dict):
-                    result_dict = result
-                else:
-                    # For any other type, convert to string representation
-                    result_dict = {"data": str(result), "snapshot_id": snapshot_id}
+            if response_data.status != 200:
+                return self.handle_api_error_response(response_data, "get snapshot", logger)
 
-                logger.debug(f"Result from get_snapshot: {result_dict}")
-                return result_dict
-
-            except Exception as sdk_error:
-                logger.warning(f"SDK method failed: {sdk_error}, trying fallback")
-
-                # Check if it's a "not found" error
-                error_str = str(sdk_error).lower()
-                if "not exist" in error_str or "not found" in error_str or "not available" in error_str:
-                    return {
-                        "error": f"Snapshot with ID '{snapshot_id}' does not exist or is not available.",
-                        "details": str(sdk_error)
-                    }
-
-                # Check if it's a validation error
-                if "validation error" in error_str:
-                    # Try using the without_preload_content version to get the raw response
-                    try:
-                        response_data = api_client.get_snapshot_without_preload_content(
-                            id=snapshot_id,
-                            to=to_time,
-                            window_size=window_size
-                        )
-
-                        # Check if the response was successful
-                        if response_data.status != 200:
-                            error_message = f"Failed to get snapshot: HTTP {response_data.status}"
-                            logger.error(error_message)
-                            return {"error": error_message}
-
-                        # Read the response content
-                        response_text = response_data.data.decode('utf-8')
-
-                        # Try to parse as JSON
-                        try:
-                            result_dict = json.loads(response_text)
-                            logger.info(f"Result from fallback method: {result_dict}")
-                            return result_dict
-                        except json.JSONDecodeError:
-                            # If not valid JSON, return as string
-                            logger.error(f"Result from fallback method (string): {response_text}")
-                            return {"message": response_text, "snapshot_id": snapshot_id}
-
-                    except Exception as fallback_error:
-                        logger.error(f"Fallback method failed: {fallback_error}")
-                        # Continue to the general error handling
-
-                # Re-raise if we couldn't handle it specifically
-                raise
+            response_text = decode_response(response_data)
+            try:
+                result_dict = json.loads(response_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"get_snapshot: non-JSON response body: {response_text[:200]}")
+                return {"error": f"Failed to parse snapshot response: {e}"}
+            logger.debug(f"Result from get_snapshot: {result_dict}")
+            return result_dict
 
         except Exception as e:
             logger.error(f"Error in get_snapshot: {e}", exc_info=True)
@@ -236,7 +209,9 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                             plugin: Optional[str] = None,
                             offline: Optional[bool] = False,
                             detailed: Optional[bool] = False,
-                            ctx=None, api_client=None) -> Dict[str, Any]:
+                            ctx=None, api_client=None,
+                            resource_type: Optional[str] = None,
+                            tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Search and discover snapshots based on search criteria.
 
@@ -275,13 +250,17 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                 from_time = to_time - (60 * 60 * 1000)  # Default to 1 hour
 
             # Call the get_snapshots method from the SDK
-            result = api_client.get_snapshots(
-                query=query,
-                to=to_time,
-                window_size=to_time - from_time if from_time else None,
-                size=size,
-                plugin=plugin,
-                offline=offline
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_snapshots,
+                    query=query,
+                    to=to_time,
+                    window_size=to_time - from_time if from_time else None,
+                    size=size,
+                    plugin=plugin,
+                    offline=offline,
+                ),
+                ctx=ctx, operation_name="get_snapshots",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             logger.debug(f"SDK returned result type: {type(result)}")
@@ -381,6 +360,35 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
 
 
+    @staticmethod
+    def _normalise_snapshot_ids(snapshot_ids: list[str] | str) -> list[str]:
+        """Coerce *snapshot_ids* to a list of ID strings."""
+        if not isinstance(snapshot_ids, str):
+            return snapshot_ids
+        if snapshot_ids.startswith('[') and snapshot_ids.endswith(']'):
+            return ast.literal_eval(snapshot_ids)
+        return [id.strip() for id in snapshot_ids.split(',')]
+
+    def _parse_snapshots_response(self, response, detailed: bool) -> Dict[str, Any]:
+        """Parse a raw HTTP response from post_snapshots and return the result dict."""
+        if response.status != 200:
+            return {
+                "error": f"SDK returned status {response.status}",
+                "details": response.data.decode('utf-8') if response.data else None,
+            }
+        response_text = response.data.decode('utf-8')
+        try:
+            result_dict = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"post_snapshots: non-JSON response body: {response_text[:200]}")
+            return {"error": f"Failed to parse snapshots response: {e}"}
+        logger.debug(f"Successfully parsed response with {len(result_dict.get('items', []))} items")
+        if detailed:
+            logger.debug("Returning detailed/raw response")
+            return result_dict
+        logger.debug("Returning summarized response")
+        return self._summarize_snapshots_response(result_dict)
+
     # @register_as_tool(...)  # Disabled for future reference
     @with_header_auth(InfrastructureResourcesApi)
     async def post_snapshots(self,
@@ -402,69 +410,38 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
         Returns:
             Dictionary containing snapshot details (summarized by default) or error information
         """
+        if not has_get_snapshots_query:
+            return {"error": "GetSnapshotsQuery model not available"}
         try:
             logger.debug(f"post_snapshots called with snapshot_ids={snapshot_ids}, detailed={detailed}")
 
-            # Handle string input conversion
-            if isinstance(snapshot_ids, str):
-                if snapshot_ids.startswith('[') and snapshot_ids.endswith(']'):
-                    snapshot_ids = ast.literal_eval(snapshot_ids)
-                else:
-                    snapshot_ids = [id.strip() for id in snapshot_ids.split(',')]
-
+            snapshot_ids = self._normalise_snapshot_ids(snapshot_ids)
             if not snapshot_ids:
                 return {"error": "snapshot_ids parameter is required"}
 
-            # Use working timeframe
-            if not to_time:
-                to_time = 1745389956000
-            if not window_size:
-                window_size = 3600000
-
+            to_time = to_time or 1745389956000
+            window_size = window_size or 3600000
             logger.debug(f"Using to_time={to_time}, window_size={window_size}")
 
-            if has_get_snapshots_query:
-                from instana_client.models.get_snapshots_query import (
-                    GetSnapshotsQuery,  #type: ignore
-                )
-                from instana_client.models.time_frame import TimeFrame  #type: ignore
+            from instana_client.models.get_snapshots_query import (
+                GetSnapshotsQuery,  # type: ignore
+            )
+            from instana_client.models.time_frame import TimeFrame  # type: ignore
 
-                time_frame = TimeFrame(to=to_time, windowSize=window_size)
-                query_obj = GetSnapshotsQuery(
-                    snapshotIds=snapshot_ids if isinstance(snapshot_ids, list) else [snapshot_ids],
-                    timeFrame=time_frame
-                )
+            query_obj = GetSnapshotsQuery(
+                snapshotIds=snapshot_ids if isinstance(snapshot_ids, list) else [snapshot_ids],
+                timeFrame=TimeFrame(to=to_time, windowSize=window_size),
+            )
 
-                logger.debug("Making SDK request with without_preload_content...")
-
-                # Use the working SDK method that bypasses model validation
-                response = api_client.post_snapshots_without_preload_content(
-                    get_snapshots_query=query_obj
-                )
-
-                logger.debug(f"SDK response status: {response.status}")
-
-                if response.status == 200:
-                    # Parse the JSON response manually
-                    response_text = response.data.decode('utf-8')
-                    result_dict = json.loads(response_text)
-
-                    logger.debug(f"Successfully parsed response with {len(result_dict.get('items', []))} items")
-
-                    # Return based on detailed parameter
-                    if detailed:
-                        logger.debug("Returning detailed/raw response")
-                        return result_dict
-                    else:
-                        logger.debug("Returning summarized response")
-                        return self._summarize_snapshots_response(result_dict)
-                else:
-                    return {
-                        "error": f"SDK returned status {response.status}",
-                        "details": response.data.decode('utf-8') if response.data else None
-                    }
-            else:
-                return {"error": "GetSnapshotsQuery model not available"}
+            logger.debug("Making SDK request with without_preload_content...")
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.post_snapshots_without_preload_content,
+                    get_snapshots_query=query_obj,
+                ),
+                ctx=ctx, operation_name="post_snapshots",
+            )
+            logger.debug(f"SDK response status: {response.status}")
+            return self._parse_snapshots_response(response, detailed)
 
         except Exception as e:
             logger.error(f"Error in post_snapshots: {e}", exc_info=True)
@@ -573,7 +550,10 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             logger.info("Calling software_versions API...")
 
             # Call the software_versions method from the SDK with no parameters
-            result = api_client.software_versions()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.software_versions),
+                ctx=ctx, operation_name="software_versions"
+            )
 
             logger.info(f"API call successful. Result type: {type(result)}")
 

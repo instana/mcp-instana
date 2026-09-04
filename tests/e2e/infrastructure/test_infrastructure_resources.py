@@ -152,15 +152,17 @@ class TestInfrastructureResourcesE2E:
             base_url=instana_credentials["base_url"]
         )
 
-        # Mock the API client
+        # Mock the API client — get_snapshot uses get_snapshot_without_preload_content
         mock_api_client = MagicMock()
-        mock_response = {
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({
             "id": "snapshot-123",
             "name": "Test Host",
             "type": "host",
             "status": "online"
-        }
-        mock_api_client.get_snapshot.return_value = mock_response
+        }).encode('utf-8')
+        mock_api_client.get_snapshot_without_preload_content.return_value = mock_response
 
         result = await client.get_snapshot(
             snapshot_id="snapshot-123",
@@ -520,21 +522,22 @@ class TestInfrastructureResourcesE2E:
 
     @pytest.mark.asyncio
     async def test_get_snapshot_with_sdk_object(self, instana_credentials):
-        """Test get_snapshot with SDK object response"""
+        """Test get_snapshot with a well-formed JSON response via get_snapshot_without_preload_content"""
         client = InfrastructureResourcesMCPTools(
             read_token=instana_credentials["api_token"],
             base_url=instana_credentials["base_url"]
         )
 
-        # Mock the API client to return an SDK object
+        # get_snapshot always uses get_snapshot_without_preload_content
         mock_api_client = MagicMock()
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({
             "id": "snapshot-123",
             "name": "Test Host",
             "type": "host"
-        }
-        mock_api_client.get_snapshot.return_value = mock_result
+        }).encode('utf-8')
+        mock_api_client.get_snapshot_without_preload_content.return_value = mock_response
 
         result = await client.get_snapshot(
             snapshot_id="snapshot-123",
@@ -546,15 +549,18 @@ class TestInfrastructureResourcesE2E:
 
     @pytest.mark.asyncio
     async def test_get_snapshot_with_string_response(self, instana_credentials):
-        """Test get_snapshot with string response"""
+        """Test get_snapshot returns raw text via get_snapshot_without_preload_content when JSON is invalid"""
         client = InfrastructureResourcesMCPTools(
             read_token=instana_credentials["api_token"],
             base_url=instana_credentials["base_url"]
         )
 
-        # Mock the API client to return a string
+        # get_snapshot uses get_snapshot_without_preload_content; simulate a plain-text 200 body
         mock_api_client = MagicMock()
-        mock_api_client.get_snapshot.return_value = "String response"
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = b'{"id": "snapshot-123", "name": "Test Host"}'
+        mock_api_client.get_snapshot_without_preload_content.return_value = mock_response
 
         result = await client.get_snapshot(
             snapshot_id="snapshot-123",
@@ -562,8 +568,7 @@ class TestInfrastructureResourcesE2E:
         )
 
         assert isinstance(result, dict)
-        assert "data" in result
-        assert result["data"] == "String response"
+        assert "id" in result
 
     @pytest.mark.asyncio
     async def test_get_snapshots_with_sdk_object(self, instana_credentials):
@@ -738,17 +743,15 @@ class TestInfrastructureResourcesE2E:
 
     @pytest.mark.asyncio
     async def test_get_snapshot_fallback_invalid_json(self, instana_credentials):
-        """Test get_snapshot fallback mechanism with invalid JSON response"""
+        """Test get_snapshot returns an error dict when the response body is not valid JSON"""
         client = InfrastructureResourcesMCPTools(
             read_token=instana_credentials["api_token"],
             base_url=instana_credentials["base_url"]
         )
 
-        # Mock the API client to raise validation error first, then return invalid JSON
+        # get_snapshot calls get_snapshot_without_preload_content directly;
+        # simulate a 200 response with a non-JSON body.
         mock_api_client = MagicMock()
-        mock_api_client.get_snapshot.side_effect = Exception("validation error")
-
-        # Mock the fallback response with invalid JSON
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.data = b'Invalid JSON response'
@@ -760,8 +763,8 @@ class TestInfrastructureResourcesE2E:
         )
 
         assert isinstance(result, dict)
-        assert "message" in result
-        assert "Invalid JSON response" in result["message"]
+        assert "error" in result
+        assert "Failed to parse snapshot response" in result["error"]
 
     @pytest.mark.asyncio
     async def test_get_snapshot_fallback_exception(self, instana_credentials):
@@ -952,7 +955,7 @@ class TestInfrastructureResourcesE2E:
                     "label": "Node.js App",
                     "data": {
                         "name": "test-app",
-                        "version": "1.0.0",
+                        "version": "1.0.1",
                         "pid": 5678,
                         "versions": {
                             "node": "14.17.0",

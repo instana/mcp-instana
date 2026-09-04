@@ -139,6 +139,7 @@ class TestEventsPrompts(unittest.TestCase):
             elif name in {
                 "get_kubernetes_info_events",
                 "get_agent_monitoring_events",
+                "get_events",
                 "get_events_by_severity_and_state",
                 "get_events_by_entity_and_problem",
                 "get_events_by_entity_type_and_event_type",

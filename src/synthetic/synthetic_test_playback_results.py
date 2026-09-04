@@ -26,8 +26,10 @@ except ImportError as e:
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     parse_payload,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.core.validation import StructureValidator
@@ -64,6 +66,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         operation: str,
         params: Optional[Dict[str, Any]] = None,
         ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute a synthetic test playback operation.
@@ -87,23 +91,28 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             if operation == "get_synthetic_result":
                 return await self.get_synthetic_result(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx
+                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_analytic":
                 return await self.get_synthetic_result_analytic(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx
+                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_list":
                 return await self.get_synthetic_result_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx
+                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_location_summary_list":
                 return await self.get_location_summary_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx
+                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_test_summary_list":
                 return await self.get_test_summary_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx
+                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_metadata":
                 return await self.get_synthetic_result_metadata(
@@ -111,15 +120,17 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                     testresultid=params.get("testresultid"),
                     start_time=params.get("start_time"),
                     ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_detail_data":
                 return await self.get_synthetic_result_detail_data(
                     testid=params.get("testid"),
                     testresultid=params.get("testresultid"),
-                    detail_type=params.get("type"),
+                    detail_type=params.get("detail_type") if params.get("detail_type") is not None else params.get("type"),
                     name=params.get("name"),
                     start_time=params.get("start_time"),
                     ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
             else:
                 return {"error": f"Operation '{operation}' not supported for test_playback"}
@@ -130,7 +141,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticTestPlaybackResultsApi)
     async def get_synthetic_result(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get aggregated synthetic test playback results.
 
@@ -194,8 +207,12 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetTestResult: {e!s}"}
 
             logger.debug("[get_synthetic_result] Calling get_synthetic_result with config object")
-            response = api_client.get_synthetic_result_without_preload_content(
-                get_test_result=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_result_without_preload_content, get_test_result=config_object),
+                ctx=ctx,
+                operation_name="get_synthetic_result",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -210,7 +227,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticTestPlaybackResultsApi)
     async def get_synthetic_result_analytic(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get synthetic test playback results reduced by an analytic function.
 
@@ -291,8 +310,12 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetTestResultAnalytic: {e!s}"}
 
             logger.debug("[get_synthetic_result_analytic] Calling get_synthetic_result_analytic with config object")
-            response = api_client.get_synthetic_result_analytic_without_preload_content(
-                get_test_result_analytic=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_result_analytic_without_preload_content, get_test_result_analytic=config_object),
+                ctx=ctx,
+                operation_name="get_synthetic_result_analytic",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -307,7 +330,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticTestPlaybackResultsApi)
     async def get_synthetic_result_list(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a list of playback result metrics for synthetic tests matching the specified parameters.
 
@@ -387,8 +412,12 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetTestResultList: {e!s}"}
 
             logger.debug("[get_synthetic_result_list] Calling get_synthetic_result_list with config object")
-            response = api_client.get_synthetic_result_list_without_preload_content(
-                get_test_result_list=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_result_list_without_preload_content, get_test_result_list=config_object),
+                ctx=ctx,
+                operation_name="get_synthetic_result_list",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -404,7 +433,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticTestPlaybackResultsApi)
     async def get_location_summary_list(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get summary information for synthetic locations matching the specified parameters.
 
@@ -454,8 +485,12 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetTestResultBase: {e!s}"}
 
             logger.debug("[get_location_summary_list] Calling get_location_summary_list with config object")
-            response = api_client.get_location_summary_list_without_preload_content(
-                get_test_result_base=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_location_summary_list_without_preload_content, get_test_result_base=config_object),
+                ctx=ctx,
+                operation_name="get_location_summary_list",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -470,7 +505,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticTestPlaybackResultsApi)
     async def get_test_summary_list(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a summary of the playback results metrics and success rate for synthetic tests.
 
@@ -543,8 +580,12 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetTestSummaryResult: {e!s}"}
 
             logger.debug("[get_test_summary_list] Calling get_test_summary_list with config object")
-            response = api_client.get_test_summary_list_without_preload_content(
-                get_test_summary_result=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_test_summary_list_without_preload_content, get_test_summary_result=config_object),
+                ctx=ctx,
+                operation_name="get_test_summary_list",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:
@@ -561,7 +602,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                                             testid: str,
                                             testresultid: str,
                                             start_time: Optional[int] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get measurement metadata for a specific synthetic test result.
 
@@ -587,10 +630,13 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 return {"error": "Both 'testid' and 'testresultid' parameters are required"}
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_synthetic_result_metadata_without_preload_content(
-                testid=testid,
-                testresultid=testresultid,
-                start_time=start_time
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_result_metadata_without_preload_content,
+                            testid=testid, testresultid=testresultid, start_time=start_time),
+                ctx=ctx,
+                operation_name="get_synthetic_result_metadata",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             # Check if the response was successful
@@ -610,7 +656,9 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                                             detail_type: str,
                                             name: Optional[str] = None,
                                             start_time: Optional[int] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get the detailed data contents for a specific synthetic test result.
 
@@ -621,7 +669,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         Args:
             testid: ID of the synthetic test
             testresultid: ID of the specific test result record
-            detail_type: Type of the detail file to retrieve (e.g. "LOGS", "HAR", "SCREENSHOT")
+            detail_type: Type of the detail file to retrieve. Valid values: "HAR", "IMAGES", "LOGS", "SUBTRANSACTIONS", "VIDEOS"
             name: Name of a specific detail file when multiple files exist for the same
                 type (optional, most relevant when type="LOGS")
             start_time: Start timestamp in milliseconds (optional)
@@ -639,15 +687,17 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
 
             if not detail_type:
                 logger.warning("[get_synthetic_result_detail_data] Missing required param: detail_type")
-                return {"error": "'type' parameter is required (e.g. 'LOGS', 'HAR', 'SCREENSHOT')"}
+                return {"error": "'type' parameter is required. Valid values: 'HAR', 'IMAGES', 'LOGS', 'SUBTRANSACTIONS', 'VIDEOS'"}
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_synthetic_result_detail_data_without_preload_content(
-                testid=testid,
-                testresultid=testresultid,
-                type=detail_type,
-                name=name,
-                start_time=start_time
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_result_detail_data_without_preload_content,
+                            testid=testid, testresultid=testresultid, type=detail_type,
+                            name=name, start_time=start_time),
+                ctx=ctx,
+                operation_name="get_synthetic_result_detail_data",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             # Check if the response was successful

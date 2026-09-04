@@ -6,7 +6,7 @@ This module provides mobile app catalog-specific MCP tools for Instana monitorin
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 try:
     from instana_client.api.mobile_app_catalog_api import MobileAppCatalogApi
@@ -19,10 +19,12 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     process_tag_catalog_response,
     project_metric_card,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -40,7 +42,9 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
     async def get_mobile_app_tag_catalog(self,
                                          beacon_type: str,
                                          use_case: str,
-                                         ctx=None, api_client=None) -> Dict[str, Any]:
+                                         ctx=None, api_client=None,
+                                         resource_type: Optional[str] = None,
+                                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Get mobile app catalog tags.
 
         This API endpoint retrieves all available tag names for mobile app monitoring.
@@ -63,25 +67,19 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
                 return {"error": "use_case parameter is required"}
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_mobile_app_tag_catalog_without_preload_content(
-                beacon_type=beacon_type,
-                use_case=use_case
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_tag_catalog_without_preload_content,
+                    beacon_type=beacon_type,
+                    use_case=use_case),
+                ctx=ctx,
+                operation_name="get_mobile_app_tag_catalog",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             # Check if the response was successful
             if response.status != 200:
-                error_message = f"Failed to get mobile app tag catalog: HTTP {response.status}"
-                logger.error(f"[get_mobile_app_tag_catalog] {error_message}")
-                try:
-                    error_body = decode_response(response)
-                    logger.error(f"[get_mobile_app_tag_catalog] API Error Response: {error_body}")
-                    return {
-                        "error": error_message,
-                        "details": error_body,
-                        "status_code": response.status,
-                    }
-                except Exception:
-                    return {"error": error_message, "status_code": response.status}
+                return self.handle_api_error_response(response, "get mobile app tag catalog", logger)
 
             # Read and parse the response content
             response_text = decode_response(response)
@@ -103,6 +101,8 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
         ctx=None,
         api_client=None,
         view: str = "planner",
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get mobile app monitoring metrics catalog.
@@ -127,7 +127,13 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
                     "valid_views": ["planner", "full"],
                 }
 
-            response = api_client.get_mobile_app_metric_catalog_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_metric_catalog_without_preload_content),
+                ctx=ctx,
+                operation_name="get_mobile_app_metric_catalog",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             # Check if the response was successful
             if response.status != 200:

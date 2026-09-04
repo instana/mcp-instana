@@ -250,8 +250,8 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.assertIn("results", result)
 
     def test_catalog_beacon_type_normalization(self):
-        """Validates that a canonical SCREAMING_SNAKE beacon_type passes through and is
-        normalised to camelCase before reaching the catalog service."""
+        """Validates that a canonical SCREAMING_SNAKE beacon_type is passed through
+        unchanged to the tag catalog — the API expects SCREAMING_SNAKE, not camelCase."""
         captured = {}
 
         async def mock_tags(*args, **kwargs):
@@ -267,8 +267,8 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         ))
 
         self.assertIn("results", result)
-        # The router normalises SESSION_START → sessionStart for the API
-        self.assertEqual(captured.get("beacon_type"), "sessionStart")
+        # The tag catalog API expects SCREAMING_SNAKE_CASE — no normalization applied
+        self.assertEqual(captured.get("beacon_type"), "SESSION_START")
 
     def test_catalog_invalid_operation(self):
         result = asyncio.run(self.router.manage_mobile_apps(

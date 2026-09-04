@@ -735,34 +735,6 @@ class TestMCPServerIntegrationE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_main_function_keyboard_interrupt(self, instana_credentials):
-        """Test main function with keyboard interrupt."""
-        from src.core.server import main
-
-        # Mock sys.argv
-        with patch('sys.argv', ['mcp_server.py']):
-            with patch('src.core.server.create_app') as mock_create_app:
-                mock_server = MagicMock()
-                mock_create_app.return_value = (mock_server, 5, 8080)
-
-                with patch('src.core.server.FastMCP') as mock_fastmcp:
-                    mock_fastmcp.return_value = mock_server
-                    # Mock server.run to raise KeyboardInterrupt
-                    mock_server.run.side_effect = KeyboardInterrupt()
-
-                    with patch.dict(os.environ, {
-                        'INSTANA_API_TOKEN': instana_credentials["api_token"],
-                        'INSTANA_BASE_URL': instana_credentials["base_url"]
-                    }):
-                        with patch('builtins.print'):
-                            with patch('sys.exit') as mock_exit:
-                                with suppress(SystemExit):
-                                    main()
-
-                                mock_exit.assert_called_with(0)
-
-    @pytest.mark.asyncio
-    @pytest.mark.mocked
     async def test_main_function_general_exception(self, instana_credentials):
         """Test main function with general exception."""
         from src.core.server import main

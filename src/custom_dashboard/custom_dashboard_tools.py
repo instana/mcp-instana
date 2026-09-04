@@ -13,7 +13,9 @@ from mcp.types import ToolAnnotations
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -235,10 +237,13 @@ class CustomDashboardMCPTools(BaseInstanaClient):
         operation: str,
         params: Dict[str, Any],
         ctx,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Route a validated dashboard operation to the appropriate handler."""
         dashboard_id = params.get("dashboard_id")
         custom_dashboard = params.get("custom_dashboard")
+        logger.info(f"Routing to {operation} [resource_type={resource_type}, tool={tool_name}]")
         dispatch = {
             "get_all": lambda: self.get_custom_dashboards(
                 query=params.get("query"),
@@ -246,13 +251,15 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                 page=params.get("page"),
                 with_total_hits=params.get("with_total_hits"),
                 ctx=ctx,
+                resource_type=resource_type,
+                tool_name=tool_name,
             ),
-            "get": lambda: self.get_custom_dashboard(dashboard_id=dashboard_id, ctx=ctx),
-            "create": lambda: self.add_custom_dashboard(custom_dashboard=custom_dashboard, ctx=ctx),
-            "update": lambda: self.update_custom_dashboard(dashboard_id=dashboard_id, custom_dashboard=custom_dashboard, ctx=ctx),
-            "delete": lambda: self.delete_custom_dashboard(dashboard_id=dashboard_id, ctx=ctx),
-            "get_shareable_users": lambda: self.get_shareable_users(ctx=ctx),
-            "get_shareable_api_tokens": lambda: self.get_shareable_api_tokens(ctx=ctx),
+            "get": lambda: self.get_custom_dashboard(dashboard_id=dashboard_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name),
+            "create": lambda: self.add_custom_dashboard(custom_dashboard=custom_dashboard, ctx=ctx, resource_type=resource_type, tool_name=tool_name),
+            "update": lambda: self.update_custom_dashboard(dashboard_id=dashboard_id, custom_dashboard=custom_dashboard, ctx=ctx, resource_type=resource_type, tool_name=tool_name),
+            "delete": lambda: self.delete_custom_dashboard(dashboard_id=dashboard_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name),
+            "get_shareable_users": lambda: self.get_shareable_users(ctx=ctx, resource_type=resource_type, tool_name=tool_name),
+            "get_shareable_api_tokens": lambda: self.get_shareable_api_tokens(ctx=ctx, resource_type=resource_type, tool_name=tool_name),
         }
         return await dispatch[operation]()
 
@@ -261,7 +268,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
         self,
         operation: str,
         params: Optional[Dict[str, Any]] = None,
-        ctx=None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Custom Dashboard CRUD operations.
@@ -277,6 +286,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                 - page: Page number (for get_all)
                 - with_total_hits: Include total count (for get_all)
             ctx: MCP context
+            resource_type: Resource type identifier for logging
+            tool_name: Tool name identifier for logging
 
         Returns:
             Operation result dictionary
@@ -288,7 +299,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             )
             if preflight:
                 return preflight
-            return await self._dispatch_dashboard_operation(operation, params, ctx)
+            return await self._dispatch_dashboard_operation(operation, params, ctx, resource_type=resource_type, tool_name=tool_name)
 
         except Exception as e:
             logger.error(f"Error executing {operation}: {e}", exc_info=True)
@@ -303,7 +314,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                                    page: Optional[int] = None,
                                    with_total_hits: Optional[bool] = None,
                                    ctx=None,
-                                   api_client=None) -> Dict[str, Any]:
+                                   api_client=None,
+                                   resource_type: Optional[str] = None,
+                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all custom dashboards from Instana server.
         Uses api/custom-dashboard endpoint.
@@ -311,24 +324,31 @@ class CustomDashboardMCPTools(BaseInstanaClient):
         Args:
             query: Search query to filter dashboards
             page_size: Number of dashboards per page
-            page: Page number (0-indexed)
+            page: Page number (1-indexed)
             with_total_hits: Include total count in response
             ctx: MCP context
             api_client: API client instance
+            resource_type: Resource type identifier for logging
+            tool_name: Tool name identifier for logging
 
         Returns:
             Dictionary containing dashboards list and metadata
         """
         try:
+            logger.info(f"[{tool_name}] get_custom_dashboards [resource_type={resource_type}] query={query}, page_size={page_size}, page={page}")
             logger.debug(f"Getting custom dashboards from Instana SDK with query={query}, page_size={page_size}, page={page}, with_total_hits={with_total_hits}")
 
             # Use _without_preload_content to bypass Pydantic validation
             # This handles cases where API returns None for fields that expect strings
-            result = api_client.get_custom_dashboards_without_preload_content(
-                query=query,
-                page_size=page_size,
-                page=page,
-                with_total_hits=with_total_hits
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_custom_dashboards_without_preload_content,
+                    query=query,
+                    page_size=page_size,
+                    page=page,
+                    with_total_hits=with_total_hits,
+                ),
+                ctx=ctx, operation_name="get_custom_dashboards",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Check HTTP status code
@@ -366,7 +386,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_custom_dashboard(self,
                                   dashboard_id: str,
-                                  ctx=None, api_client=None) -> Dict[str, Any]:
+                                  ctx=None, api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a specific custom dashboard by ID from Instana server.
         Uses api/custom-dashboard/{id} endpoint.
@@ -375,11 +397,18 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             if not dashboard_id:
                 return {"error": "Dashboard ID is required for this operation"}
 
+            logger.info(f"[{tool_name}] get_custom_dashboard [resource_type={resource_type}] dashboard_id={dashboard_id}")
             logger.debug(f"Getting custom dashboard {dashboard_id} from Instana SDK")
 
             # Use _without_preload_content to bypass Pydantic validation
             # Note: SDK expects 'custom_dashboard_id' not 'dashboard_id'
-            result = api_client.get_custom_dashboard_without_preload_content(custom_dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_custom_dashboard_without_preload_content,
+                    custom_dashboard_id=dashboard_id,
+                ),
+                ctx=ctx, operation_name="get_custom_dashboard",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check HTTP status code
             if result.status >= 400:
@@ -404,7 +433,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def add_custom_dashboard(self,
                                   custom_dashboard: Dict[str, Any],
-                                  ctx=None, api_client=None) -> Dict[str, Any]:
+                                  ctx=None, api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Add a new custom dashboard to Instana server.
         Uses api/custom-dashboard POST endpoint.
@@ -413,6 +444,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             if custom_dashboard is None:
                 return {"error": "Custom dashboard configuration is required for this operation"}
 
+            logger.info(f"[{tool_name}] add_custom_dashboard [resource_type={resource_type}]")
             logger.debug("Adding custom dashboard to Instana SDK")
             logger.debug(json.dumps(custom_dashboard, indent=2))
 
@@ -444,7 +476,13 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             dashboard_obj = CustomDashboard(**dashboard_config)
 
             # Use _without_preload_content to bypass Pydantic validation on response
-            result = api_client.add_custom_dashboard_without_preload_content(custom_dashboard=dashboard_obj)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.add_custom_dashboard_without_preload_content,
+                    custom_dashboard=dashboard_obj,
+                ),
+                ctx=ctx, operation_name="add_custom_dashboard",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check HTTP status code
             if result.status >= 400:
@@ -470,7 +508,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     async def update_custom_dashboard(self,
                                      dashboard_id: str,
                                      custom_dashboard: Dict[str, Any],
-                                     ctx=None, api_client=None) -> Dict[str, Any]:
+                                     ctx=None, api_client=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Update an existing custom dashboard in Instana server.
         Uses api/custom-dashboard/{id} PUT endpoint.
@@ -482,6 +522,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             if custom_dashboard is None:
                 return {"error": "Custom dashboard configuration is required for this operation"}
 
+            logger.info(f"[{tool_name}] update_custom_dashboard [resource_type={resource_type}] dashboard_id={dashboard_id}")
             logger.debug(f"Updating custom dashboard {dashboard_id} in Instana SDK")
             logger.debug(json.dumps(custom_dashboard, indent=2))
 
@@ -492,6 +533,11 @@ class CustomDashboardMCPTools(BaseInstanaClient):
 
             # Prepare dashboard config with required fields
             dashboard_config = custom_dashboard.copy()
+
+            # Inject the dashboard ID into the body — the Instana PUT API
+            # requires the 'id' field in the request body to match the URL path ID.
+            # Without it the server accepts the request (HTTP 200) but ignores the body.
+            dashboard_config['id'] = dashboard_id
 
             # Ensure widgets field exists (required by model)
             if 'widgets' not in dashboard_config:
@@ -510,9 +556,13 @@ class CustomDashboardMCPTools(BaseInstanaClient):
 
             # Use _without_preload_content to bypass Pydantic validation on response
             # Note: SDK expects 'custom_dashboard_id' not 'dashboard_id'
-            result = api_client.update_custom_dashboard_without_preload_content(
-                custom_dashboard_id=dashboard_id,
-                custom_dashboard=dashboard_obj
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.update_custom_dashboard_without_preload_content,
+                    custom_dashboard_id=dashboard_id,
+                    custom_dashboard=dashboard_obj,
+                ),
+                ctx=ctx, operation_name="update_custom_dashboard",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Check HTTP status code
@@ -520,16 +570,15 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
-            # Parse the JSON response manually
-            response_text = result.data.decode('utf-8')
-            result_dict = json.loads(response_text)
-
-            try:
-                logger.debug(f"Result from update_custom_dashboard: {json.dumps(result_dict, indent=2)}")
-            except TypeError:
-                logger.debug(f"Result from update_custom_dashboard: {result_dict} (not JSON serializable)")
-
-            return result_dict
+            # The PUT endpoint may return an empty or sparse body — re-fetch the full
+            # record by ID so the caller always gets complete, non-null data back.
+            logger.debug("Update succeeded; re-fetching dashboard to return full record")
+            return await self.get_custom_dashboard(
+                dashboard_id=dashboard_id,
+                ctx=ctx,
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
         except Exception as e:
             logger.error(f"Error in update_custom_dashboard: {e}", exc_info=True)
@@ -538,7 +587,9 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def delete_custom_dashboard(self,
                                      dashboard_id: str,
-                                     ctx=None, api_client=None) -> Dict[str, Any]:
+                                     ctx=None, api_client=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Delete a custom dashboard from Instana server.
         Uses api/custom-dashboard/{id} DELETE endpoint.
@@ -547,11 +598,18 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             if not dashboard_id:
                 return {"error": "Dashboard ID is required for this operation"}
 
+            logger.info(f"[{tool_name}] delete_custom_dashboard [resource_type={resource_type}] dashboard_id={dashboard_id}")
             logger.debug(f"Deleting custom dashboard {dashboard_id} from Instana SDK")
 
             # Use _without_preload_content to bypass Pydantic validation
             # Note: SDK expects 'custom_dashboard_id' not 'dashboard_id'
-            result = api_client.delete_custom_dashboard_without_preload_content(custom_dashboard_id=dashboard_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.delete_custom_dashboard_without_preload_content,
+                    custom_dashboard_id=dashboard_id,
+                ),
+                ctx=ctx, operation_name="delete_custom_dashboard",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check HTTP status code
             if result.status >= 400:
@@ -583,18 +641,25 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_users(self,
                                  dashboard_id: Optional[str] = None,
-                                 ctx=None, api_client=None) -> Dict[str, Any]:
+                                 ctx=None, api_client=None,
+                                 resource_type: Optional[str] = None,
+                                 tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all users that have access to shareable custom dashboards.
         Note: This returns ALL users globally, not for a specific dashboard.
         Uses api/custom-dashboard/shareable-users endpoint.
         """
         try:
+            logger.info(f"[{tool_name}] get_shareable_users [resource_type={resource_type}]")
             logger.debug("Getting all shareable users from Instana SDK")
 
             # Use _without_preload_content to bypass Pydantic validation
             # Note: This API does not take a dashboard_id - it returns all shareable users globally
-            result = api_client.get_shareable_users_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_shareable_users_without_preload_content),
+                ctx=ctx, operation_name="get_shareable_users",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check HTTP status code
             if result.status >= 400:
@@ -627,18 +692,25 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_api_tokens(self,
                                       dashboard_id: Optional[str] = None,
-                                      ctx=None, api_client=None) -> Dict[str, Any]:
+                                      ctx=None, api_client=None,
+                                      resource_type: Optional[str] = None,
+                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all API tokens that have access to shareable custom dashboards.
         Note: This returns ALL API tokens globally, not for a specific dashboard.
         Uses api/custom-dashboard/shareable-api-tokens endpoint.
         """
         try:
+            logger.info(f"[{tool_name}] get_shareable_api_tokens [resource_type={resource_type}]")
             logger.debug("Getting all shareable API tokens from Instana SDK")
 
             # Use _without_preload_content to bypass Pydantic validation
             # Note: This API does not take a dashboard_id - it returns all shareable tokens globally
-            result = api_client.get_shareable_api_tokens_without_preload_content()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_shareable_api_tokens_without_preload_content),
+                ctx=ctx, operation_name="get_shareable_api_tokens",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Check HTTP status code
             if result.status >= 400:

@@ -648,7 +648,21 @@ def main():
                 logger.info(f"Registered tools: {registered_tool_count}")
 
             try:
-                app.run(transport="streamable-http", host="0.0.0.0", port=port)
+                app.run(
+                    transport="streamable-http",
+                    host="0.0.0.0",
+                    port=port,
+                    stateless_http=True,
+                    # Use JSON responses instead of SSE streaming.
+                    # The SSE path uses a zero-buffer MemoryObjectStream; under
+                    # simultaneous stateless requests, the _run_sse_writer.send()
+                    # call blocks waiting for uvicorn to pull the next SSE chunk,
+                    # causing multi-minute hangs when two tool calls race.
+                    # json_response=True switches to a buffered (size=16) channel
+                    # and returns the result as one atomic JSON HTTP response body,
+                    # eliminating the zero-buffer deadlock entirely.
+                    json_response=True,
+                )
                 # app.run() returns normally on graceful shutdown (e.g. SIGTERM).
                 # sys.exit(0) gets caught by the except in SystemExit block below
                 # and duplicates the "stopped cleanly" log.

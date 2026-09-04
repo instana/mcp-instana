@@ -337,6 +337,37 @@ class TestSLOReportMCPTools(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_get_slo_report_single_dict_response(self):
+        """Test getting SLO report when API returns a single dict (not a list)."""
+        async def run_test():
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.data = json.dumps({
+                "sli": 0.916,
+                "slo": 0.99,
+                "totalErrorBudget": 101,
+                "errorBudgetRemaining": -741,
+                "errorBudgetSpent": 842,
+                "errorBurnRate": 8,
+                "fromTimestamp": 1787316720000,
+                "toTimestamp": 1787921520000,
+            }).encode('utf-8')
+
+            self.mock_api.get_slo_without_preload_content.return_value = mock_response
+
+            result = await self.client.get_slo_report(slo_id="slo-123")
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(len(result["reports"]), 1)
+            report = result["reports"][0]
+            self.assertAlmostEqual(report["sli"], 0.916)
+            self.assertAlmostEqual(report["slo"], 0.99)
+            self.assertEqual(report["errorBurnRate"], 8)
+            self.assertNotIn("message", result)
+
+        asyncio.run(run_test())
+
     def test_get_slo_report_multiple_reports(self):
         """Test getting SLO report with multiple reports."""
         async def run_test():

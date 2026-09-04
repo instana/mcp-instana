@@ -45,7 +45,7 @@ Parameters (params dict):
 - custom_dashboard: Dashboard config (for create, update) - see model below
 - query: Search filter (for get_all)
 - page_size: Items per page (for get_all)
-- page: Page number, 0-indexed (for get_all)
+- page: Page number, 1-indexed (for get_all)
 - with_total_hits: Include total count (for get_all)
 
 Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
@@ -72,8 +72,12 @@ Examples:
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
         """Unified Instana custom dashboard manager for CRUD operations."""
+
+        TOOL_NAME = "manage_custom_dashboards"
+        RESOURCE_TYPE = "custom_dashboard"
+
         try:
-            logger.info(f"Custom Dashboard Smart Router received: operation={operation}")
+            logger.info(f"Received: resource_type={RESOURCE_TYPE}, operation={operation}, tool={TOOL_NAME}")
 
             # Initialize params if not provided
             if params is None:
@@ -86,6 +90,7 @@ Examples:
             ]
 
             if operation not in valid_operations:
+                logger.warning(f"Invalid operation: {operation}")
                 return {
                     "elicitation_needed": True,
                     "reason": f"Invalid operation: {operation!r}",
@@ -106,10 +111,13 @@ Examples:
             result = await self.dashboard_client.execute_dashboard_operation(
                 operation=operation,
                 params=params,
-                ctx=ctx
+                ctx=ctx,
+                resource_type=RESOURCE_TYPE,
+                tool_name=TOOL_NAME,
             )
 
             return {
+                "resource_type": RESOURCE_TYPE,
                 "operation": operation,
                 "dashboard_id": params.get("dashboard_id") if params.get("dashboard_id") else None,
                 "results": result
@@ -119,5 +127,6 @@ Examples:
             logger.error(f"Error in custom dashboard smart router: {e}", exc_info=True)
             return {
                 "error": f"Custom dashboard smart router error: {e!s}",
+                "resource_type": RESOURCE_TYPE,
                 "operation": operation
             }

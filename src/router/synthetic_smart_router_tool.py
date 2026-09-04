@@ -157,7 +157,7 @@ TEST_PLAYBACK (resource_type="test_playback"):
     get_synthetic_result_metadata - Discover available detail file types. params (flat): {testid, testresultid, start_time}
 
     get_synthetic_result_detail_data - Download a detail file. Call metadata first to discover types.
-        params (flat): {testid, testresultid, detail_type ("LOGS"|"HAR"|"SCREENSHOT"), name, start_time}
+        params (flat): {testid, testresultid, detail_type ("HAR"|"IMAGES"|"LOGS"|"SUBTRANSACTIONS"|"VIDEOS"), name, start_time}
 
 Args:
     resource_type: "catalog", "metrics", "settings" or "test_playback"
@@ -239,6 +239,7 @@ Examples:
                 result = await self.synthetic_metrics_client.get_metrics_result(
                     payload=payload,
                     ctx=ctx,
+                    resource_type="metrics", tool_name="manage_synthetics",
                 )
                 return {
                     "resource_type": "metrics",
@@ -304,7 +305,10 @@ Examples:
             if operation == "get_synthetic_catalog_metrics":
                 view = params.get("view", "planner")
                 logger.debug("[_handle_catalog] Routing to get_synthetic_catalog_metrics | view=%s", view)
-                result = await self.synthetic_catalog_client.get_synthetic_catalog_metrics(ctx=ctx, view=view)
+                result = await self.synthetic_catalog_client.get_synthetic_catalog_metrics(
+                    ctx=ctx, view=view,
+                    resource_type="catalog", tool_name="manage_synthetics",
+                )
 
             elif operation == "get_synthetic_tag_catalog":
                 use_case = params.get("use_case")
@@ -319,6 +323,7 @@ Examples:
                 result = await self.synthetic_catalog_client.get_synthetic_tag_catalog(
                     use_case=use_case,
                     ctx=ctx,
+                    resource_type="catalog", tool_name="manage_synthetics",
                 )
 
 
@@ -368,6 +373,7 @@ Examples:
                     test_id=test_id,
                     test_name=test_name,
                     ctx=ctx,
+                    resource_type="settings", tool_name="manage_synthetics",
                 )
 
             elif operation == "get_synthetic_tests":
@@ -381,6 +387,7 @@ Examples:
                     limit=params.get("limit"),
                     filter_param=params.get("filter"),
                     ctx=ctx,
+                    resource_type="settings", tool_name="manage_synthetics",
                 )
 
             elif operation == "get_locations":
@@ -393,6 +400,7 @@ Examples:
                     limit=params.get("limit"),
                     filter=params.get("filter"),
                     ctx=ctx,
+                    resource_type="settings", tool_name="manage_synthetics",
                 )
 
             elif operation == "get_location_by_id":
@@ -403,6 +411,7 @@ Examples:
                     location_id=location_id,
                     location_name=location_name,
                     ctx=ctx,
+                    resource_type="settings", tool_name="manage_synthetics",
                 )
 
             elif operation == "get_all_datacenters":
@@ -410,6 +419,7 @@ Examples:
                 result = await self.synthetic_settings_client.get_all_datacenters(
                     status=params.get("status"),
                     ctx=ctx,
+                    resource_type="settings", tool_name="manage_synthetics",
                 )
 
 
@@ -455,6 +465,7 @@ Examples:
                 operation=operation,
                 params=params,
                 ctx=ctx,
+                resource_type="test_playback", tool_name="manage_synthetics",
             )
 
             return {

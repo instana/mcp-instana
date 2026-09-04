@@ -265,12 +265,17 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         self.assertIn("id", result)
 
     def test_update_custom_dashboard_success(self):
-        """Test successful update_custom_dashboard call"""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response_data = {"id": "dash1", "title": "Updated Dashboard"}
-        mock_response.data = json.dumps(mock_response_data).encode('utf-8')
-        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_response
+        """Test successful update_custom_dashboard call — re-fetches the full record."""
+        mock_put_response = MagicMock()
+        mock_put_response.status = 200
+        mock_put_response.data = b""  # PUT may return empty body
+        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_put_response
+
+        # The re-fetch (GET) returns the full record
+        mock_get_response = MagicMock()
+        mock_get_response.status = 200
+        mock_get_response.data = json.dumps({"id": "dash1", "title": "Updated Dashboard"}).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboard_without_preload_content.return_value = mock_get_response
 
         dashboard_config = {
             "title": "Updated Dashboard",
@@ -284,6 +289,7 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         ))
 
         self.custom_dashboards_api.update_custom_dashboard_without_preload_content.assert_called_once()
+        self.custom_dashboards_api.get_custom_dashboard_without_preload_content.assert_called_once()
         self.assertIn("id", result)
         self.assertEqual(result["title"], "Updated Dashboard")
 
@@ -486,10 +492,15 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
 
     def test_execute_dashboard_operation_update(self):
         """Test execute_dashboard_operation with update operation"""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
-        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_response
+        mock_put_response = MagicMock()
+        mock_put_response.status = 200
+        mock_put_response.data = b""
+        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_put_response
+
+        mock_get_response = MagicMock()
+        mock_get_response.status = 200
+        mock_get_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboard_without_preload_content.return_value = mock_get_response
 
         result = asyncio.run(self.custom_dashboard_tools.execute_dashboard_operation(
             operation="update",
@@ -736,11 +747,16 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_update_custom_dashboard_json_serialization_error(self):
-        """Test update_custom_dashboard with JSON serialization error in logging"""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
-        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_response
+        """Test update_custom_dashboard — re-fetch returns full record."""
+        mock_put_response = MagicMock()
+        mock_put_response.status = 200
+        mock_put_response.data = b""
+        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_put_response
+
+        mock_get_response = MagicMock()
+        mock_get_response.status = 200
+        mock_get_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboard_without_preload_content.return_value = mock_get_response
 
         dashboard_config = {"title": "Updated"}
 
@@ -927,11 +943,16 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         self.assertIn("id", result)
 
     def test_update_custom_dashboard_with_access_rules(self):
-        """Test update_custom_dashboard when accessRules is already present"""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
-        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_response
+        """Test update_custom_dashboard when accessRules is already present — re-fetches full record."""
+        mock_put_response = MagicMock()
+        mock_put_response.status = 200
+        mock_put_response.data = b""
+        self.custom_dashboards_api.update_custom_dashboard_without_preload_content.return_value = mock_put_response
+
+        mock_get_response = MagicMock()
+        mock_get_response.status = 200
+        mock_get_response.data = json.dumps({"id": "dash1"}).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboard_without_preload_content.return_value = mock_get_response
 
         dashboard_config = {
             "title": "Updated",

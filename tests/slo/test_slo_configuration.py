@@ -396,14 +396,70 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
             self.mock_api.get_all_slo_configs_without_preload_content.return_value = mock_response
 
             result = await self.client.get_all_slo_configs(
-                page_size=10,
-                page=1,
-                query="test",
-                tag=["production"]
+                filters={"page_size": 10, "page": 1, "query": "test", "tag": ["production"]}
             )
 
             self.assertIn("success", result)
             self.assertEqual(len(result["items"]), 1)
+
+        asyncio.run(run_test())
+
+    def test_get_all_slo_configs_with_all_filters(self):
+        """Test getting all SLO configs with every supported filter parameter."""
+        async def run_test():
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.data = json.dumps({
+                "items": [{"id": "slo-1", "name": "SLO 1"}],
+                "page": 2,
+                "pageSize": 25,
+                "totalHits": 1
+            }).encode('utf-8')
+
+            self.mock_api.get_all_slo_configs_without_preload_content.return_value = mock_response
+
+            result = await self.client.get_all_slo_configs(
+                filters={
+                    "page_size": 25,
+                    "page": 2,
+                    "order_by": "name",
+                    "order_direction": "asc",
+                    "query": "latency",
+                    "tag": ["production", "critical"],
+                    "entity_type": ["application"],
+                    "infra_entity_types": ["host"],
+                    "kubernetes_cluster_uuid": "kube-uuid-123",
+                    "blueprint": ["latency"],
+                    "slo_ids": ["slo-1", "slo-2"],
+                    "slo_status": "HEALTHY",
+                    "entity_ids": ["entity-1"],
+                    "grouped": True,
+                    "refresh": True,
+                    "rbac_tags": ["team-a"],
+                }
+            )
+
+            self.assertIn("success", result)
+            self.assertEqual(len(result["items"]), 1)
+
+            self.mock_api.get_all_slo_configs_without_preload_content.assert_called_once_with(
+                page_size=25,
+                page=2,
+                order_by="name",
+                order_direction="asc",
+                query="latency",
+                tag=["production", "critical"],
+                entity_type=["application"],
+                infra_entity_types=["host"],
+                kubernetes_cluster_uuid="kube-uuid-123",
+                blueprint=["latency"],
+                slo_ids=["slo-1", "slo-2"],
+                slo_status="HEALTHY",
+                entity_ids=["entity-1"],
+                grouped=True,
+                refresh=True,
+                rbac_tags=["team-a"],
+            )
 
         asyncio.run(run_test())
 
@@ -1131,8 +1187,8 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
         detail = next(p for p in result["parameter_details"] if p["name"] == "entity.boundaryScope")
         self.assertIn("error", detail)
 
-    def test_validate_slo_config_payload_missing_include_internal(self):
-        """Missing entity.includeInternal should be caught."""
+    def test_validate_slo_config_payload_missing_include_internal_defaults_false(self):
+        """Missing entity.includeInternal is silently defaulted to False (no elicitation)."""
         payload = {
             "name": "Test SLO",
             "tags": ["test"],
@@ -1143,11 +1199,13 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
             "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}
         }
         result = self.client._validate_slo_config_payload(payload)
-        self.assertIsNotNone(result)
-        self.assertIn("entity.includeInternal", result["missing_parameters"])
+        # Should pass validation (returns None) — no elicitation triggered
+        self.assertIsNone(result)
+        # The entity dict must have been mutated with the default
+        self.assertFalse(payload["entity"]["includeInternal"])
 
-    def test_validate_slo_config_payload_missing_include_synthetic(self):
-        """Missing entity.includeSynthetic should be caught."""
+    def test_validate_slo_config_payload_missing_include_synthetic_defaults_false(self):
+        """Missing entity.includeSynthetic is silently defaulted to False (no elicitation)."""
         payload = {
             "name": "Test SLO",
             "tags": ["test"],
@@ -1158,8 +1216,10 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
             "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}
         }
         result = self.client._validate_slo_config_payload(payload)
-        self.assertIsNotNone(result)
-        self.assertIn("entity.includeSynthetic", result["missing_parameters"])
+        # Should pass validation (returns None) — no elicitation triggered
+        self.assertIsNone(result)
+        # The entity dict must have been mutated with the default
+        self.assertFalse(payload["entity"]["includeSynthetic"])
 
     def test_validate_slo_config_payload_invalid_indicator_type(self):
         """indicator.type with an unrecognised value should be rejected."""

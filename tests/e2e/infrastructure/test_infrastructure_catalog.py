@@ -1164,10 +1164,11 @@ class TestInfrastructureCatalogComprehensiveE2E:
         )
 
         # Test that methods handle None api_client gracefully
+        # Note: get_infrastructure_catalog_plugins is excluded — it takes no parameters
+        # (returns a static cached list) so api_client=None is not applicable.
         methods_to_test = [
             client.get_available_payload_keys_by_plugin_id,
             client.get_infrastructure_catalog_metrics,
-            client.get_infrastructure_catalog_plugins,
             client.get_infrastructure_catalog_plugins_with_custom_metrics,
             client.get_tag_catalog,
             client.get_tag_catalog_all,

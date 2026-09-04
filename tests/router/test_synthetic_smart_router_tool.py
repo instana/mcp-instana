@@ -418,7 +418,7 @@ class TestSyntheticSmartRouterMCPTool(unittest.TestCase):
         """All params from the call should be forwarded to execute_playback_operation."""
         captured = {}
 
-        async def mock_execute(operation, params, ctx=None):
+        async def mock_execute(operation, params, ctx=None, **kwargs):
             captured["operation"] = operation
             captured["params"] = params
             return {}

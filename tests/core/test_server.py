@@ -330,7 +330,13 @@ class TestMCPServer(unittest.TestCase):
         mock_parser.parse_args.return_value = mock_args
         with patch('src.core.server.sys.exit'):
             main()
-        mock_app.run.assert_called_once_with(transport="streamable-http", host='0.0.0.0', port=0)
+        mock_app.run.assert_called_once_with(
+            transport="streamable-http",
+            host='0.0.0.0',
+            port=0,
+            stateless_http=True,
+            json_response=True,
+        )
 
     @patch('src.core.server.argparse.ArgumentParser')
     @patch('src.core.server.create_app')

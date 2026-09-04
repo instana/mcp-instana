@@ -19,9 +19,11 @@ except ImportError as e:
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     process_tag_catalog_response,
     project_metric_card,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 
@@ -40,6 +42,8 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
         ctx=None,
         api_client=None,
         view: str = "planner",
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get synthetic monitoring metrics catalog.
@@ -65,7 +69,13 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
                 }
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_synthetic_catalog_metrics_without_preload_content()
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_synthetic_catalog_metrics_without_preload_content),
+                ctx=ctx,
+                operation_name="get_synthetic_catalog_metrics",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             # Check if the response was successful
             if response.status != 200:
@@ -104,6 +114,8 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
         use_case: str,
         ctx=None,
         api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get synthetic monitoring tag catalog.
@@ -127,8 +139,15 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
                 return {"error": "use_case parameter is required"}
 
             # Use without_preload_content to bypass Pydantic validation
-            response = api_client.get_synthetic_tag_catalog_without_preload_content(
-                use_case=use_case
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_synthetic_tag_catalog_without_preload_content,
+                    use_case=use_case,
+                ),
+                ctx=ctx,
+                operation_name="get_synthetic_tag_catalog",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             # Check if the response was successful

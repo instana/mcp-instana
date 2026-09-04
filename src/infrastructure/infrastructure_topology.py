@@ -19,7 +19,13 @@ except ImportError:
     logger.error("Failed to import infrastructure topology API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -83,11 +89,7 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                 return {"error": "snapshot_id parameter is required"}
 
             # Call the get_related_hosts method from the SDK
-            result = api_client.get_related_hosts(
-                snapshot_id=snapshot_id,
-                to=to_time,
-                window_size=window_size
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_related_hosts, snapshot_id=snapshot_id, to=to_time, window_size=window_size), ctx=ctx, operation_name="get_related_hosts")
 
             # Convert the result to a dictionary
             if isinstance(result, list):
@@ -303,7 +305,7 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
 
             # Get and parse topology data
             try:
-                response = api_client.get_topology_without_preload_content(include_data=include_data)
+                response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_topology_without_preload_content, include_data=include_data), ctx=ctx, operation_name="get_topology_without_preload_content")
                 logger.debug("SDK call successful using get_topology_without_preload_content")
 
                 result, error = self._parse_topology_response(response)

@@ -155,7 +155,6 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         for method_name in (
             "get_available_payload_keys_by_plugin_id",
             "get_infrastructure_catalog_metrics",
-            "get_infrastructure_catalog_plugins",
             "get_infrastructure_catalog_plugins_with_custom_metrics",
             "get_tag_catalog",
             "get_tag_catalog_all",

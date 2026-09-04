@@ -35,9 +35,11 @@ except ImportError as e:
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     parse_payload,
     register_as_tool,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.core.validation import StructureValidator
@@ -56,68 +58,20 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
     def _normalize_tag_filter_expression(self, filter_expr: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize tagFilterExpression to the correct format required by the API.
+        """
+        Pass the tagFilterExpression through unchanged.
 
-        The Infrastructure Analyze API requires:
-        1. Filters must be wrapped in an EXPRESSION envelope with elements array
-        2. Value fields must use stringValue/numberValue/booleanValue (not just 'value')
-
-        This method handles both formats:
-        - Simple TAG_FILTER format (converts to EXPRESSION)
-        - Already correct EXPRESSION format (validates and fixes value fields)
+        The SDK's TagFilter.from_dict() correctly handles both "value" (mapped to the
+        TagFilterAllOfValue wrapper) and the typed fields (stringValue / numberValue /
+        booleanValue) — no pre-processing is needed here.  The infrastructure API
+        also accepts both forms directly.
 
         Args:
             filter_expr: The tagFilterExpression from the payload
 
         Returns:
-            Normalized tagFilterExpression in correct format
+            The tagFilterExpression unchanged.
         """
-        if not filter_expr or not isinstance(filter_expr, dict):
-            return filter_expr
-
-        # If it's already an EXPRESSION, validate and fix value fields in elements
-        if filter_expr.get("type") == "EXPRESSION":
-            if "elements" in filter_expr and isinstance(filter_expr["elements"], list):
-                fixed_elements = []
-                for element in filter_expr["elements"]:
-                    if isinstance(element, dict):
-                        fixed_element = element.copy()
-                        # Fix value field if present
-                        if "value" in fixed_element and "stringValue" not in fixed_element:
-                            value = fixed_element.pop("value")
-                            # Determine the correct value field based on type
-                            if isinstance(value, bool):
-                                fixed_element["booleanValue"] = value
-                            elif isinstance(value, (int, float)):
-                                fixed_element["numberValue"] = value
-                            else:
-                                fixed_element["stringValue"] = str(value)
-                        fixed_elements.append(fixed_element)
-                filter_expr["elements"] = fixed_elements
-            return filter_expr
-
-        # If it's a simple TAG_FILTER, wrap it in an EXPRESSION
-        if filter_expr.get("type") == "TAG_FILTER":
-            # Fix the value field
-            fixed_filter = filter_expr.copy()
-            if "value" in fixed_filter and "stringValue" not in fixed_filter:
-                value = fixed_filter.pop("value")
-                # Determine the correct value field based on type
-                if isinstance(value, bool):
-                    fixed_filter["booleanValue"] = value
-                elif isinstance(value, (int, float)):
-                    fixed_filter["numberValue"] = value
-                else:
-                    fixed_filter["stringValue"] = str(value)
-
-            # Wrap in EXPRESSION
-            return {
-                "type": "EXPRESSION",
-                "logicalOperator": "AND",
-                "elements": [fixed_filter]
-            }
-
-        # Return as-is if we don't recognize the format
         return filter_expr
 
     # @register_as_tool(...)  # Disabled for future reference
@@ -199,7 +153,12 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
 
             # Call the get_available_metrics method from the SDK with the query object
             logger.debug("Calling get_available_metrics with query object")
-            result = api_client.get_available_metrics(get_available_metrics_query=query_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_available_metrics,
+                    get_available_metrics_query=query_object,
+                ),
+                ctx=ctx, operation_name="get_available_metrics"
+            )
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -217,7 +176,9 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
     @with_header_auth(InfrastructureAnalyzeApi)
     async def get_entities(self,
                            payload: Optional[Union[Dict[str, Any], str]] = None,
-                           ctx=None, api_client=None) -> Dict[str, Any]:
+                           ctx=None, api_client=None,
+                           resource_type: Optional[str] = None,
+                           tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get infrastructure entities for a given entity type along with requested metrics.
 
@@ -306,23 +267,25 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                 )
                 logger.debug(f"Normalized tagFilterExpression: {request_body['tagFilterExpression']}")
 
-            # Create the GetInfrastructureQuery object
+            # Use from_dict() — NOT GetInfrastructureQuery(**dict) — to construct the
+            # model.  Pydantic's @validate_call on the public SDK method coerces the
+            # argument using __init__, which maps tagFilterExpression to the base
+            # TagFilterExpressionElement type (only "type" field).  from_dict() routes
+            # through the discriminated-union dispatcher which correctly instantiates
+            # TagFilter, preserving name/operator/entity/stringValue.
             try:
-                # Create the query object directly from the request body
-                get_infra_query = GetInfrastructureQuery(**request_body) #type: ignore
-                logger.debug("Successfully created GetInfrastructureQuery object")
+                get_infra_query = GetInfrastructureQuery.from_dict(request_body)
             except Exception as model_error:
-                error_msg = f"Failed to create GetInfrastructureQuery object: {model_error}"
-                logger.error(error_msg)
-                return {"error": error_msg, "request_body": request_body}
+                return {"error": f"Failed to create GetInfrastructureQuery: {model_error!s}"}
 
-            # Use without_preload_content to get the raw HTTP response and parse it
-            # manually. The typed sdk method (get_entities) incorrectly deserializes
-            # the infrastructure payload into an Event model, causing validation errors.
             logger.debug("Calling API method get_entities_without_preload_content")
             try:
-                response = api_client.get_entities_without_preload_content(
-                    get_infrastructure_query=get_infra_query
+                response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_entities_without_preload_content,
+                        get_infrastructure_query=get_infra_query,
+                    ),
+                    ctx=ctx, operation_name="get_entities",
+                    resource_type=resource_type, tool_name=tool_name,
                 )
 
                 if response.status != 200:
@@ -343,7 +306,9 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
     @with_header_auth(InfrastructureAnalyzeApi)
     async def get_aggregated_entity_groups(self,
                                            payload: Optional[Union[Dict[str, Any], str]] = None,
-                                           ctx=None, api_client=None) -> Dict[str, Any]:
+                                           ctx=None, api_client=None,
+                                           resource_type: Optional[str] = None,
+                                           tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get grouped infrastructure entities with aggregated metrics.
 
@@ -434,22 +399,25 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                 )
                 logger.debug(f"Normalized tagFilterExpression: {request_body['tagFilterExpression']}")
 
-            # Create the GetInfrastructureGroupsQuery object
+            # Use from_dict() — NOT GetInfrastructureGroupsQuery(**dict) — to construct
+            # the model.  Pydantic's @validate_call on the public SDK method coerces the
+            # argument using __init__, which maps tagFilterExpression to the base
+            # TagFilterExpressionElement type (only "type" field).  from_dict() routes
+            # through the discriminated-union dispatcher which correctly instantiates
+            # TagFilter, preserving name/operator/entity/stringValue.
             try:
-                # Create the query object
-                get_groups_query = GetInfrastructureGroupsQuery(**request_body)
-                logger.debug("Successfully created GetInfrastructureGroupsQuery object")
+                get_groups_query = GetInfrastructureGroupsQuery.from_dict(request_body)
             except Exception as model_error:
-                error_msg = f"Failed to create GetInfrastructureGroupsQuery object: {model_error}"
-                logger.error(error_msg, exc_info=True)
-                return {"error": error_msg, "request_body": request_body}
+                return {"error": f"Failed to create GetInfrastructureGroupsQuery: {model_error!s}"}
 
-            # Call the get_entity_groups method from the SDK
-            logger.debug("Calling API method get_entity_groups")
+            logger.debug("Calling API method get_entity_groups_without_preload_content")
             try:
-                # Use the without_preload_content version to get the raw response
-                response = api_client.get_entity_groups_without_preload_content(
-                    get_infrastructure_groups_query=get_groups_query
+                response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_entity_groups_without_preload_content,
+                        get_infrastructure_groups_query=get_groups_query,
+                    ),
+                    ctx=ctx, operation_name="get_entity_groups",
+                    resource_type=resource_type, tool_name=tool_name,
                 )
 
                 # Check if the response was successful
@@ -611,7 +579,12 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
 
             # Call the get_available_plugins method from the SDK with the query object
             logger.debug("Calling get_available_plugins with query object")
-            result = api_client.get_available_plugins(get_available_plugins_query=query_object)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_available_plugins,
+                    get_available_plugins_query=query_object,
+                ),
+                ctx=ctx, operation_name="get_available_plugins"
+            )
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):

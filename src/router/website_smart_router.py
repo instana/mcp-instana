@@ -18,7 +18,10 @@ from src.core.utils import (
     normalize_beacon_type,
     register_as_tool,
 )
-from src.core.validation import VALID_WEBSITE_BEACON_TYPES, StructureValidator
+from src.core.validation import (
+    VALID_WEBSITE_BEACON_TYPES,
+    StructureValidator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +166,7 @@ Returns:
 
 Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"beacon_type": "PAGELOAD", "use_case": "GROUPING"}
-    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
+    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
     resource_type="analyze", operation="get_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
     resource_type="catalog", operation="get_metrics"
     resource_type="configuration", operation="get_all"
@@ -341,6 +344,7 @@ Examples:
             )
 
             # Pass individual parameters to the client
+            _routing = {"resource_type": "analyze", "tool_name": "manage_websites"}
             result = await self.website_analyze_client.get_website_beacon_groups(
                 metrics=metrics,
                 group=group,
@@ -350,7 +354,7 @@ Examples:
                 fill_time_series=fill_time_series,
                 order=order,
                 pagination=pagination,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         elif operation == "get_beacons":
@@ -363,12 +367,13 @@ Examples:
             )
 
             # Pass individual parameters to the client
+            _routing = {"resource_type": "analyze", "tool_name": "manage_websites"}
             result = await self.website_analyze_client.get_website_beacons(
                 tag_filter_expression=tag_filter_expression,
                 time_frame=time_frame,
                 beacon_type=beacon_type,
                 pagination=pagination,
-                ctx=ctx
+                ctx=ctx, **_routing,
             )
 
         # Return structured response
@@ -402,10 +407,11 @@ Examples:
             }
 
         #Route to specific operation
+        _cat_routing = {"resource_type": "catalog", "tool_name": "manage_websites"}
         if operation == "get_metrics":
             view = (params or {}).get("view", "planner")
             logger.debug(f"Routing to Website Catalog Metrics | view={view}")
-            result = await self.website_catalog_client.get_website_catalog_metrics(ctx=ctx, view=view)
+            result = await self.website_catalog_client.get_website_catalog_metrics(ctx=ctx, view=view, **_cat_routing)
 
         elif operation == "get_tag_catalog":
             # Extract required parameters
@@ -458,7 +464,7 @@ Examples:
             result = await self.website_catalog_client.get_website_tag_catalog(
                 beacon_type=beacon_type,
                 use_case=use_case,
-                ctx=ctx
+                ctx=ctx, **_cat_routing,
             )
 
         # Return structured response
@@ -498,13 +504,15 @@ Examples:
         payload = params.get(PARAM_PAYLOAD)
 
         # Route to the configuration client
+        logger.info(f"Routing to {operation} [resource_type=configuration, tool_name=manage_websites]")
         result = await self.website_configuration_client.execute_website_operation(
             operation=operation,
             website_id=website_id,
             website_name=website_name,
             name=name,
             payload=payload,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="configuration", tool_name="manage_websites",
         )
 
         return {
@@ -549,7 +557,8 @@ Examples:
             operation=operation,
             website_id=website_id,
             website_name=website_name,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="advanced_config", tool_name="manage_websites",
         )
 
         return {
@@ -610,7 +619,8 @@ Examples:
             result = await self.website_alert_client.find_active_website_alert_configs(
                 website_id=website_id,
                 alert_ids=alert_ids,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="alert", tool_name="manage_websites",
             )
         elif operation == "find_website_alert_config":
             alert_id = params.get(PARAM_ALERT_ID)
@@ -635,7 +645,8 @@ Examples:
             result = await self.website_alert_client.find_website_alert_config(
                 id=alert_id,
                 valid_on=valid_on,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="alert", tool_name="manage_websites",
             )
         else:
             # This should never happen due to validation above, but handle it gracefully

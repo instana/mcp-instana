@@ -231,6 +231,9 @@ Examples:
         ctx=None
     ) -> Dict[str, Any]:
         """Unified Instana maintenance window manager for lifecycle management."""
+
+        TOOL_NAME = "manage_maintenance_windows"
+
         try:
             # Initialize params if not provided
             if params is None:
@@ -239,6 +242,8 @@ Examples:
             # Apply defaults for optional params (WatsonX may omit them entirely)
             resource_type = resource_type or RESOURCE_TYPE_WINDOW
             operation = operation or OP_LIST_SCHEDULED
+
+            logger.info(f"Received: resource_type={resource_type}, operation={operation}, tool={TOOL_NAME}")
 
             # Log all incoming parameters for debugging
             self._log_incoming_request(resource_type, operation, params)
@@ -252,7 +257,7 @@ Examples:
                 return validation_error
 
             # Route to the appropriate resource handler
-            return await self._route_to_handler(resource_type, operation, params, ctx)
+            return await self._route_to_handler(resource_type, operation, params, ctx, tool_name=TOOL_NAME)
 
         except Exception as e:
             return self._handle_error(e, resource_type, operation, params or {})
@@ -305,13 +310,14 @@ Examples:
         resource_type: str,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Route request to appropriate resource handler."""
         if resource_type == RESOURCE_TYPE_WINDOW:
-            return await self._handle_window(operation, params, ctx)
+            return await self._handle_window(operation, params, ctx, tool_name=tool_name)
         elif resource_type == RESOURCE_TYPE_TEMPLATES:
-            return await self._handle_templates(operation, ctx)
+            return await self._handle_templates(operation, ctx, tool_name=tool_name)
         else:
             return {
                 "elicitation_needed": True,
@@ -461,7 +467,8 @@ Examples:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handle maintenance window lifecycle operations."""
         if operation not in WINDOW_VALID_OPERATIONS:
@@ -503,7 +510,7 @@ Examples:
         if validation_error:
             return validation_error
 
-        logger.info(f"Routing to Maintenance Window client for operation: {operation}")
+        logger.info(f"Routing to Maintenance Window client for operation: {operation} [resource_type={RESOURCE_TYPE_WINDOW}, tool={tool_name}]")
 
         operation_params = {
             PARAM_APPLICATION_ID: params.get(PARAM_APPLICATION_ID),
@@ -531,7 +538,9 @@ Examples:
         result = await self.maintenance_window_client.execute_maintenance_operation(
             operation=operation,
             params=operation_params,
-            ctx=ctx
+            ctx=ctx,
+            resource_type=RESOURCE_TYPE_WINDOW,
+            tool_name=tool_name,
         )
 
         return {
@@ -543,7 +552,8 @@ Examples:
     async def _handle_templates(
         self,
         operation: str,
-        ctx
+        ctx,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handle maintenance window template retrieval."""
         if operation not in TEMPLATES_VALID_OPERATIONS:
@@ -561,12 +571,14 @@ Examples:
                 "message": f"Invalid operation '{operation}' for resource_type 'templates'. Valid operations: {TEMPLATES_VALID_OPERATIONS}"
             }
 
-        logger.info("Routing to Maintenance Window client for get_templates")
+        logger.info(f"Routing to Maintenance Window client for get_templates [resource_type={RESOURCE_TYPE_TEMPLATES}, tool={tool_name}]")
 
         result = await self.maintenance_window_client.execute_maintenance_operation(
             operation="get_templates",
             params={},
-            ctx=ctx
+            ctx=ctx,
+            resource_type=RESOURCE_TYPE_TEMPLATES,
+            tool_name=tool_name,
         )
 
         return {

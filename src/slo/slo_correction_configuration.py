@@ -22,7 +22,12 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -193,22 +198,14 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
         slo_id: Optional[List[str]] = None,
         refresh: Optional[bool] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get all SLO correction window configurations with optional filtering."""
         try:
             logger.debug(f"get_all_corrections called with page_size: {page_size}, page: {page}")
-            result = api_client.get_all_slo_correction_window_configs_without_preload_content(
-                page_size = page_size,
-                page = page,
-                order_by = order_by,
-                order_direction = order_direction,
-                query = query,
-                tag = tag,
-                id = id,
-                slo_id = slo_id,
-                refresh = refresh
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_correction_window_configs_without_preload_content, page_size=page_size, page=page, order_by=order_by, order_direction=order_direction, query=query, tag=tag, id=id, slo_id=slo_id, refresh=refresh), ctx=ctx, operation_name="get_all_slo_correction_window_configs", resource_type=resource_type, tool_name=tool_name)
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
@@ -227,17 +224,17 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
     @with_header_auth(SLOCorrectionConfigurationsApi)
     async def get_correction_by_id(self,
        id: str,
-       ctx = None,
-       api_client=None
+       ctx=None,
+       api_client=None,
+       resource_type: Optional[str] = None,
+       tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get a specific SLO correction window configuration by ID."""
         try:
             if not id:
                 return {"error": "ID is required"}
             logger.debug(f"get_correction_by_id called with id: {id}")
-            result = api_client.get_slo_correction_window_config_by_id_without_preload_content(
-                id=id
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_slo_correction_window_config_by_id_without_preload_content, id=id), ctx=ctx, operation_name="get_slo_correction_window_config_by_id", resource_type=resource_type, tool_name=tool_name)
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
@@ -253,7 +250,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
     async def create_correction(self,
         payload: Union[Dict[str, Any], str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create new SLO correction window configuration."""
         try:
@@ -301,9 +300,7 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
                 active = request_body.get("active")
             )
 
-            result = api_client.create_slo_correction_window_config_without_preload_content(
-                correction_configuration=correction_object
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_slo_correction_window_config_without_preload_content, correction_configuration=correction_object), ctx=ctx, operation_name="create_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -327,8 +324,10 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
         self,
         id: str,
         payload: Union[Dict[str, Any], str],
-        api_client = None,
-        ctx = None
+        api_client=None,
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update existing SLO correction window configuration."""
         try:
@@ -378,10 +377,7 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
                 active=request_body.get("active")
             )
 
-            result = api_client.update_slo_correction_window_config_without_preload_content(
-                id=id,
-                correction_configuration=correction_object
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_slo_correction_window_config_without_preload_content, id=id, correction_configuration=correction_object), ctx=ctx, operation_name="update_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
 
             if result.status >= 400:
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
@@ -401,14 +397,16 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
     async def delete_correction(self,
         id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delete SLO correction window configuration."""
         try:
             if not id:
                 return {"error": "id is required"}
 
-            api_client.delete_slo_correction_window_config(id=id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_correction_window_config, id=id), ctx=ctx, operation_name="delete_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
             return {"success": True, "message": f"Correction window '{id}' deleted"}
 
         except Exception as e:

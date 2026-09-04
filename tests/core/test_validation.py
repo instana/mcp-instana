@@ -823,6 +823,17 @@ class TestStructureValidatorGroup(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(any("groupbyTagEntity" in e for e in result["api_error"]))
 
+    def test_default_guidance_is_unchanged(self):
+        """No entity_guidance must reproduce the pre-parameter message exactly,
+        so any call site that does not opt in is unaffected."""
+        expected = (
+            "group.groupbyTagEntity: required. "
+            "Valid values: ['DESTINATION', 'NOT_APPLICABLE', 'SOURCE']. "
+            'Example: "groupbyTagEntity": "DESTINATION"'
+        )
+        result = StructureValidator.validate_group({"groupbyTag": "service.name"})
+        self.assertEqual(result["api_error"][0], expected)
+
     def test_invalid_groupby_tag_entity(self):
         group = {"groupbyTag": "service.name", "groupbyTagEntity": "ALL"}
         result = StructureValidator.validate_group(group)

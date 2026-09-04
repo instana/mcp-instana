@@ -397,6 +397,7 @@ class TestActionHistoryMCPTools(unittest.TestCase):
         self.action_history_api.get_action_instances.return_value = mock_response
 
         result = asyncio.run(self.action_history_tools.list_action_instances(
+            filters={},
             api_client=self.action_history_api
         ))
 
@@ -415,18 +416,20 @@ class TestActionHistoryMCPTools(unittest.TestCase):
         self.action_history_api.get_action_instances.return_value = mock_response
 
         result = asyncio.run(self.action_history_tools.list_action_instances(
-            window_size=3600000,
-            to=1234567890000,
-            page=1,
-            page_size=50,
-            target_snapshot_id="snap123",
-            event_id="event456",
-            event_specification_id="spec789",
-            search="test",
-            types=["script", "webhook"],
-            action_statuses=["SUCCESS", "FAILED"],
-            order_by="timestamp",
-            order_direction="DESC",
+            filters={
+                "window_size": 3600000,
+                "to": 1234567890000,
+                "page": 1,
+                "page_size": 50,
+                "target_snapshot_id": "snap123",
+                "event_id": "event456",
+                "event_specification_id": "spec789",
+                "search": "test",
+                "types": ["script", "webhook"],
+                "action_statuses": ["SUCCESS", "FAILED"],
+                "order_by": "timestamp",
+                "order_direction": "DESC",
+            },
             api_client=self.action_history_api
         ))
 
@@ -455,6 +458,7 @@ class TestActionHistoryMCPTools(unittest.TestCase):
         self.action_history_api.get_action_instances.side_effect = Exception("API Error")
 
         result = asyncio.run(self.action_history_tools.list_action_instances(
+            filters={},
             api_client=self.action_history_api
         ))
 
@@ -467,6 +471,7 @@ class TestActionHistoryMCPTools(unittest.TestCase):
         self.action_history_api.get_action_instances.return_value = None
 
         result = asyncio.run(self.action_history_tools.list_action_instances(
+            filters={},
             api_client=self.action_history_api
         ))
 

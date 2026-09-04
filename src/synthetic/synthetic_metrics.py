@@ -20,8 +20,10 @@ except ImportError as e:
 
 from src.core.utils import (
     BaseInstanaClient,
+    call_sdk_fn,
     decode_response,
     parse_payload,
+    sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.core.validation import StructureValidator
@@ -38,7 +40,9 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
     @with_header_auth(SyntheticMetricsApi)
     async def get_metrics_result(self,
                                 payload: Optional[Union[Dict[str, Any], str]] = None,
-                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                ctx=None, api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get synthetic beacon metrics.
 
@@ -104,8 +108,15 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
                 return {"error": f"Failed to build GetMetricsResult: {e!s}"}
 
             logger.debug("[get_metrics_result] Calling get_metrics_result with config object")
-            response = api_client.get_metrics_result_without_preload_content(
-                get_metrics_result=config_object
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_metrics_result_without_preload_content,
+                    get_metrics_result=config_object,
+                ),
+                ctx=ctx,
+                operation_name="get_metrics_result",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             if response.status != 200:

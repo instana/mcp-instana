@@ -7,6 +7,7 @@ are removed since they are internal implementation details.
 """
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -136,14 +137,18 @@ class MockBaseInstanaClient:
         return {"data": "mock_response"}
 
 
+from src.core.utils import call_sdk_fn as _real_call_sdk_fn
 from src.core.utils import decode_response as _real_decode_response
 from src.core.utils import parse_payload as _real_parse_payload
+from src.core.utils import sdk_call_with_keepalive as _real_sdk_call_with_keepalive
 
 mock_src_core_utils.BaseInstanaClient = MockBaseInstanaClient
 mock_src_core_utils.register_as_tool = lambda *args, **kwargs: lambda func: func
 mock_src_core_utils.with_header_auth = mock_with_header_auth
 mock_src_core_utils.parse_payload = _real_parse_payload
 mock_src_core_utils.decode_response = _real_decode_response
+mock_src_core_utils.call_sdk_fn = _real_call_sdk_fn
+mock_src_core_utils.sdk_call_with_keepalive = _real_sdk_call_with_keepalive
 
 # Build the full mocks dict for patch.dict
 _mocks = {
@@ -208,10 +213,10 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         mock_api_client.reset_mock()
         mock_settings_api.reset_mock()
 
-        # Reset all side_effects to None
+        # Reset all side_effects to None (public and specific private methods)
         for attr_name in dir(mock_settings_api):
             attr = getattr(mock_settings_api, attr_name)
-            if callable(attr) and not attr_name.startswith('_'):
+            if callable(attr) and not attr_name.startswith('__'):
                 import contextlib
                 with contextlib.suppress(AttributeError):
                     attr.side_effect = None
@@ -265,7 +270,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
             id="app1"
         ))
 
-        self.client._get_application_config.assert_called_once_with("app1", None)
+        self.client._get_application_config.assert_called_once_with("app1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, expected)
 
     def test_execute_settings_operation_application_create(self):
@@ -280,7 +285,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
             payload=payload
         ))
 
-        self.client._add_application_config.assert_called_once_with(payload, None)
+        self.client._add_application_config.assert_called_once_with(payload, None, resource_type=None, tool_name=None)
         self.assertEqual(result, expected)
 
     def test_execute_settings_operation_application_delete(self):
@@ -294,7 +299,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
             id="app1"
         ))
 
-        self.client._delete_application_config.assert_called_once_with("app1", None)
+        self.client._delete_application_config.assert_called_once_with("app1", None, resource_type=None, tool_name=None)
         self.assertEqual(result, expected)
 
     def test_execute_settings_operation_manual_service_get_all(self):
@@ -423,12 +428,11 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_add_application_config_success(self):
         """Test _add_application_config with valid payload"""
-        # Reset any side_effect from previous tests
-        mock_settings_api.add_application_config.side_effect = None
-
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "new-app", "label": "Test App"}
-        mock_settings_api.add_application_config.return_value = mock_result
+        data = {"id": "new-app", "label": "Test App"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._add_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {"label": "Test App"}
         result = asyncio.run(self.client._add_application_config(payload))
@@ -438,7 +442,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_add_application_config_exception(self):
         """Test _add_application_config handles exceptions"""
-        mock_settings_api.add_application_config.side_effect = Exception("API Error")
+        mock_settings_api._add_application_config_serialize.side_effect = Exception("API Error")
 
         payload = {"label": "Test App"}
         result = asyncio.run(self.client._add_application_config(payload))
@@ -455,9 +459,10 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_get_application_config_success(self):
         """Test _get_application_config with valid ID"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1", "label": "Test App"}
-        mock_settings_api.get_application_config.return_value = mock_result
+        data = {"id": "app1", "label": "Test App"}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.get_application_config_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
@@ -470,9 +475,11 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_update_application_config_success(self):
         """Test _update_application_config with valid parameters"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1", "label": "Updated"}
-        mock_settings_api.put_application_config.return_value = mock_result
+        data = {"id": "app1", "label": "Updated"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {"label": "Updated", "scope": "INCLUDE_ALL_DOWNSTREAM"}
         result = asyncio.run(self.client._update_application_config("app1", payload))
@@ -911,20 +918,22 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_get_application_config_exception(self):
         """Test _get_application_config handles exceptions"""
-        mock_settings_api.get_application_config.side_effect = Exception("API Error")
+        mock_settings_api.get_application_config_without_preload_content.side_effect = Exception("API Error")
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
         self.assertIn("error", result)
 
     def test_get_application_config_no_to_dict(self):
-        """Test _get_application_config when result doesn't have to_dict"""
-        mock_result = {"id": "app1", "label": "App"}
-        mock_settings_api.get_application_config.return_value = mock_result
+        """Test _get_application_config returns parsed JSON from raw response"""
+        data = {"id": "app1", "label": "App"}
+        mock_response = MagicMock()
+        mock_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.get_application_config_without_preload_content.return_value = mock_response
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
-        self.assertEqual(result, mock_result)
+        self.assertEqual(result, data)
 
     def test_add_application_config_validation_error(self):
         """Test _add_application_config without label returns elicitation"""
@@ -933,20 +942,25 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertTrue(any("label" in e for e in result["api_error"]))
 
     def test_add_application_config_no_to_dict(self):
-        """Test _add_application_config when result doesn't have to_dict"""
-        mock_settings_api.add_application_config.side_effect = None
-        mock_settings_api.add_application_config.return_value = None
+        """Test _add_application_config when API returns empty response returns message"""
+        data = {}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._add_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {"label": "Test App"}
         result = asyncio.run(self.client._add_application_config(payload))
 
-        self.assertIn("success", result)
+        self.assertIn("message", result)
 
     def test_update_application_config_with_string_payload(self):
         """Test _update_application_config with string JSON payload"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1", "label": "Updated"}
-        mock_settings_api.put_application_config.return_value = mock_result
+        data = {"id": "app1", "label": "Updated"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = '{"label": "Updated"}'
         result = asyncio.run(self.client._update_application_config("app1", payload))
@@ -955,9 +969,11 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_update_application_config_with_ast_literal_eval(self):
         """Test _update_application_config with Python dict string"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1", "label": "Updated"}
-        mock_settings_api.put_application_config.return_value = mock_result
+        data = {"id": "app1", "label": "Updated"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = "{'label': 'Updated'}"
         result = asyncio.run(self.client._update_application_config("app1", payload))
@@ -973,9 +989,11 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_update_application_config_with_tag_filter_expression(self):
         """Test _update_application_config with EXPRESSION tag filter"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1"}
-        mock_settings_api.put_application_config.return_value = mock_result
+        data = {"id": "app1"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {
             "label": "Test",
@@ -998,9 +1016,11 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_update_application_config_with_simple_tag_filter(self):
         """Test _update_application_config with TAG_FILTER type"""
-        mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"id": "app1"}
-        mock_settings_api.put_application_config.return_value = mock_result
+        data = {"id": "app1"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {
             "label": "Test",
@@ -1017,8 +1037,12 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertIn("id", result)
 
     def test_update_application_config_no_to_dict(self):
-        """Test _update_application_config when result doesn't have to_dict"""
-        mock_settings_api.put_application_config.return_value = None
+        """Test _update_application_config when API returns empty response returns success"""
+        data = {}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
 
         payload = {"label": "Updated"}
         result = asyncio.run(self.client._update_application_config("app1", payload))
@@ -1027,7 +1051,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
     def test_update_application_config_exception(self):
         """Test _update_application_config handles exceptions"""
-        mock_settings_api.put_application_config.side_effect = Exception("API Error")
+        mock_settings_api._put_application_config_serialize.side_effect = Exception("API Error")
 
         payload = {"label": "Updated"}
         result = asyncio.run(self.client._update_application_config("app1", payload))

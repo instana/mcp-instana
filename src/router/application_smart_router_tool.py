@@ -70,7 +70,7 @@ CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER:
        - resource_type="catalog", operation="get_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and data sources
 
-2. SECOND: Call get_tag_catalog to get valid tag names
+    2. SECOND: Call get_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_tag_catalog"
        - params: {"use_case": "GROUPING", "data_source": "CALLS"}
 
@@ -368,7 +368,8 @@ Examples:
             include_synthetic=include_synthetic,
             order=order,
             pagination=pagination,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="metrics", tool_name="manage_applications",
         )
 
         return {
@@ -436,7 +437,8 @@ Examples:
             valid_on=valid_on,
             created=created,
             payload=payload,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="alert_config", tool_name="manage_applications",
         )
 
         return {
@@ -506,7 +508,8 @@ Examples:
             valid_on=valid_on,
             created=created,
             payload=payload,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="global_alert_config", tool_name="manage_applications",
         )
 
         return {
@@ -630,7 +633,8 @@ Examples:
             id=settings_id,
             payload=payload,
             request_body=request_body,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="settings", tool_name="manage_applications",
         )
 
         return {
@@ -780,7 +784,8 @@ Examples:
 
         # Route to the analyze client with params
         result = await self.app_analyze_client.execute_analyze_operation(
-            operation=operation, params=params, ctx=ctx
+            operation=operation, params=params, ctx=ctx,
+            resource_type="analyze", tool_name="manage_applications",
         )
 
         return {
@@ -824,7 +829,8 @@ Examples:
                 use_case=use_case,
                 data_source=data_source,
                 var_from=var_from,
-                ctx=ctx
+                ctx=ctx,
+                resource_type="catalog", tool_name="manage_applications",
             )
 
             return {
@@ -836,7 +842,8 @@ Examples:
         elif operation == "get_metric_catalog":
             logger.info("Routing to Application Metric Catalog")
             result = await self.app_catalog_client.get_application_metric_catalog(
-                ctx=ctx
+                ctx=ctx,
+                resource_type="catalog", tool_name="manage_applications",
             )
 
             return {
@@ -907,7 +914,8 @@ Examples:
             technologies=technologies,
             application_boundary_scope=application_boundary_scope,
             include_snapshot_ids=include_snapshot_ids,
-            ctx=ctx
+            ctx=ctx,
+            resource_type="resources", tool_name="manage_applications",
         )
 
         return {

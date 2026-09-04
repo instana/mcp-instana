@@ -87,7 +87,7 @@ class TestReleasesMCPToolsE2E:
             {"id": "rel-2", "name": "release-2", "start": 2000000},
             {"id": "rel-3", "name": "release-3", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -121,7 +121,7 @@ class TestReleasesMCPToolsE2E:
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1500000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -160,7 +160,7 @@ class TestReleasesMCPToolsE2E:
             {"id": "rel-2", "name": "backend-release-2", "start": 2000000},
             {"id": "rel-3", "name": "frontend-release-3", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -194,7 +194,7 @@ class TestReleasesMCPToolsE2E:
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -233,7 +233,7 @@ class TestReleasesMCPToolsE2E:
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -282,7 +282,7 @@ class TestReleasesMCPToolsE2E:
             {"id": "rel-4", "name": "frontend-release-4", "start": 1800000},
             {"id": "rel-5", "name": "backend-release-5", "start": 1900000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -316,7 +316,7 @@ class TestReleasesMCPToolsE2E:
 
         mock_response = MagicMock()
         import json
-        mock_response.read.return_value = json.dumps([]).encode('utf-8')
+        mock_response.data = json.dumps([]).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -380,7 +380,7 @@ class TestReleasesMCPToolsE2E:
             "start": 1000000,
             "applications": [{"name": "app1"}]
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         mock_api_client.get_release_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -443,7 +443,7 @@ class TestReleasesMCPToolsE2E:
             "name": "new-release",
             "start": 1000000
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         mock_api_client.post_release_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -474,7 +474,7 @@ class TestReleasesMCPToolsE2E:
         mock_response = MagicMock()
         import json
         release_data = {"id": "rel-new", "name": "new-release", "start": 1000000}
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         mock_api_client.post_release_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -508,7 +508,7 @@ class TestReleasesMCPToolsE2E:
             "name": "updated-release",
             "start": 2000000
         }
-        mock_response.read.return_value = json.dumps(release_data).encode('utf-8')
+        mock_response.data = json.dumps(release_data).encode('utf-8')
         mock_api_client.put_release_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -537,7 +537,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
-        mock_response.read.return_value = b''
+        mock_response.data = b''
         mock_api_client.delete_release_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -600,7 +600,7 @@ class TestReleasesMCPToolsE2E:
             {"id": "rel-2", "name": "FRONTEND-APP", "start": 2000000},
             {"id": "rel-3", "name": "backend-release", "start": 3000000}
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client
@@ -632,7 +632,7 @@ class TestReleasesMCPToolsE2E:
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 101)  # 100 releases
         ]
-        mock_response.read.return_value = json.dumps(releases_data).encode('utf-8')
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
 
         # Create the client

@@ -96,7 +96,13 @@ from instana_client.api.maintenance_configuration_api import MaintenanceConfigur
 from instana_client.models.maintenance_config_v2 import MaintenanceConfigV2
 
 from src.core.timestamp_utils import get_current_timestamp
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +198,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         operation: str,
         params: Optional[Dict[str, Any]] = None,
         ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -354,7 +362,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             return await self._route_operation(
                 operation=operation,
                 params=route_params,
-                ctx=ctx
+                ctx=ctx,
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
         except Exception as e:
@@ -491,7 +501,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx: Optional[Any]
+        ctx: Optional[Any],
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Route operation to appropriate handler method."""
         # Extract parameters from params dict
@@ -504,43 +516,35 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         duration_hours = params.get("duration_hours")
         duration_days = params.get("duration_days")
         reason = params.get("reason")
-        template = params.get("template")
-        change_request_id = params.get("change_request_id")
-        use_tag_filter_expression = params.get("use_tag_filter_expression")
-        tag_name = params.get("tag_name")
         rrule = params.get("rrule")
         until_date = params.get("until_date")
         completion_notes = params.get("completion_notes")
-        application_ids = params.get("application_ids")
-        imap_codes = params.get("imap_codes")
+
+        logger.info(f"[{tool_name}] _route_operation: {operation} [resource_type={resource_type}]")
 
         operation_handlers = {
-            "create": lambda: self._create_maintenance_window(params=params, ctx=ctx),
+            "create": lambda: self._create_maintenance_window(params=params, ctx=ctx, resource_type=resource_type, tool_name=tool_name),
             "modify": lambda: self._handle_modify_operation(
                 window_id, end_time, duration_minutes, duration_hours, duration_days,
-                reason, rrule, until_date, ctx
+                reason, rrule, until_date, ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "close": lambda: self._close_maintenance_window(
-                window_id=window_id, completion_notes=completion_notes, ctx=ctx
+                window_id=window_id, completion_notes=completion_notes, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "list_active": lambda: self._list_active_windows(
-                application_id=application_id or imap_code, ctx=ctx
+                application_id=application_id or imap_code, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "list_scheduled": lambda: self._list_scheduled_windows(
-                application_id=application_id or imap_code, ctx=ctx
+                application_id=application_id or imap_code, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "list_all": lambda: self._list_all_windows(
-                application_id=application_id or imap_code, ctx=ctx
+                application_id=application_id or imap_code, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "list_expired": lambda: self._list_expired_windows(
-                application_id=application_id or imap_code, ctx=ctx
+                application_id=application_id or imap_code, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "bulk_create": lambda: self._bulk_create_windows(
-                application_ids=application_ids, imap_codes=imap_codes, start_time=start_time,
-                duration_minutes=duration_minutes, duration_hours=duration_hours,
-                duration_days=duration_days, reason=reason, template=template,
-                change_request_id=change_request_id, use_tag_filter_expression=use_tag_filter_expression,
-                tag_name=tag_name, ctx=ctx
+                params=params, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             ),
             "validate": lambda: self._validate_window_params(
                 application_id=application_id or imap_code, start_time=start_time
@@ -562,7 +566,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                                        duration_minutes: Optional[int], duration_hours: Optional[int],
                                        duration_days: Optional[int], reason: Optional[str],
                                        rrule: Optional[str], until_date: Optional[str],
-                                       ctx: Optional[Any]) -> Dict[str, Any]:
+                                       ctx: Optional[Any],
+                                       resource_type: Optional[str] = None,
+                                       tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Handle modify operation with duration conversion."""
         final_duration_minutes = duration_minutes
         if duration_hours and not duration_minutes:
@@ -574,7 +580,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
         return await self._modify_maintenance_window(
             window_id=window_id, end_time=end_time, duration_minutes=final_duration_minutes,
-            reason=reason, rrule=rrule, until_date=until_date, ctx=ctx
+            reason=reason, rrule=rrule, until_date=until_date, ctx=ctx,
+            resource_type=resource_type, tool_name=tool_name,
         )
 
     def _check_response_status(self, response, operation_name: str) -> Optional[Dict[str, Any]]:
@@ -603,7 +610,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         params: Dict[str, Any],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new maintenance window in Instana using real API structure.
@@ -727,10 +736,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             maintenance_config = MaintenanceConfigV2.from_dict(window_payload)
 
             # Use without_preload_content to avoid pydantic validation issues
-            response = api_client.put_maintenance_config_v2_without_preload_content(
-                id=window_id,
-                maintenance_config_v2=maintenance_config
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.put_maintenance_config_v2_without_preload_content, id=window_id, maintenance_config_v2=maintenance_config), ctx=ctx, operation_name="put_maintenance_config_v2_create", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "create maintenance window")
@@ -738,7 +744,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             result = json.loads(response_data) if response_data else {}
 
             if not result:
@@ -1155,15 +1161,23 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             }
         return None
 
-    def _fetch_existing_window(self, window_id: str, api_client) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    async def _fetch_existing_window(self, window_id: str, api_client, ctx=None,
+                                     resource_type: Optional[str] = None,
+                                     tool_name: Optional[str] = None) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """Fetch existing maintenance window. Returns (window_data, error)."""
         try:
-            response = api_client.get_maintenance_config_v2_without_preload_content(id=window_id)
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_maintenance_config_v2_without_preload_content, id=window_id),
+                ctx=ctx,
+                operation_name="get_maintenance_config_v2_fetch",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
             status_error = self._check_response_status(response, "fetch maintenance window")
             if status_error:
                 return None, status_error
 
-            response_data = response.read()
+            response_data = response.data
             existing_window = json.loads(response_data) if response_data else None
 
             if not existing_window:
@@ -1360,7 +1374,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         rrule: Optional[str] = None,
         until_date: Optional[str] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Modify an existing maintenance window.
@@ -1390,7 +1406,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             assert window_id is not None, "window_id validated but is None"
 
             # Fetch existing window
-            existing_window, fetch_error = self._fetch_existing_window(window_id, api_client)
+            existing_window, fetch_error = await self._fetch_existing_window(window_id, api_client, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
             if fetch_error:
                 return fetch_error
 
@@ -1415,10 +1431,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             # Create MaintenanceConfigV2 object and update
             maintenance_config = MaintenanceConfigV2.from_dict(update_payload)
-            response = api_client.put_maintenance_config_v2_without_preload_content(
-                id=window_id,
-                maintenance_config_v2=maintenance_config
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.put_maintenance_config_v2_without_preload_content, id=window_id, maintenance_config_v2=maintenance_config), ctx=ctx, operation_name="put_maintenance_config_v2_modify", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "update maintenance window")
@@ -1426,14 +1439,14 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Parse response
-            response_data = response.read()
+            response_data = response.data
             result = json.loads(response_data) if response_data else {}
             if not result:
                 return {"error": "Empty response from API"}
 
             # Fetch updated window for verification
-            response = api_client.get_maintenance_config_v2_without_preload_content(id=window_id)
-            response_data = response.read()
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_config_v2_without_preload_content, id=window_id), ctx=ctx, operation_name="get_maintenance_config_v2_verify", resource_type=resource_type, tool_name=tool_name)
+            response_data = response.data
             updated_window = json.loads(response_data) if response_data else {}
 
             # Calculate new end time
@@ -1465,7 +1478,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         window_id: Optional[str],
         completion_notes: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Close and document a maintenance window.
@@ -1501,9 +1516,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             # Delete/close the maintenance window using API client
             # The delete_maintenance_config_v2_without_preload_content method
             # takes 'id' as the parameter for the window ID
-            response = api_client.delete_maintenance_config_v2_without_preload_content(
-                id=window_id
-            )
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_maintenance_config_v2_without_preload_content, id=window_id), ctx=ctx, operation_name="delete_maintenance_config_v2", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "close maintenance window")
@@ -1511,7 +1524,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read the response (delete typically returns empty response)
-            response.read()
+            _ = response.data
 
             closed_at = get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]
 
@@ -1604,7 +1617,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         application_id: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List all active maintenance windows.
@@ -1618,7 +1633,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         try:
             # Get all maintenance windows using API client
-            response = api_client.get_maintenance_configs_v2_without_preload_content()
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_configs_v2_without_preload_content), ctx=ctx, operation_name="get_maintenance_configs_v2_active", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "list active windows")
@@ -1626,7 +1641,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             all_windows = json.loads(response_data) if response_data else []
 
             if not isinstance(all_windows, list):
@@ -1685,7 +1700,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         application_id: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List all scheduled maintenance windows.
@@ -1699,7 +1716,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         try:
             # Get all maintenance windows using API client
-            response = api_client.get_maintenance_configs_v2_without_preload_content()
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_configs_v2_without_preload_content), ctx=ctx, operation_name="get_maintenance_configs_v2_scheduled", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "list scheduled windows")
@@ -1707,7 +1724,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             all_windows = json.loads(response_data) if response_data else []
 
             if not isinstance(all_windows, list):
@@ -1782,7 +1799,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         application_id: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List all maintenance windows (active, scheduled, and expired).
@@ -1796,7 +1815,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         try:
             # Get all maintenance windows using API client
-            response = api_client.get_maintenance_configs_v2_without_preload_content()
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_configs_v2_without_preload_content), ctx=ctx, operation_name="get_maintenance_configs_v2_all", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "list all windows")
@@ -1804,7 +1823,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             all_windows = json.loads(response_data) if response_data else []
 
             if not isinstance(all_windows, list):
@@ -1861,7 +1880,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         self,
         application_id: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         List all expired maintenance windows.
@@ -1875,7 +1896,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """
         try:
             # Get all maintenance windows using API client
-            response = api_client.get_maintenance_configs_v2_without_preload_content()
+            response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_configs_v2_without_preload_content), ctx=ctx, operation_name="get_maintenance_configs_v2_expired", resource_type=resource_type, tool_name=tool_name)
 
             # Check response status
             status_error = self._check_response_status(response, "list expired windows")
@@ -1883,7 +1904,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return status_error
 
             # Read and parse the response
-            response_data = response.read()
+            response_data = response.data
             all_windows = json.loads(response_data) if response_data else []
 
             if not isinstance(all_windows, list):
@@ -1917,43 +1938,36 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
     @with_header_auth(MaintenanceConfigurationApi)
     async def _bulk_create_windows(
         self,
-        application_ids: Optional[List[str]],
-        imap_codes: Optional[List[str]],
-        start_time: Optional[int],
-        duration_minutes: Optional[int],
-        duration_hours: Optional[int],
-        duration_days: Optional[int],
-        reason: Optional[str],
-        template: Optional[str],
-        change_request_id: Optional[str],
-        use_tag_filter_expression: Optional[bool],
-        tag_name: Optional[str],
+        params: Dict[str, Any],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create maintenance windows for multiple IMAP codes or applications.
 
         Args:
-            application_ids: List of application IDs (legacy support)
-            imap_codes: List of IMAP codes
-            start_time: Start time for all windows
-            duration_minutes: Duration in minutes
-            duration_hours: Duration in hours
-            duration_days: Duration in days
-            reason: Reason for maintenance
-            template: Template to apply
-            change_request_id: ServiceNow change request ID
-            use_tag_filter_expression: Use tag filter expression format
-            tag_name: Tag name for filter expression
+            params: Dictionary containing parameters:
+                - application_ids: List of application IDs (legacy support)
+                - imap_codes: List of IMAP codes
+                - start_time: Start time for all windows
+                - duration_minutes: Duration in minutes
+                - duration_hours: Duration in hours
+                - duration_days: Duration in days
+                - reason: Reason for maintenance
+                - template: Template to apply
+                - change_request_id: ServiceNow change request ID
+                - use_tag_filter_expression: Use tag filter expression format
+                - tag_name: Tag name for filter expression
             ctx: MCP context
 
         Returns:
             Dictionary with bulk creation results
         """
         try:
-            # Use imap_codes if provided, otherwise use application_ids
-            target_codes = imap_codes or application_ids
+            target_codes = params.get("imap_codes") or params.get("application_ids")
+            start_time = params.get("start_time")
 
             errors = []
             if not target_codes:
@@ -1978,27 +1992,30 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
             results = []
             for code in target_codes:
+                window_params = {
+                    "application_id": None,
+                    "imap_code": code,
+                    "start_time": start_time,
+                    "end_time": None,
+                    "duration_minutes": params.get("duration_minutes"),
+                    "duration_hours": params.get("duration_hours"),
+                    "duration_days": params.get("duration_days"),
+                    "reason": params.get("reason"),
+                    "template": params.get("template"),
+                    "change_request_id": params.get("change_request_id"),
+                    "affected_services": None,
+                    "notification_channels": None,
+                    "use_tag_filter_expression": params.get("use_tag_filter_expression"),
+                    "tag_name": params.get("tag_name"),
+                    "rrule": None,
+                    "until_date": None,
+                }
                 result = await self._create_maintenance_window(
-                    params={
-                        "application_id": None,
-                        "imap_code": code,
-                        "start_time": start_time,
-                        "end_time": None,
-                        "duration_minutes": duration_minutes,
-                        "duration_hours": duration_hours,
-                        "duration_days": duration_days,
-                        "reason": reason,
-                        "template": template,
-                        "change_request_id": change_request_id,
-                        "affected_services": None,
-                        "notification_channels": None,
-                        "use_tag_filter_expression": use_tag_filter_expression,
-                        "tag_name": tag_name,
-                        "rrule": None,
-                        "until_date": None
-                    },
+                    params=window_params,
                     ctx=ctx,
-                    api_client=api_client
+                    api_client=api_client,
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
                 results.append({
                     "imap_code": code,

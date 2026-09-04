@@ -30,8 +30,17 @@ except ImportError:
     logger.error("Failed to import application analyze API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
-from src.core.validation import BooleanCoercer, StructureValidator
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
+from src.core.validation import (
+    BooleanCoercer,
+    StructureValidator,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -66,6 +75,8 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         operation: str,
         params: Optional[Union[Dict[str, Any], str]] = None,
         ctx: Optional[Context] = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Application Analyze operations.
@@ -80,20 +91,21 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             Operation result dictionary
         """
         try:
+            _routing = {"resource_type": resource_type, "tool_name": tool_name}
             if operation == "get_all_traces":
                 payload = params.get('payload')
-                return await self.get_all_traces(payload, ctx=ctx)
+                return await self.get_all_traces(payload, ctx=ctx, **_routing)
             elif operation == "get_trace_details":
                 return await self.get_trace_details(
                     id=params.get('id'),
                     retrieval_size=params.get('retrievalSize'),
                     offset=params.get('offset'),
                     ingestion_time=params.get('ingestionTime'),
-                    ctx=ctx
+                    ctx=ctx, **_routing,
                 )
             elif operation == "get_trace_groups":
                 payload = params.get('payload') if params else None
-                return await self.get_trace_groups(payload, ctx=ctx)
+                return await self.get_trace_groups(payload, ctx=ctx, **_routing)
             else:
                 return {"error": f"Operation '{operation}' not supported"}
 
@@ -152,7 +164,9 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         offset: Optional[int] = None,
         ingestion_time: Optional[int] = None,
         ctx: Optional[Context] = None,
-        api_client: Any = None
+        api_client: Any = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get details of a specific trace.
@@ -178,11 +192,17 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
 
             # Fetch trace details
             logger.debug(f"Fetching trace details for id={id}")
-            result = api_client.get_trace_download(
-                id=id,
-                retrieval_size=retrieval_size,
-                offset=offset,
-                ingestion_time=ingestion_time
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_trace_download,
+                    id=id,
+                    retrieval_size=retrieval_size,
+                    offset=offset,
+                    ingestion_time=ingestion_time
+                ),
+                ctx=ctx,
+                operation_name="get_trace_download",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             # Convert result to dictionary
@@ -295,9 +315,11 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
     @with_header_auth(ApplicationAnalyzeApi)
     async def get_all_traces(
         self,
-        payload: Optional[Union[Dict[str, Any], str]]=None,
-        api_client = None,
-        ctx: Optional[Context] = None
+        payload: Optional[Union[Dict[str, Any], str]] = None,
+        api_client=None,
+        ctx: Optional[Context] = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get traces from Instana API.
@@ -391,7 +413,15 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
 
             # Call API using _without_preload_content to get raw response
             config = GetTraces.from_dict(request_body)
-            result = api_client.get_traces_without_preload_content(get_traces=config)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_traces_without_preload_content,
+                    get_traces=config
+                ),
+                ctx=ctx,
+                operation_name="get_traces_without_preload_content",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             # Parse raw JSON response
             response_text = result.data.decode('utf-8')
@@ -473,7 +503,9 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         self,
         payload: Optional[Union[Dict[str, Any], str]] = None,
         api_client: Any = None,
-        ctx: Optional[Context] = None
+        ctx: Optional[Context] = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get grouped trace metrics from Instana API.
@@ -523,7 +555,15 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 }
 
             config = GetTraceGroups.from_dict(request_body)
-            result = api_client.get_trace_groups_without_preload_content(get_trace_groups=config)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_trace_groups_without_preload_content,
+                    get_trace_groups=config
+                ),
+                ctx=ctx,
+                operation_name="get_trace_groups_without_preload_content",
+                resource_type=resource_type, tool_name=tool_name,
+            )
 
             response_text = result.data.decode('utf-8')
             result_dict = json.loads(response_text)

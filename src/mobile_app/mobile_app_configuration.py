@@ -20,7 +20,13 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -37,7 +43,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         operation: str,
         mobile_app_id: Optional[str] = None,
         mobile_app_name: Optional[str] = None,
-        ctx=None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Mobile app CRUD operations. Called by the smart router with appropriate parameters.
@@ -52,9 +60,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         """
         try:
             if operation == "get_all":
-                return await self.get_all_mobile_apps(ctx=ctx)
+                return await self.get_all_mobile_apps(ctx=ctx, resource_type=resource_type, tool_name=tool_name)
             elif operation == "get":
-                return await self._get_mobile_app(mobile_app_id, mobile_app_name, ctx)
+                return await self._get_mobile_app(mobile_app_id, mobile_app_name, ctx, resource_type=resource_type, tool_name=tool_name)
             else:
                 return {"error": f"Invalid operation: {operation}"}
         except Exception as e:
@@ -67,7 +75,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         mobile_app_id: Optional[str] = None,
         mobile_app_name: Optional[str] = None,
         config_id: Optional[str] = None,
-        ctx=None
+        ctx=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute advanced configuration retrieval operations (read-only).
@@ -97,7 +107,8 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             mobile_app_id = mobile_app_id_or_error
 
             return await self._route_advanced_config_operation(
-                operation, mobile_app_id, config_id, ctx
+                operation, mobile_app_id, config_id, ctx,
+                resource_type=resource_type, tool_name=tool_name,
             )
 
         except Exception as e:
@@ -113,7 +124,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         mobile_app_id: Optional[str],
         mobile_app_name: Optional[str],
         ctx,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Union[str, Dict[str, Any]]:
         """
         Resolve mobile app ID from either direct ID or name.
@@ -123,6 +136,8 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             mobile_app_name: Mobile app name to resolve to ID
             ctx: MCP context
             api_client: API client instance (optional, will use decorator if not provided)
+            resource_type: Optional resource type label forwarded to sdk_call_with_keepalive.
+            tool_name: Optional MCP tool name forwarded to sdk_call_with_keepalive.
 
         Returns:
             Mobile app ID string or error dictionary
@@ -139,10 +154,11 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
 
         # If api_client is provided, use it directly; otherwise fetch via decorator
         if api_client:
-            result = await self.get_all_mobile_apps(ctx=ctx, api_client=api_client)
+            result = await self.get_all_mobile_apps(ctx=ctx, api_client=api_client,
+                                                    resource_type=resource_type, tool_name=tool_name)
         else:
             # This will trigger the @with_header_auth decorator
-            result = await self.get_all_mobile_apps(ctx=ctx)
+            result = await self.get_all_mobile_apps(ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
         logger.debug(f"[_resolve_mobile_app_id] get_all_mobile_apps returned type: {type(result)}, value: {result}")
 
@@ -174,7 +190,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         operation: str,
         mobile_app_id: str,
         config_id: Optional[str],
-        ctx
+        ctx,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
 
         operations_map = {
@@ -185,13 +203,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         }
 
         if operation in operations_map:
-            return await operations_map[operation](mobile_app_id, ctx)
+            return await operations_map[operation](mobile_app_id, ctx, resource_type=resource_type, tool_name=tool_name)
 
         if operation == "get_mobile_app_source_map_upload_config_by_id":
             if not config_id:
                 return {"error": "config_id is required for get_mobile_app_source_map_upload_config_by_id operation"}
             return await self.get_mobile_app_source_map_upload_configuration_by_id(
-                mobile_app_id, config_id, ctx
+                mobile_app_id, config_id, ctx, resource_type=resource_type, tool_name=tool_name
             )
 
         return {
@@ -208,7 +226,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         mobile_app_id: Optional[str],
         mobile_app_name: Optional[str],
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get a specific mobile app by ID or name."""
 
@@ -217,7 +237,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
                 mobile_app_id=None,
                 mobile_app_name=mobile_app_name,
                 ctx=ctx,
-                api_client=api_client
+                api_client=api_client,
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
             if isinstance(mobile_app_id_or_error, dict):
                 return mobile_app_id_or_error
@@ -230,7 +252,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         return await self.get_mobile_app_by_id(
             mobile_app_id=mobile_app_id,
             ctx=ctx,
-            api_client=api_client
+            api_client=api_client,
+            resource_type=resource_type,
+            tool_name=tool_name,
         )
 
     def _normalize_mobile_apps_response(self, response: Any) -> Any:
@@ -277,7 +301,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         return names
 
     @with_header_auth(MobileAppConfigurationApi)
-    async def get_all_mobile_apps(self, ctx=None, api_client=None) -> List[Dict[str, Any]]:
+    async def get_all_mobile_apps(self, ctx=None, api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all mobile app configurations.
 
         This API endpoint retrieves all configured mobile apps in your Instana environment.
@@ -291,7 +317,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_all_mobile_apps] Called.")
 
-            result = api_client.get_mobile_app_config()
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_config),
+                ctx=ctx,
+                operation_name="get_all_mobile_apps",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -306,7 +338,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             return [{"error": f"Failed to get mobile apps: {e!s}"}]
 
     @with_header_auth(MobileAppConfigurationApi)
-    async def get_mobile_app_by_id(self, mobile_app_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_mobile_app_by_id(self, mobile_app_id: str, ctx=None, api_client=None,
+                                   resource_type: Optional[str] = None,
+                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a specific mobile app by ID.
 
@@ -322,7 +356,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"[get_mobile_app_by_id] Called with mobile_app_id: {mobile_app_id}")
 
-            result = api_client.get_single_mobile_app_config(mobile_app_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_single_mobile_app_config, mobile_app_id=mobile_app_id),
+                ctx=ctx,
+                operation_name="get_mobile_app_by_id",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -339,7 +379,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
     async def get_mobile_app_geo_location_configuration(self,
                                                         mobile_app_id: str,
                                                         ctx=None,
-                                                        api_client=None) -> Dict[str, Any]:
+                                                        api_client=None,
+                                                        resource_type: Optional[str] = None,
+                                                        tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get geo location configuration for a specific mobile app.
 
@@ -355,7 +397,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"[get_mobile_app_geo_location_configuration] Called with mobile_app_id: {mobile_app_id}")
 
-            result = api_client.get_mobile_app_geo_location_configuration(mobile_app_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_geo_location_configuration, mobile_app_id=mobile_app_id),
+                ctx=ctx,
+                operation_name="get_mobile_app_geo_location_configuration",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -369,7 +417,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get geo location configuration for mobile app with ID {mobile_app_id}: {e!s}"}
 
     @with_header_auth(MobileAppConfigurationApi)
-    async def get_mobile_app_geo_mapping_rules(self, mobile_app_id: str, ctx=None, api_client=None) -> List[Dict[str, Any]]:
+    async def get_mobile_app_geo_mapping_rules(self, mobile_app_id: str, ctx=None, api_client=None,
+                                               resource_type: Optional[str] = None,
+                                               tool_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get custom geo mapping rules for mobile app.
 
@@ -385,7 +435,7 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"[get_mobile_app_geo_mapping_rules] Called with mobile_app_id: {mobile_app_id}")
 
-            csv_data = self._fetch_geo_mapping_rules_csv(api_client, mobile_app_id)
+            csv_data = await self._fetch_geo_mapping_rules_csv(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
             result_list = self._parse_csv_to_dict_list(csv_data)
 
@@ -396,22 +446,39 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             logger.error(f"Error in get_mobile_app_geo_mapping_rules: {e}", exc_info=True)
             return [{"error": f"Failed to get mobile app geo mapping rules: {e!s}"}]
 
-    def _fetch_geo_mapping_rules_csv(self, api_client, mobile_app_id: str) -> str:
+    async def _fetch_geo_mapping_rules_csv(self, api_client, mobile_app_id: str, ctx=None,
+                                           resource_type: Optional[str] = None,
+                                           tool_name: Optional[str] = None) -> str:
         try:
-            result = api_client.get_mobile_app_geo_mapping_rules(mobile_app_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_geo_mapping_rules, mobile_app_id=mobile_app_id),
+                ctx=ctx,
+                operation_name="get_mobile_app_geo_mapping_rules",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if result is not None:
                 return str(result)
 
-            return self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id)
+            return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
         except Exception as api_error:
             logger.warning(f"High-level API call failed: {api_error}, trying raw response")
-            return self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id)
+            return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
-    def _fetch_raw_geo_mapping_rules(self, api_client, mobile_app_id: str) -> str:
-        response = api_client.get_mobile_app_geo_mapping_rules_without_preload_content(
-            mobile_app_id=mobile_app_id
+    async def _fetch_raw_geo_mapping_rules(self, api_client, mobile_app_id: str, ctx=None,
+                                           resource_type: Optional[str] = None,
+                                           tool_name: Optional[str] = None) -> str:
+        response = await sdk_call_with_keepalive(
+            call_sdk_fn(
+                api_client.get_mobile_app_geo_mapping_rules_without_preload_content,
+                mobile_app_id=mobile_app_id,
+            ),
+            ctx=ctx,
+            operation_name="get_mobile_app_geo_mapping_rules_without_preload_content",
+            resource_type=resource_type,
+            tool_name=tool_name,
         )
 
         if hasattr(response, "data"):
@@ -461,7 +528,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         }
 
     @with_header_auth(MobileAppConfigurationApi)
-    async def get_mobile_app_ip_masking_configuration(self, mobile_app_id: str, ctx=None, api_client=None) -> Dict[str, Any]:
+    async def get_mobile_app_ip_masking_configuration(self, mobile_app_id: str, ctx=None, api_client=None,
+                                                      resource_type: Optional[str] = None,
+                                                      tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get IP masking configuration for a specific mobile app.
 
@@ -476,7 +545,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"[get_mobile_app_ip_masking_configuration] Called with mobile_app_id: {mobile_app_id}")
 
-            result = api_client.get_mobile_app_ip_masking_configuration(mobile_app_id=mobile_app_id)
+            result = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.get_mobile_app_ip_masking_configuration, mobile_app_id=mobile_app_id),
+                ctx=ctx,
+                operation_name="get_mobile_app_ip_masking_configuration",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
 
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -494,7 +569,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         self,
         mobile_app_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get all source map upload configurations for a specific mobile app.
@@ -511,7 +588,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"[get_all_mobile_app_source_map_upload_configurations] Called with mobile_app_id: {mobile_app_id}")
 
             try:
-                response = api_client.get_mobile_app_source_map_files_without_preload_content(mobile_app_id=mobile_app_id)
+                response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_mobile_app_source_map_files_without_preload_content, mobile_app_id=mobile_app_id),
+                    ctx=ctx,
+                    operation_name="get_all_mobile_app_source_map_upload_configurations",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 if response.status != 200:
                     error_message = f"Failed to get source map configurations: HTTP {response.status}"
@@ -530,7 +613,13 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
 
             except Exception as api_error:
                 logger.warning(f"without_preload_content failed: {api_error}, trying standard method")
-                result = api_client.get_mobile_app_source_map_files(mobile_app_id=mobile_app_id)
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_mobile_app_source_map_files, mobile_app_id=mobile_app_id),
+                    ctx=ctx,
+                    operation_name="get_mobile_app_source_map_files_fallback",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
+                )
 
                 if hasattr(result, 'to_dict'):
                     result_dict = result.to_dict()
@@ -549,7 +638,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
         mobile_app_id: str,
         source_map_config_id: str,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a specific source map upload configuration by ID for a mobile app.
@@ -568,9 +659,14 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"get_mobile_app_source_map_upload_configuration called with mobile_app_id={mobile_app_id}, source_map_config_id={source_map_config_id}")
 
             try:
-                response = api_client.get_mobile_app_source_map_file_without_preload_content(
-                    mobile_app_id=mobile_app_id,
-                    source_map_config_id=source_map_config_id
+                response = await sdk_call_with_keepalive(
+                    call_sdk_fn(api_client.get_mobile_app_source_map_file_without_preload_content,
+                        mobile_app_id=mobile_app_id,
+                        source_map_config_id=source_map_config_id),
+                    ctx=ctx,
+                    operation_name="get_mobile_app_source_map_upload_configuration_by_id",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
 
                 # Check response status
@@ -594,9 +690,16 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             except Exception as api_error:
                 logger.warning(f"without_preload_content failed: {api_error}, trying standard method")
                 # Fallback to standard method
-                result = api_client.get_mobile_app_source_map_file(
-                    mobile_app_id=mobile_app_id,
-                    source_map_config_id=source_map_config_id
+                result = await sdk_call_with_keepalive(
+                    call_sdk_fn(
+                        api_client.get_mobile_app_source_map_file,
+                        mobile_app_id=mobile_app_id,
+                        source_map_config_id=source_map_config_id,
+                    ),
+                    ctx=ctx,
+                    operation_name="get_mobile_app_source_map_file_fallback",
+                    resource_type=resource_type,
+                    tool_name=tool_name,
                 )
 
                 if hasattr(result, 'to_dict'):

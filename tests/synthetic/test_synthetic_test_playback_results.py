@@ -193,7 +193,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
             "get_synthetic_result_metadata",
             {"testid": "t1", "testresultid": "r1"}
         ))
-        m.assert_called_once_with(testid="t1", testresultid="r1", start_time=None, ctx=None)
+        m.assert_called_once_with(testid="t1", testresultid="r1", start_time=None, ctx=None, resource_type=None, tool_name=None)
 
     def test_dispatches_get_synthetic_result_detail_data(self):
         m = self._patch_method("get_synthetic_result_detail_data", {"data": "..."})
@@ -201,7 +201,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
             "get_synthetic_result_detail_data",
             {"testid": "t1", "testresultid": "r1", "type": "HAR"}
         ))
-        m.assert_called_once_with(testid="t1", testresultid="r1", detail_type="HAR", name=None, start_time=None, ctx=None)
+        m.assert_called_once_with(testid="t1", testresultid="r1", detail_type="HAR", name=None, start_time=None, ctx=None, resource_type=None, tool_name=None)
 
     def test_unknown_operation_returns_error(self):
         result = asyncio.run(self.client.execute_playback_operation("no_such_op", {}))

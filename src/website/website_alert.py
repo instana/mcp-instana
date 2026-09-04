@@ -14,7 +14,13 @@ from src.core.alert_config_utils import (
     parse_alert_config_response,
     parse_single_alert_config_response,
 )
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.prompts import mcp
 
 # Import the necessary classes from the SDK
@@ -42,7 +48,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
     async def find_active_website_alert_configs(self,
                                                 website_id: str,
                                                 alert_ids: Optional[list] = None,
-                                                ctx=None, api_client=None) -> Dict[str, Any]:
+                                                ctx=None, api_client=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all Website Smart Alert Configurations for a specific website.
 
@@ -78,9 +86,13 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
 
             # Call the find_active_website_alert_configs_without_preload_content method from the SDK
             logger.debug(f"Calling find_active_website_alert_configs_without_preload_content with website_id={website_id}, alert_ids={alert_ids}")
-            response = api_client.find_active_website_alert_configs_without_preload_content(
-                website_id=website_id,
-                alert_ids=alert_ids
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.find_active_website_alert_configs_without_preload_content,
+                    website_id=website_id,
+                    alert_ids=alert_ids),
+                ctx=ctx,
+                operation_name="find_active_website_alert_configs",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             return parse_alert_config_response(response, "website", website_id)
@@ -93,7 +105,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
     async def find_website_alert_config(self,
                                         id: str,
                                         valid_on: Optional[int] = None,
-                                        ctx=None, api_client=None) -> Dict[str, Any]:
+                                        ctx=None, api_client=None,
+    resource_type: Optional[str] = None,
+    tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Gets a specific Smart Alert Configuration for websites by ID. This may return a deleted Configuration.
 
@@ -128,9 +142,13 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
             # Call the find_website_alert_config_without_preload_content method from the SDK
             # Using _without_preload_content to avoid SDK deserialization issues
             logger.debug(f"Calling find_website_alert_config_without_preload_content with id={id}, valid_on={valid_on}")
-            response = api_client.find_website_alert_config_without_preload_content(
-                id=id,
-                valid_on=valid_on
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.find_website_alert_config_without_preload_content,
+                    id=id,
+                    valid_on=valid_on),
+                ctx=ctx,
+                operation_name="find_website_alert_config",
+                resource_type=resource_type, tool_name=tool_name,
             )
 
             return parse_single_alert_config_response(response)

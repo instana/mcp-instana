@@ -14,7 +14,13 @@ from src.core.alert_config_utils import (
     parse_alert_config_response,
     parse_single_alert_config_response,
 )
-from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.prompts import mcp
 
 # Import the necessary classes from the SDK
@@ -42,7 +48,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
     async def find_active_mobile_app_alert_configs(self,
                                                    mobile_app_id: str,
                                                    alert_ids: Optional[list] = None,
-                                                   ctx=None, api_client=None) -> Dict[str, Any]:
+                                                   ctx=None, api_client=None,
+                                                   resource_type: Optional[str] = None,
+                                                   tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all Mobile Smart Alert Configurations for a specific mobile app.
 
@@ -78,9 +86,14 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
 
             # Call the find_active_mobile_app_alert_configs_without_preload_content method from the SDK
             logger.debug(f"Calling find_active_mobile_app_alert_configs_without_preload_content with mobile_app_id={mobile_app_id}, alert_ids={alert_ids}")
-            response = api_client.find_active_mobile_app_alert_configs_without_preload_content(
-                mobile_app_id=mobile_app_id,
-                alert_ids=alert_ids
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.find_active_mobile_app_alert_configs_without_preload_content,
+                    mobile_app_id=mobile_app_id,
+                    alert_ids=alert_ids),
+                ctx=ctx,
+                operation_name="find_active_mobile_app_alert_configs",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             return parse_alert_config_response(response, "mobile app", mobile_app_id)
@@ -93,7 +106,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
     async def find_mobile_app_alert_config(self,
                                            id: str,
                                            valid_on: Optional[int] = None,
-                                           ctx=None, api_client=None) -> Dict[str, Any]:
+                                           ctx=None, api_client=None,
+                                           resource_type: Optional[str] = None,
+                                           tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Gets a specific Smart Alert Configuration for mobile apps by ID. This may return a deleted Configuration.
 
@@ -128,9 +143,14 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
             # Call the find_mobile_app_alert_config_without_preload_content method from the SDK
             # Using _without_preload_content to avoid SDK deserialization issues
             logger.debug(f"Calling find_mobile_app_alert_config_without_preload_content with id={id}, valid_on={valid_on}")
-            response = api_client.find_mobile_app_alert_config_without_preload_content(
-                id=id,
-                valid_on=valid_on
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(api_client.find_mobile_app_alert_config_without_preload_content,
+                    id=id,
+                    valid_on=valid_on),
+                ctx=ctx,
+                operation_name="find_mobile_app_alert_config",
+                resource_type=resource_type,
+                tool_name=tool_name,
             )
 
             return parse_single_alert_config_response(response)

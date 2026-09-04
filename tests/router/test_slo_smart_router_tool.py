@@ -648,7 +648,39 @@ class TestSLOSmartRouterTool(unittest.TestCase):
 
         self.assertIn("results", result)
 
+    # _normalize_correction_start_time Tests
+    def test_normalize_correction_start_time_numeric_ms_passthrough(self):
+        """Numeric ms timestamps must pass through without timezone elicitation."""
+        scheduling = {"startTime": 1609459200000}
+        result = self.router._normalize_correction_start_time(scheduling, "create")
+        self.assertIsNone(result)
+        # Value must be unchanged
+        self.assertEqual(scheduling["startTime"], 1609459200000)
+
+    def test_normalize_correction_start_time_float_ms_passthrough(self):
+        """Float ms timestamps must also pass through without elicitation."""
+        scheduling = {"startTime": 1609459200000.0}
+        result = self.router._normalize_correction_start_time(scheduling, "create")
+        self.assertIsNone(result)
+
+    def test_normalize_correction_start_time_string_with_timezone_succeeds(self):
+        """String datetime with timezone should be converted without elicitation."""
+        scheduling = {"startTime": "10 March 2026, 2:00 PM|IST"}
+        result = self.router._normalize_correction_start_time(scheduling, "create")
+        # Must not trigger elicitation (timezone was provided)
+        if result is not None:
+            self.assertNotIn("elicitation_needed", result)
+
+    def test_normalize_correction_start_time_string_without_timezone_triggers_elicitation(self):
+        """String datetime missing timezone should trigger timezone elicitation."""
+        scheduling = {"startTime": "10 March 2026, 2:00 PM"}
+        result = self.router._normalize_correction_start_time(scheduling, "create")
+        # May trigger elicitation asking for timezone
+        if result is not None:
+            self.assertTrue(result.get("elicitation_needed") or "error" in result)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

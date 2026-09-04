@@ -117,6 +117,7 @@ CORRECTION_VALID_OPERATIONS = [
 SLO_ID_HINT = "Use get_all to list available SLO IDs"
 PAYLOAD_REQUIRED_FOR_CREATE = "payload is required for create"
 ID_REQUIRED_FOR_UPDATE = "id is required for update"
+ID_REQUIRED_FOR_DELETE = "id is required for delete"
 PAYLOAD_REQUIRED_FOR_UPDATE = "payload is required for update"
 MISSING_ID_FOR_DELETE_MESSAGE = "Missing required parameter 'id' for delete."
 ALERT_CREATE_REQUIRED_FIELDS = ["name", "description", "sloIds", "rule", "severity", "alertChannelIds", "timeThreshold", "customPayloadFields"]
@@ -198,7 +199,7 @@ CORRECTION (resource_type="correction") - Operations: get_all, get_by_id, create
         query: Filter by name or matching names (e.g., query="maintenance" to find corrections with "maintenance" in name)
     get_by_id: Get correction by ID - params: id (required)
     create: Create correction window - params: payload (required) with name, scheduling, sloIds, description, tags, active
-        REQUIRED FIELDS: name, scheduling (with duration, durationUnit, startTime optional, recurrent optional, recurrentRule optional)
+        REQUIRED FIELDS: name, sloIds (list of SLO config IDs, e.g. ["slo-abc123"]), scheduling (with duration, durationUnit, startTime optional, recurrent optional, recurrentRule optional)
         scheduling: {duration: 1, durationUnit: "hour"/"day"/"week"/"month", startTime: <timestamp_or_datetime>, recurrent: true/false, recurrentRule: "..."}
         durationUnit: Must be one of: millisecond, second, minute, hour, day, week, month
         startTime: Can be provided as:
@@ -275,15 +276,17 @@ Examples:
                     "message": f"Invalid resource_type '{resource_type}'. Must be one of: {VALID_RESOURCE_TYPES}"
                 }
 
+            TOOL_NAME = "manage_slo"
+
             # Route to the appropriate resource handler
             if resource_type == RESOURCE_TYPE_CONFIGURATION:
-                return await self._handle_configuration(operation, params, ctx)
+                return await self._handle_configuration(operation, params, ctx, resource_type=resource_type, tool_name=TOOL_NAME)
             elif resource_type == RESOURCE_TYPE_REPORT:
-                return await self._handle_report(operation, params, ctx)
+                return await self._handle_report(operation, params, ctx, resource_type=resource_type, tool_name=TOOL_NAME)
             elif resource_type == RESOURCE_TYPE_ALERT:
-                return await self._handle_alert(operation, params, ctx)
+                return await self._handle_alert(operation, params, ctx, resource_type=resource_type, tool_name=TOOL_NAME)
             elif resource_type == RESOURCE_TYPE_CORRECTION:
-                return await self._handle_correction(operation, params, ctx)
+                return await self._handle_correction(operation, params, ctx, resource_type=resource_type, tool_name=TOOL_NAME)
             else:
                 logger.error(f"[manage_slo] Unhandled resource_type: {resource_type}")
                 return {
@@ -360,7 +363,9 @@ Examples:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Handle SLO configuration operations."""
         logger.debug(f"[_handle_configuration] Operation: {operation}, params: {params}")
@@ -383,8 +388,9 @@ Examples:
             if operation == CONFIG_OP_GET_ALL:
                 logger.debug("[_handle_configuration] Routing to get_all_slo_configs")
                 result = await self.slo_config_client.get_all_slo_configs(
-                    **self._get_all_configuration_params(params),
-                    ctx=ctx
+                    filters=self._get_all_configuration_params(params),
+                    ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 return self._configuration_operation_result(operation, result)
 
@@ -399,7 +405,8 @@ Examples:
                 result = await self.slo_config_client.get_slo_config_by_id(
                     id=slo_id,
                     refresh=params.get(PARAM_REFRESH),
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 return self._configuration_operation_result(operation, result)
 
@@ -420,7 +427,7 @@ Examples:
                         "message": "Missing required parameter 'payload' for create. Required fields: name, entity, indicator, target, timeWindow, tags."
                     }
                 logger.debug("[_handle_configuration] Routing to create_slo_config")
-                result = await self.slo_config_client.create_slo_config(payload=payload, ctx=ctx)
+                result = await self.slo_config_client.create_slo_config(payload=payload, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
                 return self._configuration_operation_result(operation, result)
 
             if operation == CONFIG_OP_UPDATE:
@@ -443,7 +450,8 @@ Examples:
                 result = await self.slo_config_client.update_slo_config(
                     id=slo_id,
                     payload=payload,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 return self._configuration_operation_result(operation, result, slo_id)
 
@@ -451,12 +459,12 @@ Examples:
                 slo_id = params.get(PARAM_ID)
                 if not slo_id:
                     return self._missing_configuration_id_error(
-                        "id is required for delete",
+                        ID_REQUIRED_FOR_DELETE,
                         MISSING_ID_FOR_DELETE_MESSAGE
                     )
 
                 logger.debug(f"[_handle_configuration] Routing to delete_slo_config with id: {slo_id}")
-                result = await self.slo_config_client.delete_slo_config(id=slo_id, ctx=ctx)
+                result = await self.slo_config_client.delete_slo_config(id=slo_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
                 return self._configuration_operation_result(operation, result, slo_id)
 
             if operation == CONFIG_OP_GET_TAGS:
@@ -465,7 +473,8 @@ Examples:
                     query=params.get(PARAM_QUERY),
                     tag=params.get(PARAM_TAG),
                     entity_type=params.get(PARAM_ENTITY_TYPE),
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 return self._configuration_operation_result(operation, result)
 
@@ -494,7 +503,9 @@ Examples:
         self,
         operation: str,
         params: Dict[str, Any],
-        ctx
+        ctx,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Handle report resource operations.
@@ -589,7 +600,8 @@ Examples:
                     to=to,
                     exclude_correction_id=exclude_correction_id,
                     include_correction_id=include_correction_id,
-                    ctx=ctx
+                    ctx=ctx,
+                    resource_type=resource_type, tool_name=tool_name,
                 )
                 return {
                     "resource_type": RESOURCE_TYPE_REPORT,
@@ -618,7 +630,8 @@ Examples:
                 "operation": operation
             }
 
-    async def _handle_alert(self, operation: str, params: Dict[str, Any], ctx) -> Dict[str, Any]:
+    async def _handle_alert(self, operation: str, params: Dict[str, Any], ctx,
+                            resource_type: Optional[str] = None, tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Handle alert config operations."""
         try:
             logger.debug(f"[_handle_alert] Operation: {operation}, params: {params}")
@@ -637,7 +650,7 @@ Examples:
                     "message": f"Invalid alert operation '{operation}'. Valid operations: {ALERT_VALID_OPERATIONS}"
                 }
 
-            result = await self._execute_alert_operation(operation, params, ctx)
+            result = await self._execute_alert_operation(operation, params, ctx, resource_type=resource_type, tool_name=tool_name)
             if isinstance(result, dict) and result.get("elicitation_needed"):
                 return result
 
@@ -693,66 +706,54 @@ Examples:
             }
         return None
 
-    async def _execute_alert_operation(self, operation: str, params: Dict[str, Any], ctx):
-        if operation == ALERT_OP_FIND_ACTIVE:
-            return await self.slo_alert_client.find_active_alert_configs(
-                slo_id=params.get("slo_id"),
-                alert_ids=params.get("alert_ids"),
-                ctx=ctx
-            )
-
-        if operation == ALERT_OP_FIND:
-            if not params.get("id"):
-                return self._missing_alert_id_error("id is required for find", "Missing required parameter 'id' for find.")
-            return await self.slo_alert_client.find_alert_config(
-                id=params["id"],
-                valid_on=params.get("valid_on"),
-                ctx=ctx
-            )
-
-        if operation == ALERT_OP_FIND_VERSIONS:
-            if not params.get("id"):
-                return self._missing_alert_id_error("id is required for find_versions", "Missing required parameter 'id' for find_versions.")
-            return await self.slo_alert_client.find_alert_config_versions(id=params["id"], ctx=ctx)
-
+    def _validate_alert_operation(self, operation: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Return an error dict if *params* fail validation for *operation*, else None."""
+        _id_required_ops = {
+            ALERT_OP_FIND:          ("id is required for find",          "Missing required parameter 'id' for find."),
+            ALERT_OP_FIND_VERSIONS: ("id is required for find_versions", "Missing required parameter 'id' for find_versions."),
+            ALERT_OP_DELETE:        (ID_REQUIRED_FOR_DELETE,             MISSING_ID_FOR_DELETE_MESSAGE),
+            ALERT_OP_DISABLE:       ("id is required for disable",       "Missing required parameter 'id' for disable."),
+            ALERT_OP_ENABLE:        ("id is required for enable",        "Missing required parameter 'id' for enable."),
+        }
+        if operation in _id_required_ops:
+            issue, message = _id_required_ops[operation]
+            return None if params.get("id") else self._missing_alert_id_error(issue, message)
         if operation == ALERT_OP_CREATE:
-            if not params.get("payload"):
-                return self._missing_alert_payload_error()
-            return await self.slo_alert_client.create_alert_config(payload=params["payload"], ctx=ctx)
-
+            return None if params.get("payload") else self._missing_alert_payload_error()
         if operation == ALERT_OP_UPDATE:
-            validation_error = self._validate_alert_update_params(params)
-            if validation_error:
-                return validation_error
-            return await self.slo_alert_client.update_alert_config(
-                id=params["id"],
-                payload=params["payload"],
-                ctx=ctx
-            )
+            return self._validate_alert_update_params(params)
+        if operation == ALERT_OP_RESTORE:
+            return self._validate_alert_restore_params(params)
+        return None
 
+    async def _call_alert_client(self, operation: str, params: Dict[str, Any], ctx,
+                                 resource_type: Optional[str], tool_name: Optional[str]):
+        """Dispatch a pre-validated alert *operation* to the appropriate client method."""
+        kw = {"ctx": ctx, "resource_type": resource_type, "tool_name": tool_name}
+        if operation == ALERT_OP_FIND_ACTIVE:
+            return await self.slo_alert_client.find_active_alert_configs(slo_id=params.get("slo_id"), alert_ids=params.get("alert_ids"), **kw)
+        if operation == ALERT_OP_FIND:
+            return await self.slo_alert_client.find_alert_config(id=params["id"], valid_on=params.get("valid_on"), **kw)
+        if operation == ALERT_OP_FIND_VERSIONS:
+            return await self.slo_alert_client.find_alert_config_versions(id=params["id"], **kw)
+        if operation == ALERT_OP_CREATE:
+            return await self.slo_alert_client.create_alert_config(payload=params["payload"], **kw)
+        if operation == ALERT_OP_UPDATE:
+            return await self.slo_alert_client.update_alert_config(id=params["id"], payload=params["payload"], **kw)
         if operation == ALERT_OP_DELETE:
-            if not params.get("id"):
-                return self._missing_alert_id_error("id is required for delete", MISSING_ID_FOR_DELETE_MESSAGE)
-            return await self.slo_alert_client.delete_alert_config(id=params["id"], ctx=ctx)
-
+            return await self.slo_alert_client.delete_alert_config(id=params["id"], **kw)
         if operation == ALERT_OP_DISABLE:
-            if not params.get("id"):
-                return self._missing_alert_id_error("id is required for disable", "Missing required parameter 'id' for disable.")
-            return await self.slo_alert_client.disable_alert_config(id=params["id"], ctx=ctx)
-
+            return await self.slo_alert_client.disable_alert_config(id=params["id"], **kw)
         if operation == ALERT_OP_ENABLE:
-            if not params.get("id"):
-                return self._missing_alert_id_error("id is required for enable", "Missing required parameter 'id' for enable.")
-            return await self.slo_alert_client.enable_alert_config(id=params["id"], ctx=ctx)
+            return await self.slo_alert_client.enable_alert_config(id=params["id"], **kw)
+        return await self.slo_alert_client.restore_alert_config(id=params["id"], created=params["created"], **kw)
 
-        validation_error = self._validate_alert_restore_params(params)
-        if validation_error:
-            return validation_error
-        return await self.slo_alert_client.restore_alert_config(
-            id=params["id"],
-            created=params["created"],
-            ctx=ctx
-        )
+    async def _execute_alert_operation(self, operation: str, params: Dict[str, Any], ctx,
+                                       resource_type: Optional[str] = None, tool_name: Optional[str] = None):
+        error = self._validate_alert_operation(operation, params)
+        if error:
+            return error
+        return await self._call_alert_client(operation, params, ctx, resource_type, tool_name)
 
     def _missing_correction_id_error(self, issue: str, message: str) -> Dict[str, Any]:
         return {
@@ -799,6 +800,11 @@ Examples:
         }
 
     def _normalize_correction_start_time(self, scheduling: Dict[str, Any], operation: str) -> Optional[Dict[str, Any]]:
+        # If startTime is already a numeric ms timestamp, pass it through directly —
+        # no timezone elicitation needed.
+        if isinstance(scheduling["startTime"], (int, float)):
+            return None
+
         start_time_result = convert_datetime_param_with_required_timezone(
             scheduling["startTime"],
             "startTime"
@@ -841,57 +847,61 @@ Examples:
 
         return None
 
-    async def _execute_correction_operation(self, operation: str, params: Dict[str, Any], ctx):
-        if operation == CORRECTION_OP_GET_ALL:
-            return await self.slo_correction_client.get_all_corrections(
-                **self._get_all_correction_params(params),
-                ctx=ctx
-            )
+    def _validate_correction_create_params(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Validate CREATE params; return error dict or None."""
+        if not params.get("payload"):
+            return self._missing_correction_payload_error()
+        payload = params["payload"]
+        error = self._validate_create_correction_payload(payload)
+        if error:
+            return error
+        return self._normalize_correction_start_time(payload["scheduling"], CORRECTION_OP_CREATE)
 
+    def _validate_correction_update_payload(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Normalise startTime in an UPDATE payload if present; return error dict or None."""
+        payload = params["payload"]
+        if not (isinstance(payload, dict) and "scheduling" in payload):
+            return None
+        scheduling = payload["scheduling"]
+        if "startTime" in scheduling and isinstance(scheduling["startTime"], str):
+            return self._normalize_correction_start_time(scheduling, CORRECTION_OP_UPDATE)
+        return None
+
+    def _validate_correction_operation(self, operation: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Return an error dict if *params* fail validation for *operation*, else None."""
         if operation == CORRECTION_OP_GET_BY_ID:
-            if not params.get("id"):
-                return self._missing_correction_id_error("id is required for get_by_id", "Missing required parameter 'id' for get_by_id.")
-            return await self.slo_correction_client.get_correction_by_id(id=params["id"], ctx=ctx)
-
+            return None if params.get("id") else self._missing_correction_id_error("id is required for get_by_id", "Missing required parameter 'id' for get_by_id.")
         if operation == CORRECTION_OP_CREATE:
-            if not params.get("payload"):
-                return self._missing_correction_payload_error()
-
-            payload = params["payload"]
-            validation_error = self._validate_create_correction_payload(payload)
-            if validation_error:
-                return validation_error
-
-            conversion_error = self._normalize_correction_start_time(payload["scheduling"], operation)
-            if conversion_error:
-                return conversion_error
-
-            return await self.slo_correction_client.create_correction(payload=payload, ctx=ctx)
-
+            return self._validate_correction_create_params(params)
         if operation == CORRECTION_OP_UPDATE:
-            validation_error = self._validate_correction_update_params(params)
-            if validation_error:
-                return validation_error
+            return self._validate_correction_update_params(params) or self._validate_correction_update_payload(params)
+        if operation == CORRECTION_OP_DELETE:
+            return None if params.get("id") else self._missing_correction_id_error(ID_REQUIRED_FOR_DELETE, MISSING_ID_FOR_DELETE_MESSAGE)
+        return None
 
-            payload = params["payload"]
-            if isinstance(payload, dict) and "scheduling" in payload:
-                scheduling = payload["scheduling"]
-                if "startTime" in scheduling and isinstance(scheduling["startTime"], str):
-                    conversion_error = self._normalize_correction_start_time(scheduling, operation)
-                    if conversion_error:
-                        return conversion_error
+    async def _call_correction_client(self, operation: str, params: Dict[str, Any], ctx,
+                                      resource_type: Optional[str], tool_name: Optional[str]):
+        """Dispatch a pre-validated correction *operation* to the appropriate client method."""
+        kw = {"ctx": ctx, "resource_type": resource_type, "tool_name": tool_name}
+        if operation == CORRECTION_OP_GET_ALL:
+            return await self.slo_correction_client.get_all_corrections(**self._get_all_correction_params(params), **kw)
+        if operation == CORRECTION_OP_GET_BY_ID:
+            return await self.slo_correction_client.get_correction_by_id(id=params["id"], **kw)
+        if operation == CORRECTION_OP_CREATE:
+            return await self.slo_correction_client.create_correction(payload=params["payload"], **kw)
+        if operation == CORRECTION_OP_UPDATE:
+            return await self.slo_correction_client.update_correction(id=params["id"], payload=params["payload"], **kw)
+        return await self.slo_correction_client.delete_correction(id=params["id"], **kw)
 
-            return await self.slo_correction_client.update_correction(
-                id=params["id"],
-                payload=payload,
-                ctx=ctx
-            )
+    async def _execute_correction_operation(self, operation: str, params: Dict[str, Any], ctx,
+                                            resource_type: Optional[str] = None, tool_name: Optional[str] = None):
+        error = self._validate_correction_operation(operation, params)
+        if error:
+            return error
+        return await self._call_correction_client(operation, params, ctx, resource_type, tool_name)
 
-        if not params.get("id"):
-            return self._missing_correction_id_error("id is required for delete", MISSING_ID_FOR_DELETE_MESSAGE)
-        return await self.slo_correction_client.delete_correction(id=params["id"], ctx=ctx)
-
-    async def _handle_correction(self, operation: str, params: Dict[str, Any], ctx) -> Dict[str, Any]:
+    async def _handle_correction(self, operation: str, params: Dict[str, Any], ctx,
+                                 resource_type: Optional[str] = None, tool_name: Optional[str] = None) -> Dict[str, Any]:
         """Handle correction window operations."""
         try:
             logger.debug(f"[_handle_correction] Operation: {operation}, params: {params}")
@@ -910,7 +920,7 @@ Examples:
                     "message": f"Invalid correction operation '{operation}'. Valid operations: {CORRECTION_VALID_OPERATIONS}"
                 }
 
-            result = await self._execute_correction_operation(operation, params, ctx)
+            result = await self._execute_correction_operation(operation, params, ctx, resource_type=resource_type, tool_name=tool_name)
             if isinstance(result, dict) and (result.get("elicitation_needed") or result.get("error")):
                 return result
 

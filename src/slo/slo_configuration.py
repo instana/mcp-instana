@@ -18,7 +18,12 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available. Please install the Instana SDK.", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -135,21 +140,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
                 error=f"Invalid boundaryScope: {entity['boundaryScope']}",
             ))
         if "includeInternal" not in entity:
-            missing_params.append(self._build_missing_param(
-                "entity.includeInternal",
-                "Whether the SLO takes internal calls into account",
-                "boolean",
-                example=False,
-                validation="Must be true or false",
-            ))
+            entity["includeInternal"] = False
         if "includeSynthetic" not in entity:
-            missing_params.append(self._build_missing_param(
-                "entity.includeSynthetic",
-                "Whether the SLO takes synthetic calls into account",
-                "boolean",
-                example=False,
-                validation="Must be true or false",
-            ))
+            entity["includeSynthetic"] = False
 
     def _validate_indicator(self, payload: Dict[str, Any], missing_params: List[Dict[str, Any]]) -> None:
         if "indicator" not in payload:
@@ -391,45 +384,33 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
     @with_header_auth(ServiceLevelsObjectiveSLOConfigurationsApi)
     async def get_all_slo_configs(self,
-        page_size: Optional[int] = None,
-        page: Optional[int] = None,
-        order_by: Optional[str] = None,
-        order_direction: Optional[str] = None,
-        query: Optional[str] = None,
-        tag: Optional[List[str]] = None,
-        entity_type: Optional[List[str]] = None,
-        infra_entity_types: Optional[List[str]] = None,
-        kubernetes_cluster_uuid: Optional[str] = None,
-        blueprint: Optional[List[str]] = None,
-        slo_ids: Optional[List[str]] = None,
-        slo_status: Optional[str] = None,
-        entity_ids: Optional[List[str]] = None,
-        grouped: Optional[bool] = None,
-        refresh: Optional[bool] = None,
-        rbac_tags: Optional[List[str]] = None,
+        filters: Optional[Dict[str, Any]] = None,
         ctx=None,
-        api_client=None
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get all SLO configurations with optional filtering and pagination.
 
         Args:
-            page_size: Number of items per page
-            page: Page number (1-based)
-            order_by: Field to order by
-            order_direction: Order direction ('asc' or 'desc')
-            query: Search query string
-            tag: Filter by tags
-            entity_type: Filter by entity types
-            infra_entity_types: Filter by infrastructure entity types
-            kubernetes_cluster_uuid: Filter by Kubernetes cluster UUID
-            blueprint: Filter by blueprint
-            slo_ids: Filter by specific SLO IDs
-            slo_status: Filter by SLO status
-            entity_ids: Filter by entity IDs
-            grouped: Group results
-            refresh: Force refresh of data
-            rbac_tags: Filter by RBAC tags
+            filters: Dictionary containing all filter/pagination parameters:
+                - page_size: Number of items per page
+                - page: Page number (1-based)
+                - order_by: Field to order by
+                - order_direction: Order direction ('asc' or 'desc')
+                - query: Search query string
+                - tag: Filter by tags
+                - entity_type: Filter by entity types
+                - infra_entity_types: Filter by infrastructure entity types
+                - kubernetes_cluster_uuid: Filter by Kubernetes cluster UUID
+                - blueprint: Filter by blueprint
+                - slo_ids: Filter by specific SLO IDs
+                - slo_status: Filter by SLO status
+                - entity_ids: Filter by entity IDs
+                - grouped: Group results
+                - refresh: Force refresh of data
+                - rbac_tags: Filter by RBAC tags
             ctx: Optional context
             api_client: Optional API client
 
@@ -438,26 +419,10 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug("get_all_slo_configs called")
+            filters = filters or {}
 
             # Call the API method
-            result = api_client.get_all_slo_configs_without_preload_content(
-                page_size=page_size,
-                page=page,
-                order_by=order_by,
-                order_direction=order_direction,
-                query=query,
-                tag=tag,
-                entity_type=entity_type,
-                infra_entity_types=infra_entity_types,
-                kubernetes_cluster_uuid=kubernetes_cluster_uuid,
-                blueprint=blueprint,
-                slo_ids=slo_ids,
-                slo_status=slo_status,
-                entity_ids=entity_ids,
-                grouped=grouped,
-                refresh=refresh,
-                rbac_tags=rbac_tags
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_configs_without_preload_content, page_size=filters.get("page_size"), page=filters.get("page"), order_by=filters.get("order_by"), order_direction=filters.get("order_direction"), query=filters.get("query"), tag=filters.get("tag"), entity_type=filters.get("entity_type"), infra_entity_types=filters.get("infra_entity_types"), kubernetes_cluster_uuid=filters.get("kubernetes_cluster_uuid"), blueprint=filters.get("blueprint"), slo_ids=filters.get("slo_ids"), slo_status=filters.get("slo_status"), entity_ids=filters.get("entity_ids"), grouped=filters.get("grouped"), refresh=filters.get("refresh"), rbac_tags=filters.get("rbac_tags")), ctx=ctx, operation_name="get_all_slo_configs", resource_type=resource_type, tool_name=tool_name)
 
             # Parse the JSON response manually
             try:
@@ -491,8 +456,10 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     async def get_slo_config_by_id(self,
         id: str,
         refresh: Optional[bool] = None,
-        ctx = None,
-        api_client = None
+        ctx=None,
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get a specific SLO configuration by ID.
@@ -513,10 +480,7 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"get_slo_config_by_id called with id: {id}")
 
             # Call the API method
-            result = api_client.get_slo_config_by_id_without_preload_content(
-                id=id,
-                refresh=refresh
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_slo_config_by_id_without_preload_content, id=id, refresh=refresh), ctx=ctx, operation_name="get_slo_config_by_id", resource_type=resource_type, tool_name=tool_name)
 
             # Parse the JSON response manually.
             try:
@@ -540,7 +504,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     async def create_slo_config(self,
                                 payload: Union[Dict[str, Any], str],
                                 ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new SLO configuration.
 
@@ -660,9 +626,7 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
             # Call the API method
             logger.debug("Calling create_slo_config_without_preload_content")
-            result = api_client.create_slo_config_without_preload_content(
-                slo_config_with_rbac_tag=config_object
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_slo_config_without_preload_content, slo_config_with_rbac_tag=config_object), ctx=ctx, operation_name="create_slo_config", resource_type=resource_type, tool_name=tool_name)
 
             # Check HTTP status code
             logger.debug(f"API response status: {result.status}")
@@ -719,7 +683,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
                                 id: str,
                                 payload: Union[Dict[str, Any], str],
                                 ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Update an existing SLO configuration.
 
@@ -842,29 +808,14 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
             # Call the API method
             logger.debug(f"Calling update_slo_config_without_preload_content with id: {id}")
-            result = api_client.update_slo_config_without_preload_content(
-                id=id,
-                slo_config_with_rbac_tag=config_object
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.update_slo_config_without_preload_content, id=id, slo_config_with_rbac_tag=config_object), ctx=ctx, operation_name="update_slo_config", resource_type=resource_type, tool_name=tool_name)
+
+            # The update endpoint returns 204 No Content or a sparse body — re-fetch
+            # the full record so the caller always gets complete, non-null data back.
+            logger.debug("Update succeeded; re-fetching SLO config by id to return full record")
+            return await self.get_slo_config_by_id(
+                id=id, ctx=ctx, resource_type=resource_type, tool_name=tool_name
             )
-
-            # Parse the JSON response manually
-            try:
-                response_text = result.data.decode('utf-8')
-                result_dict = json.loads(response_text)
-                logger.debug("Successfully updated SLO config")
-            except (json.JSONDecodeError, AttributeError) as json_err:
-                error_message = f"Failed to parse JSON response: {json_err}"
-                logger.error(error_message)
-                return {"error": error_message}
-
-            # Clean the config data
-            cleaned_config = self._clean_slo_config_data(result_dict)
-            logger.debug("Cleaned updated SLO config data")
-            return {
-                "success": True,
-                "message": "SLO config updated successfully",
-                "data": cleaned_config
-            }
 
         except Exception as e:
             logger.error(f"Error in update_slo_config: {e}")
@@ -874,7 +825,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
     async def delete_slo_config(self,
                                 id: str,
                                 ctx=None,
-                                api_client=None) -> Dict[str, Any]:
+                                api_client=None,
+                                resource_type: Optional[str] = None,
+                                tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Delete an SLO configuration.
 
@@ -893,7 +846,7 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_slo_config called with id: {id}")
 
             # Call the API method
-            api_client.delete_slo_config(id=id)
+            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_config, id=id), ctx=ctx, operation_name="delete_slo_config", resource_type=resource_type, tool_name=tool_name)
 
             logger.debug("Successfully deleted SLO config")
             return {
@@ -911,7 +864,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
                                   tag: Optional[List[str]] = None,
                                   entity_type: Optional[str] = None,
                                   ctx=None,
-                                  api_client=None) -> Dict[str, Any]:
+                                  api_client=None,
+                                  resource_type: Optional[str] = None,
+                                  tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all available tags for SLO configurations with optional filtering.
 
@@ -929,11 +884,7 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"get_all_slo_config_tags called with query={query}, tag={tag}, entity_type={entity_type}")
 
             # Call the API method
-            result = api_client.get_all_slo_config_tags_without_preload_content(
-                query=query,
-                tag=tag,
-                entity_type=entity_type
-            )
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_config_tags_without_preload_content, query=query, tag=tag, entity_type=entity_type), ctx=ctx, operation_name="get_all_slo_config_tags", resource_type=resource_type, tool_name=tool_name)
 
             try:
                 response_text = result.data.decode('utf-8')
