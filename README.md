@@ -515,7 +515,7 @@ uv sync
 
 ## Setup and Usage
 
-## Supported MCP Clients
+### Supported MCP Clients
 
 | Client | Transports |
 | :--- | :--- |
@@ -525,7 +525,7 @@ uv sync
 | [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` | 
 | [Mistral AI](./docs/mcp-clients/mistral-ai.md) | `streamable http` |
 
-## Connecting to Multiple Instana MCP Servers
+### Connecting to Multiple Instana MCP Servers
 
 You can configure your MCP client to connect to multiple instances. Below is a sample configuration:
 
