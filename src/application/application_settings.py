@@ -418,6 +418,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         serializable_body = {}
         for k, v in request_body.items():
             if k == 'businessCriticality':
+                if isinstance(v, int):
+                    serializable_body[k] = v
                 continue  # omit — API rejects any string value for this field
             if hasattr(v, 'to_dict'):
                 serializable_body[k] = v.to_dict()
