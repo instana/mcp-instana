@@ -426,13 +426,6 @@ uv run src/core/server.py --transport streamable-http --tools infra,app
 uv run src/core/server.py --transport streamable-http --tools events
 ```
 
-**Available Categories:**
-- **`infra`**: Infrastructure monitoring tools and prompts (resources, catalog, topology, analyze, metrics)
-- **`app`**: Application performance tools and prompts (resources, metrics, alerts, catalog, topology, analyze, settings, global alerts)
-- **`events`**: Event monitoring tools and prompts (Kubernetes events, agent monitoring)
-- **`website`**: Website monitoring tools and prompts (metrics, catalog, analyze, configuration)
-
-
 ### SSL Certificate Verification
 
 SSL certificate verification for outgoing Instana API calls is **disabled by default**. This applies to both **Streamable HTTP** and **Stdio** transport modes.
@@ -570,37 +563,52 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 
 ## Supported Features
 
-- [x] **Unified Application & Infrastructure Management** (`manage_instana_resources`)
-  - [x] Application Metrics
+- [x] **Unified Application Management** (`manage_applications`)
+  - [x] Application Metrics (resource_type="metrics")
     - [x] Query application metrics with flexible filtering
-    - [x] List services and endpoints
     - [x] Group by tags and aggregate metrics
-  - [x] Application Alert Configuration
+  - [x] Application Alert Configuration (resource_type="alert_config")
     - [x] Find active alert configurations
     - [x] Get alert configuration versions
     - [x] Create, update, and delete alert configurations
     - [x] Enable, disable, and restore alert configurations
     - [x] Update historic baselines
-  - [x] Global Application Alert Configuration
+  - [x] Global Application Alert Configuration (resource_type="global_alert_config")
     - [x] Manage global alert configurations
     - [x] Version control for global alerts
-  - [x] Application Settings
+  - [x] Application Settings (resource_type="settings")
     - [x] Manage application perspectives
-    - [x] Configure endpoints and services
-    - [x] Manage manual services
-  - [x] Application Catalog
+  - [x] Application Resources (resource_type="resources")
+    - [x] List application perspectives (operation="get_applications")
+    - [x] List services across all applications (operation="get_services")
+    - [x] List services for a specific application (operation="get_application_services")
+    - [x] List endpoints for an application service (operation="get_application_endpoints")
+  - [x] Application Catalog (resource_type="catalog")
     - [x] Get application tag catalog
     - [x] Get application metric catalog
-- [x] **Infrastructure Management** (`manage_infrastructure`)
-  - [x] Unified smart router replacing `analyze_infrastructure` — single tool for analyze, catalog, and resource snapshots
-  - [x] `get_plugin_schema` — fetches metrics **and** tags for a plugin in one API call (replaces two separate calls)
-  - [x] Dynamic support for all entity types from Instana API catalog (JVM, Kubernetes, Docker, hosts, databases, message queues, and more)
-  - [x] Static schema files removed — all schema is fetched live from the Instana API
-  - [x] Snapshot resource operations: `get_snapshot`, `get_snapshots`
-  - [x] Flexible metric aggregation (max, mean, sum, etc.)
-  - [x] Advanced filtering by tags and properties
-  - [x] Grouping and ordering capabilities
-  - [x] Time range queries
+  - [x] Application Analyze (resource_type="analyze")
+    - [x] Get all traces with filtering and pagination (operation="get_all_traces")
+    - [x] Get trace details by ID (operation="get_trace_details")
+    - [x] Get grouped trace metrics (operation="get_trace_groups")
+- [x] **Unified Infrastructure Management** (`manage_infrastructure`)
+  - [x] Infrastructure Analyze (resource_type="analyze")
+    - [x] Get individual infrastructure entities with metrics (operation="get_entities")
+    - [x] Get grouped infrastructure entities with aggregated metrics (operation="get_entity_groups")
+    - [x] Auto-routing based on payload: groupBy present → get_entity_groups, absent → get_entities
+    - [x] Flexible metric aggregation (MAX, MEAN, MIN, SUM)
+    - [x] Advanced filtering by tags and properties
+    - [x] Grouping and ordering capabilities
+    - [x] Time range queries
+  - [x] Infrastructure Catalog (resource_type="catalog")
+    - [x] Get all available entity types/plugins in your Instana installation (operation="get_plugins")
+    - [x] Get combined metrics and tags schema for a plugin in one call (operation="get_plugin_schema")
+    - [x] Get infrastructure metrics catalog for a specific plugin (operation="get_metrics")
+    - [x] Get valid tag names for filtering and grouping (operation="get_tag_catalog")
+    - [x] Dynamic support for all entity types (JVM, Kubernetes, Docker, hosts, databases, message queues, and more)
+    - [x] Automatically synchronized with your Instana installation's available plugins
+  - [x] Infrastructure Resources (resource_type="resources")
+    - [x] Get detailed information for a specific snapshot (operation="get_snapshot")
+    - [x] Search and discover multiple snapshots matching criteria (operation="get_snapshots")
 - [x] **Unified Events Management** (`manage_events`)
   - [x] Events Monitoring
     - [x] Get Event by ID (operation="get_event")
@@ -613,11 +621,29 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
   - [x] Support for natural language time ranges ("last 24 hours", "last 2 days")
   - [x] Event filtering and optimization
 - [x] **Mobile App Monitoring** (`manage_mobile_apps`)
-  - [x] Session Replay — **new** (`resource_type="session_replay"`)
-    - [x] `get_session_replay_action_beacons` — paginated retrieval of action beacons by mobile app ID and session ID
+  - [x] Mobile App Analyze (resource_type="analyze")
+    - [x] Get individual mobile app beacons (operation="get_all_mobile_app_beacons")
+    - [x] Get grouped/aggregated mobile app beacon metrics (operation="get_mobile_app_beacon_groups")
+    - [x] Supports beacon types: SESSION_START, VIEW_CHANGE, HTTP_REQUEST, CUSTOM, CRASH, PERF, DROP_BEACON
+  - [x] Mobile App Catalog (resource_type="catalog")
+    - [x] Get mobile app metrics catalog (operation="get_mobile_app_metric_catalog")
+    - [x] Get mobile app tag catalog by beacon type and use case (operation="get_mobile_app_tag_catalog")
+  - [x] Mobile App Configuration (resource_type="configuration")
+    - [x] Get all mobile apps (operation="get_all")
+    - [x] Get mobile app by ID or name (operation="get")
+  - [x] Advanced Configuration - READ ONLY (resource_type="advanced_config")
+    - [x] Get Geo-Location Configuration (operation="get_geo_config")
+    - [x] Get IP Masking Configuration (operation="get_ip_masking")
+    - [x] Get Geo Mapping Rules (operation="get_geo_rules")
+    - [x] Get Source Map Upload Configuration (operation="get_source_map_upload_config")
+    - [x] Get Source Map Upload Configuration by ID (operation="get_mobile_app_source_map_upload_config_by_id")
+  - [x] Mobile App Alert (resource_type="alert")
+    - [x] Find active mobile app alert configurations (operation="find_active_mobile_app_alert_configs")
+    - [x] Get mobile app alert configuration by ID (operation="find_mobile_app_alert_config")
+  - [x] Session Replay (resource_type="session_replay")
+    - [x] Get paginated session replay action beacons by mobile app ID and session ID (operation="get_session_replay_action_beacons")
     - [x] Cursor-based pagination (`cursor`, `page_size`, `hasMore`)
-  - [x] Beacon Analysis, Performance Metrics, Geographic & Device Analysis, Alert Management (existing)
-- [x] **Unified Website Management** (`manage_website_resources`)
+- [x] **Unified Website Management** (`manage_websites`)
   - [x] Website Analyze (resource_type="analyze")
     - [x] Get Website Beacon Groups - grouped/aggregated beacon data (operation="get_beacon_groups")
     - [x] Get Website Beacons - individual beacon data with pagination (operation="get_beacons")
@@ -673,6 +699,43 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
   - [x] Delete custom dashboard
   - [x] Get shareable users for dashboard
   - [x] Get shareable API tokens for dashboard
+- [x] **Unified SLO Management** (`manage_slo`)
+  - [x] SLO Configuration (resource_type="configuration")
+    - [x] List and filter SLO configurations (operation="get_all")
+    - [x] Get SLO configuration by ID (operation="get_by_id")
+    - [x] Create SLO configuration (operation="create")
+    - [x] Update SLO configuration (operation="update")
+    - [x] Delete SLO configuration (operation="delete")
+    - [x] List SLO tags (operation="get_tags")
+  - [x] SLO Report (resource_type="report")
+    - [x] Generate SLO report with SLI value, error budget, and burn rate (operation="get")
+  - [x] SLO Alert Configuration (resource_type="alert")
+    - [x] Find active SLO alert configurations (operation="find_active")
+    - [x] Get SLO alert configuration by ID (operation="find")
+    - [x] Get SLO alert configuration versions (operation="find_versions")
+    - [x] Create, update, and delete SLO alert configurations
+    - [x] Enable, disable, and restore SLO alert configurations
+  - [x] SLO Correction Windows (resource_type="correction")
+    - [x] List correction windows (operation="get_all")
+    - [x] Get correction window by ID (operation="get_by_id")
+    - [x] Create, update, and delete correction windows
+- [x] **Releases Management** (`manage_releases`)
+  - [x] List all releases with pagination and name filtering (operation="get_all_releases")
+  - [x] Get specific release by ID (operation="get_release")
+  - [x] Create new release with application and service scopes (operation="create_release")
+  - [x] Update existing release (operation="update_release")
+  - [x] Delete release (operation="delete_release")
+- [x] **Maintenance Window Management** (`manage_maintenance_windows`)
+  - [x] Maintenance Window Lifecycle (resource_type="window")
+    - [x] Create maintenance window with template support (operation="create")
+    - [x] Modify existing maintenance window (operation="modify")
+    - [x] Close and document a maintenance window (operation="close")
+    - [x] List active, scheduled, expired, or all windows (operation="list_active", "list_scheduled", "list_expired", "list_all")
+    - [x] Bulk create windows for multiple applications (operation="bulk_create")
+    - [x] Validate maintenance window parameters (operation="validate")
+    - [x] Support for one-time and recurring windows (RFC 5545 RRULE)
+  - [x] Maintenance Window Templates (resource_type="templates")
+    - [x] Get predefined templates: deployment, database_migration, infrastructure_upgrade, emergency, routine (operation="get")
 
 ## Available Tools
 
@@ -698,16 +761,12 @@ The MCP server supports selective tool loading to optimize performance and reduc
 
 ### Available Tool Categories
 
-- **`router`**: Unified application and infrastructure management
-  - `manage_instana_resources`: Single tool for application metrics, alert configurations, settings, and catalog
+- **`app`**: Application monitoring and management
+  - `manage_applications`: Unified smart router for application metrics, alert configurations, settings, catalog, resources, and trace analysis
   - Supports application perspectives, endpoints, services, and manual services
   - Manages both application-specific and global alert configurations
   - Provides access to application tag catalog and metric catalog
-
-- **`dashboard`**: Custom dashboard management
-  - `manage_custom_dashboards`: CRUD operations for custom dashboards
-  - Supports dashboard creation, retrieval, updates, and deletion
-  - Manages shareable users and API tokens for dashboards
+  - Analyzes application traces and call groups
 
 - **`infra`**: Infrastructure management tools
   - `manage_infrastructure`: Unified smart router for infrastructure analyze, catalog, and snapshot resource operations
@@ -716,19 +775,28 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - Includes JVM, Kubernetes, Docker, hosts, databases, message queues, and any custom or newly added entity types
   - Flexible metric aggregation, filtering, grouping, and time range queries
 
+- **`events`**: Event monitoring tools
+  - `manage_events`: Unified smart router for all event monitoring operations
+  - Get all events, individual events by ID, or multiple events by IDs
+  - Kubernetes info events and agent monitoring events with detailed analysis
+  - Flexible filtering by event type, entity type, severity, state, problem, and RCA availability
+
 - **`automation`**: Automation action tools
   - `manage_automation`: Unified smart router for automation catalog and execution history
   - Action Catalog: browse actions, get details, search by name/description, filter by application or snapshot ID
   - Action History: list execution instances with filtering, get execution details
 
-- **`events`**: Event monitoring tools
-  - Events: Kubernetes events, agent monitoring and system event tracking
-
 - **`website`**: Website monitoring tools
-  - Website Metrics: Performance measurement for websites
-  - Website Catalog: Website metadata and definitions
-  - Website Analyze: Website performance analysis
-  - Website Configuration: Website configuration management
+  - `manage_websites`: Unified smart router for website beacon monitoring, catalog, configuration, and alert operations
+  - Website Analyze: Query beacon data with grouping or filtering
+  - Website Catalog: Get available metrics and tags for website monitoring
+  - Website Configuration: Retrieve website configurations (read-only; create/update/delete via Instana UI)
+  - Website Alerts: Retrieve website alert configurations
+
+- **`settings`**: Custom dashboard management
+  - `manage_custom_dashboards`: CRUD operations for custom dashboards
+  - Supports dashboard creation, retrieval, updates, and deletion
+  - Manages shareable users and API tokens for dashboards
 
 - **`slo`**: Service Level Objective (SLO) management
   - `manage_slo`: Unified smart router for comprehensive SLO operations
@@ -748,7 +816,7 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - **Efficient Pagination**: Avoid redundant data fetching with proper page-based navigation
   - **Name Filtering**: Case-insensitive substring matching to find releases by name
 
-- **`maintenance_window`**: Maintenance window lifecycle management
+- **`maintenance`**: Maintenance window lifecycle management
   - `manage_maintenance_windows`: Unified smart router for maintenance window operations
   - **Window Operations**: Create, modify, close, and list maintenance windows (active, scheduled, all, expired)
   - **Bulk Operations**: Create maintenance windows for multiple applications simultaneously
@@ -768,7 +836,7 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - **Configuration Management**: Manage mobile app configurations, geo-location, and IP masking settings
   - **Alert Management**: Configure and manage mobile app alert configurations
 
-- **`synthetics`**: Synthetic monitoring management
+- **`synthetic`**: Synthetic monitoring management
   - `manage_synthetics`: Unified smart router for all synthetic monitoring operations
   - **Catalog**: Discover valid metric IDs and tag names before building queries
   - **Metrics**: Retrieve aggregated response times and success rates grouped by location or test name
@@ -780,26 +848,38 @@ The MCP server supports selective tool loading to optimize performance and reduc
 #### Using CLI (PyPI Installation)
 
 ```bash
-# Enable only router (unified app/infra management) and events tools
-mcp-instana --tools router,events --transport streamable-http
+# Enable only application monitoring tools
+mcp-instana --tools app --transport streamable-http
 
 # Enable only infrastructure analysis tools
 mcp-instana --tools infra --transport streamable-http
 
-# Enable router and infrastructure analysis
-mcp-instana --tools router,infra --transport streamable-http
+# Enable application and infrastructure tools
+mcp-instana --tools app,infra --transport streamable-http
 
 # Enable events and website tools
 mcp-instana --tools events,website --transport streamable-http
 
-# Enable dashboard and router tools
-mcp-instana --tools dashboard,router --transport streamable-http
+# Enable settings (custom dashboards) and app tools
+mcp-instana --tools settings,app --transport streamable-http
 
 # Enable releases and events tools
 mcp-instana --tools releases,events --transport streamable-http
 
 # Enable maintenance window and events tools
-mcp-instana --tools maintenance_window,events --transport streamable-http
+mcp-instana --tools maintenance,events --transport streamable-http
+
+# Enable automation and app tools
+mcp-instana --tools automation,app --transport streamable-http
+
+# Enable SLO management tools
+mcp-instana --tools slo --transport streamable-http
+
+# Enable synthetic monitoring tools
+mcp-instana --tools synthetic --transport streamable-http
+
+# Enable mobile app monitoring tools
+mcp-instana --tools mobile_app --transport streamable-http
 
 # Enable all tools (default behavior)
 mcp-instana --transport streamable-http
@@ -811,26 +891,38 @@ mcp-instana --list-tools
 #### Using Development Installation
 
 ```bash
-# Enable only router (unified app/infra management) and events tools
-uv run src/core/server.py --tools router,events --transport streamable-http
+# Enable only application monitoring tools
+uv run src/core/server.py --tools app --transport streamable-http
 
 # Enable only infrastructure analysis tools
 uv run src/core/server.py --tools infra --transport streamable-http
 
-# Enable router and infrastructure analysis
-uv run src/core/server.py --tools router,infra --transport streamable-http
+# Enable application and infrastructure tools
+uv run src/core/server.py --tools app,infra --transport streamable-http
 
 # Enable events and website tools
 uv run src/core/server.py --tools events,website --transport streamable-http
 
-# Enable dashboard and router tools
-uv run src/core/server.py --tools dashboard,router --transport streamable-http
+# Enable settings (custom dashboards) and app tools
+uv run src/core/server.py --tools settings,app --transport streamable-http
 
 # Enable releases and events tools
 uv run src/core/server.py --tools releases,events --transport streamable-http
 
 # Enable maintenance window and events tools
-uv run src/core/server.py --tools maintenance_window,events --transport streamable-http
+uv run src/core/server.py --tools maintenance,events --transport streamable-http
+
+# Enable automation and app tools
+uv run src/core/server.py --tools automation,app --transport streamable-http
+
+# Enable SLO management tools
+uv run src/core/server.py --tools slo --transport streamable-http
+
+# Enable synthetic monitoring tools
+uv run src/core/server.py --tools synthetic --transport streamable-http
+
+# Enable mobile app monitoring tools
+uv run src/core/server.py --tools mobile_app --transport streamable-http
 
 # Enable all tools (default behavior)
 uv run src/core/server.py --transport streamable-http

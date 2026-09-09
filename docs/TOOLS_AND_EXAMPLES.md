@@ -74,6 +74,7 @@
       - [Configuration](#configuration-1)
       - [Alert Management](#alert-management)
   - [10. Maintenance Window Management](#10-maintenance-window-management)
+  - [11. Synthetic Monitoring](#11-synthetic-monitoring)
     - [Capabilities](#capabilities-9)
     - [Example Prompts](#example-prompts-9)
       - [Creating Maintenance Windows](#creating-maintenance-windows)
@@ -224,6 +225,7 @@ This document provides comprehensive examples of how to interact with the Instan
 8. [Release Tracking](#8-release-tracking)
 9. [Mobile App Monitoring](#9-mobile-app-monitoring)
 10. [Maintenance Window Management](#10-maintenance-window-management)
+11. [Synthetic Monitoring](#11-synthetic-monitoring)
 
 **Advanced:**
 - [Advanced Usage Tips](#advanced-usage-tips)
@@ -237,14 +239,16 @@ This document provides comprehensive examples of how to interact with the Instan
 
 ### Capabilities
 
-This unified tool manages all application-related operations including metrics, alerts, configurations, and catalog information.
+This unified tool manages all application-related operations including metrics, alerts, configurations, catalog information, trace analysis, and resource discovery.
 
 #### Resource Types:
 - **metrics**: Query application performance metrics, services, and endpoints
 - **alert_config**: Manage application-specific alert configurations
 - **global_alert_config**: Manage global application alert configurations
-- **settings**: Manage application perspectives, endpoints, services, manual services
+- **settings**: Manage application configurations (perspectives, endpoints, services, manual services)
 - **catalog**: Access application tag and metric catalog information
+- **resources**: Query application perspectives, services, and endpoints
+- **analyze**: Analyze application traces and call groups
 
 ### Example Prompts
 
@@ -471,6 +475,13 @@ Get all warning events (severity 5) affecting Kubernetes pods in the staging nam
 
 Monitor real user monitoring (RUM) data including page loads, resource loads, errors, and custom beacons with advanced filtering and grouping.
 
+**Resource Types:**
+- **analyze**: Query beacon data with grouping (`get_beacon_groups`) or individual beacons (`get_beacons`)
+- **catalog**: Get available metrics (`get_metrics`) and tags (`get_tag_catalog`) for website beacons
+- **configuration**: Retrieve website configurations (read-only; create/update/delete via Instana UI)
+- **advanced_config**: Retrieve advanced configurations (geo-location rules, IP masking)
+- **alert**: Retrieve website alert configurations
+
 ### Example Prompts
 
 #### Beacon Analysis
@@ -535,6 +546,10 @@ Show me IP masking configuration for the customer portal website
 
 Browse automation action catalog and view execution history for automated remediation and response actions.
 
+**Resource Types:**
+- **catalog**: Browse actions, get details, search by name/description, filter by application or snapshot ID
+- **history**: List execution instances with filtering and get execution details
+
 ### Example Prompts
 
 #### Action Catalog
@@ -576,7 +591,7 @@ Show me the execution history of automation actions from the last 7 days
 ```
 
 ```
-Get details for action instance execution ID abc-123-def
+Get execution details for action instance ID abc-123-def
 ```
 
 ```
@@ -584,7 +599,7 @@ List all failed automation action executions from yesterday
 ```
 
 ```
-Show me automation actions triggered by event ID evt-789
+Show me automation actions triggered for application snapshot ID snap-12345 from the last hour
 ```
 
 ---
@@ -596,6 +611,15 @@ Show me automation actions triggered by event ID evt-789
 ### Capabilities
 
 Create, read, update, and delete custom dashboards with widgets for visualizing metrics and monitoring data.
+
+**Operations** (passed directly as `operation`, no `resource_type` parameter):
+- `get_all`: List dashboards with optional search filter and pagination
+- `get`: Get a specific dashboard by ID
+- `create`: Create a new dashboard with title, access rules, and widgets
+- `update`: Update an existing dashboard
+- `delete`: Delete a dashboard by ID
+- `get_shareable_users`: List all users available for dashboard sharing (global, not per-dashboard)
+- `get_shareable_api_tokens`: List all API tokens available for dashboard sharing (global, not per-dashboard)
 
 ### Example Prompts
 
@@ -660,6 +684,12 @@ List all API tokens that have dashboard access
 ### Capabilities
 
 Manage Service Level Objectives including configuration, reporting, alerts, and error budget corrections.
+
+**Resource Types:**
+- **configuration**: Create, read, update, delete SLO configurations; supports time-based and event-based indicators
+- **report**: Generate SLO reports with SLI values, error budgets, burn rates, and time-series charts
+- **alert**: Manage SLO alert configurations for error budget monitoring and burn rate tracking
+- **correction**: Create and manage correction windows to exclude planned downtime from SLO calculations
 
 ### Example Prompts
 
@@ -791,6 +821,8 @@ Show me how error rates changed after the release deployed at 2:47 PM IST on Mar
 Get statistics on latency evolution after the Checkout Service release compared to the previous week
 ```
 
+---
+
 ## 9. Mobile App Monitoring
 
 **Tool Name:** `manage_mobile_apps`
@@ -920,15 +952,14 @@ List all alert configurations for mobile app ID "app-abc123"
 ```
 
 **Important Notes:**
-- Always call `get_mobile_app_metric_catalog` first to get valid metrics
-- Then call `get_mobile_app_tag_catalog` to get valid tag names
+- Always call `resource_type="catalog", operation="get_mobile_app_metric_catalog"` first to get valid metrics
+- Then call `resource_type="catalog", operation="get_mobile_app_tag_catalog"` to get valid tag names
 - Tag names MUST start with "mobileBeacon." (e.g., "mobileBeacon.mobileApp.name")
 - ALWAYS include `"entity": "NOT_APPLICABLE"` in every tag filter
 - Default beacon type is "SESSION_START"
 
 ---
 
----
 ## 10. Maintenance Window Management
 
 **Tool Name:** `manage_maintenance_windows`
@@ -1096,6 +1127,80 @@ Check if I can create a maintenance window for EAL-012471 using the deployment t
 - ServiceNow integration is optional and requires configuration
 - Use `imap_code` (e.g., "EAL-012471") or `application_id` to identify applications
 - Bulk operations support comma-separated lists or JSON arrays
+
+---
+
+## 11. Synthetic Monitoring
+
+**Tool Name:** `manage_synthetics`
+
+### Capabilities
+
+Manage and query synthetic monitoring tests, locations, metrics, and test playback results.
+
+**Resource Types:**
+- **catalog**: Discover valid metric IDs (`get_synthetic_catalog_metrics`) and tag names (`get_synthetic_tag_catalog`) before building queries
+- **metrics**: Retrieve aggregated response times and success rates grouped by location or test name
+- **settings**: List and look up tests and locations with automatic name resolution; identify datacenter (Managed) vs self-hosted (Private) PoPs
+- **test_playback**: Per-run raw results, `LAST_VALUE` analytics, per-location success rate summaries, and detail file downloads (LOGS, HAR, screenshots)
+
+### Example Prompts
+
+#### Catalog Discovery
+
+```
+What metrics are available for synthetic monitoring?
+```
+
+```
+Show me available tag names for filtering synthetic tests
+```
+
+#### Metrics
+
+```
+Get average response times for all synthetic tests over the last hour grouped by test name
+```
+
+```
+Show me success rates for synthetic tests in the last 24 hours grouped by location
+```
+
+#### Settings
+
+```
+List all synthetic tests configured in Instana
+```
+
+```
+Get details for the synthetic test named "Login Flow"
+```
+
+```
+Show me all synthetic monitoring locations and their status
+```
+
+```
+Find the synthetic location ID for "ap-south-1(Mumbai)"
+```
+
+#### Test Playback
+
+```
+Get the latest test results for all synthetic tests using LAST_VALUE analytics
+```
+
+```
+Show me per-location success rate summaries for synthetic tests in the last 30 minutes
+```
+
+```
+Get raw playback results for synthetic test ID abc123 and result ID res456
+```
+
+```
+Download the HAR file for synthetic test run abc123, result res456
+```
 
 ---
 
