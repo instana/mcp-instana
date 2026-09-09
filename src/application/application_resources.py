@@ -11,8 +11,6 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 
-from src.prompts import mcp
-
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_resources_api import (

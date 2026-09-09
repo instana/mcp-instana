@@ -147,9 +147,10 @@ class TestMCPServer(unittest.TestCase):
         # Verify that logger.error was called but don't actually log anything
         mock_logger.error.assert_called_with("Failed to create events_client: Test error", exc_info=True)
 
+    @patch('src.core.server.Prompt')
     @patch('src.core.server.FastMCP')
     @patch('src.core.server.create_clients')
-    def test_create_app(self, mock_create_clients, mock_fast_mcp):
+    def test_create_app(self, mock_create_clients, mock_fast_mcp, mock_prompt):
         mock_server = MagicMock()
         mock_fast_mcp.return_value = mock_server
         mock_state = MCPState()
@@ -450,10 +451,11 @@ class TestPromptCategories(unittest.TestCase):
         self.assertIn("events", registered_categories)
         self.assertNotIn("app", registered_categories)
 
+    @patch('src.core.server.Prompt')
     @patch('src.core.server.FastMCP')
     @patch('src.core.server.create_clients')
     @patch('src.core.server.logger')
-    def test_both_categories(self, mock_logger, mock_create_clients, mock_fast_mcp):
+    def test_both_categories(self, mock_logger, mock_create_clients, mock_fast_mcp, mock_prompt):
         """Test that both app and events prompts are registered when both categories are enabled"""
         mock_server = MagicMock()
         mock_fast_mcp.return_value = mock_server
