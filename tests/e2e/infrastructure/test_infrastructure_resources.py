@@ -923,7 +923,7 @@ class TestInfrastructureResourcesE2E:
                     "data": {
                         "name": "test-process",
                         "pid": 1234,
-                        "jvm.version": "11.0.1",
+                        "jvm.version": "11.0.2",
                         "jvm.vendor": "Oracle",
                         "memory.max": 1024,
                         "jvm.pools": {"eden": {}, "survivor": {}, "old": {}}
@@ -955,7 +955,7 @@ class TestInfrastructureResourcesE2E:
                     "label": "Node.js App",
                     "data": {
                         "name": "test-app",
-                        "version": "1.0.1",
+                        "version": "1.0.2",
                         "pid": 5678,
                         "versions": {
                             "node": "14.17.0",
@@ -1068,7 +1068,7 @@ class TestInfrastructureResourcesE2E:
         mock_api_client = MagicMock()
         mock_response = {
             "versions": [
-                {"name": "java", "version": "11.0.1", "count": 25}
+                {"name": "java", "version": "11.0.2", "count": 25}
             ],
             "tagTree": [
                 {

@@ -1,4 +1,12 @@
 # Changelog
+### 1.0.2
+- **Enhancement:** Introduced Async functionality to all the tool calls across all MCP tools.
+- **Enhancement:** Added domain-aware `groupbyTagEntity` validation for application queries.
+- **Enhancement:** Hardened graceful shutdown for stdio transport.
+- **Fix:** Fixed business criticality field handling in application settings.
+- **Fix:** Fixed oTelLLM infrastructure analyze issue by adding a static metric list.
+- **Chore:** Updated tools and examples documentation.
+
 ### 1.0.1
 - **New Feature:** Introduced `manage_synthetics` as a unified smart router for managing synthetic monitoring operations.
 - **Enhancement:** Added multi-arch docker support for windows.

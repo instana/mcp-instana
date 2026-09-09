@@ -1225,7 +1225,7 @@ class TestVersionImport(unittest.TestCase):
 
     def test_version_format(self):
         """Test that __version__ follows semantic versioning format (X.Y.Z)"""
-        # Version should be in format like "0.3.1" or "1.0.1"
+        # Version should be in format like "0.3.1" or "1.0.2"
         parts = __version__.split('.')
         self.assertGreaterEqual(len(parts), 2, "Version should have at least major.minor")
         # Check that parts are numeric (or contain numeric values)
