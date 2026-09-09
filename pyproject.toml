@@ -19,7 +19,7 @@ license = {text = "Apache-2.0"}
 dependencies = [
     # Core MCP framework - imported in src/prompts/__init__.py and src/core/server.py
     # Pinned to 3.3.0 to avoid test compatibility issues with 3.3.1
-    "fastmcp==3.3.0",
+    "fastmcp==3.4.7",
     # MCP SDK for types and annotations
     # Pinned to 1.26.x to match fastmcp 3.1.x compatibility
     "mcp",

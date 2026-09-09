@@ -10,8 +10,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 
-from src.prompts import mcp
-
 # Import the necessary classes from the SDK
 try:
     from instana_client.api.application_analyze_api import ApplicationAnalyzeApi

@@ -556,13 +556,9 @@ Returns:
                     )
                 }
 
-            # Normalize beacon_type to camelCase format (API expects camelCase)
-            normalized_beacon_type = normalize_beacon_type(beacon_type, MOBILE_BEACON_TYPE_MAP)
-            if beacon_type != normalized_beacon_type:
-                logger.debug(f"Normalized beacon_type from '{beacon_type}' to '{normalized_beacon_type}'")
-                beacon_type = normalized_beacon_type
-
             # Pass parameters to the client
+            # Note: tag catalog API expects SCREAMING_SNAKE_CASE beacon_type directly;
+            # no camelCase normalization is applied here.
             logger.info(f"Routing to get_mobile_app_tag_catalog [resource_type=catalog, tool={tool_name}]")
             result = await self.mobile_app_catalog_client.get_mobile_app_tag_catalog(
                 beacon_type=beacon_type,

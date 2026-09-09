@@ -20,7 +20,6 @@ from src.core.utils import (
     sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.prompts import mcp
 
 try:
     from instana_client.api.application_catalog_api import (

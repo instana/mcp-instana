@@ -329,19 +329,20 @@ class TestMCPServerIntegrationE2E:
             mock_fastmcp.return_value = mock_server
 
             with patch('src.core.server.create_clients') as mock_create_clients:
-                mock_state = MCPState()
-                mock_state.app_resource_client = MagicMock()
-                mock_state.app_resource_client.get_applications = MagicMock()
-                mock_create_clients.return_value = mock_state
+                with patch('src.core.server.Prompt'):
+                    mock_state = MCPState()
+                    mock_state.app_resource_client = MagicMock()
+                    mock_state.app_resource_client.get_applications = MagicMock()
+                    mock_create_clients.return_value = mock_state
 
-                server, tool_count, port = create_app(
-                    instana_credentials["api_token"],
-                    instana_credentials["base_url"]
-                )
+                    server, tool_count, port = create_app(
+                        instana_credentials["api_token"],
+                        instana_credentials["base_url"]
+                    )
 
-                assert server is not None
-                # Verify that add_prompt was called on the server (prompt registration happens internally)
-                mock_server.add_prompt.assert_called()
+                    assert server is not None
+                    # Verify that add_prompt was called on the server (prompt registration happens internally)
+                    mock_server.add_prompt.assert_called()
 
     @pytest.mark.asyncio
     @pytest.mark.mocked

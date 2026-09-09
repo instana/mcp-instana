@@ -18,7 +18,6 @@ from src.core.utils import (
     sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.prompts import mcp
 
 # Import the necessary classes from the SDK
 try:

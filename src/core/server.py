@@ -18,6 +18,7 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from dotenv import load_dotenv
+from fastmcp.prompts.base import Prompt
 
 from src.prompts import PROMPT_REGISTRY
 
@@ -207,7 +208,7 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                     logger.info(f"    - {group_name}: {prompt_count} prompts")
 
                     for prompt_name, prompt_func in prompts:
-                        server.add_prompt(prompt_func)
+                        server.add_prompt(Prompt.from_function(prompt_func))
                         registered_prompts.add(prompt_name)
                         logger.debug(f"      * Registered prompt: {prompt_name}")
             else:

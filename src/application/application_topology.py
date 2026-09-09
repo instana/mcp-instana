@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 from mcp.types import ToolAnnotations
 
 from src.core.utils import BaseInstanaClient, register_as_tool
-from src.prompts import mcp
 
 try:
     from instana_client.api.application_topology_api import (
