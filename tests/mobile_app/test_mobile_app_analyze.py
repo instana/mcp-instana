@@ -177,6 +177,27 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
     def test_summarize_beacons_non_dict(self):
         self.assertEqual(self.client._summarize_beacons_response(["x"]), ["x"])
 
+    def test_summarize_includes_custom_event_meta(self):
+        input_data = {
+            "totalHits": 1,
+            "items": [
+                {
+                    "beacon": {
+                        "mobileAppLabel": "App1",
+                        "timestamp": 12345,
+                        "type": "custom",
+                        "meta": {"flow": "onboarding", "step": "signup"},
+                    }
+                }
+            ],
+        }
+        result = self.client._summarize_beacons_response(input_data)
+        self.assertEqual(len(result["beacons"]), 1)
+        self.assertEqual(
+            result["beacons"][0]["meta"],
+            {"flow": "onboarding", "step": "signup"},
+        )
+
     async def test_get_all_mobile_app_beacons_success(self):
         payload = {
             "totalHits": 1,
