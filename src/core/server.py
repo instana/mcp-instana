@@ -549,9 +549,12 @@ def main():
         )
         parser.add_argument(
             "--verify-ssl",
-            action="store_true",
-            default=False,
-            help="Enable SSL certificate verification. Equivalent to INSTANA_SSL_VERIFY=true."
+            nargs="?",
+            const=True,
+            type=lambda x: x.strip().lower() not in ("0", "false", "no"),
+            default=True,
+            metavar="BOOL",
+            help="Enable or disable SSL certificate verification (default: true). Pass false/0/no to disable."
         )
         # Check for help arguments before parsing
         if len(sys.argv) > 1 and any(arg in ['-h', '--help'] for arg in sys.argv[1:]):
