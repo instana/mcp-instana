@@ -465,10 +465,10 @@ def _set_csrf_headers(api_client_instance, auth_headers):
 def _ssl_verify_from_env() -> bool:
     """Return SSL verification flag from INSTANA_SSL_VERIFY env var.
 
-    Defaults to False (skip verification) when the variable is absent or unrecognised.
-    Set INSTANA_SSL_VERIFY=true / 1 / yes to enable verification.
+    Defaults to True (verify SSL) when the variable is absent or unrecognised.
+    Set INSTANA_SSL_VERIFY=false / 0 / no to disable verification.
     """
-    raw = os.getenv("INSTANA_SSL_VERIFY", "false").strip().lower()
+    raw = os.getenv("INSTANA_SSL_VERIFY", "true").strip().lower()
     return raw not in ("0", "false", "no")
 
 
