@@ -2,6 +2,18 @@
 
 This guide documents everything Docker-related for MCP Instana. Use it when you need more than the quick blurb in `README.md`.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Docker Architecture](#docker-architecture)
+- [Quickstart](#quickstart)
+- [Image anatomy (`Dockerfile`)](#image-anatomy-dockerfile)
+- [Build context and `.dockerignore`](#build-context-and-dockerignore)
+- [Building images](#building-images)
+- [Security posture](#security-posture)
+- [Testing & troubleshooting](#testing--troubleshooting)
+- [Production deployment](#production-deployment)
+
 ## Overview
 
 - Two-stage image defined in `Dockerfile`: a builder installs only runtime dependencies, and the runtime stage copies the installed packages plus `src/`.
@@ -17,6 +29,9 @@ This guide documents everything Docker-related for MCP Instana. Use it when you 
 ```bash
 # Build a local image (single architecture)
 docker build -t mcp-instana .
+
+# Alternatively, to build with a specific tag
+docker build -t mcp-instana:<image_tag> .
 
 # Run it (streamable HTTP transport on port 8080)
 docker run --rm -p 8080:8080 mcp-instana
@@ -155,20 +170,32 @@ The script:
 ## Testing & troubleshooting
 
 ```bash
-# Inspect container status (health column)
-docker ps
+# Container Won't Start (port already in use, invalid image, missing dependencies etc)
+docker logs <container_id>
+
+# Test container connectivity (expects 406 from a bare GET — means server is up)
+curl http://localhost:8080/mcp
+
+# Check port mapping
+docker port <container_id>
 
 # Hit MCP endpoint directly (expect 406 from a bare GET — means the server is up)
 curl http://localhost:8080/mcp
 
+# Inspect container status (health column)
+docker ps
+
 # Test using MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
 
-# Logs
-docker logs -f <container_id>
-
 # Debug shell (container already has /bin/bash from python:slim)
 docker exec -it <container_id> /bin/bash
+
+# Check container resource usage
+docker stats <container_id>
+
+# Monitor container health
+docker inspect <container_id> | grep Status
 ```
 
 ---

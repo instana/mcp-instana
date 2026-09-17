@@ -3,10 +3,11 @@
 ## Table of Contents
 
 - [MCP Server for IBM Instana](#mcp-server-for-ibm-instana)
-  - [Quick Links](#-quick-links)
+  - [Quick Links](#quick-links)
   - [Architecture Overview](#architecture-overview)
   - [Workflow](#workflow)
   - [Prerequisites](#prerequisites)
+  - [Installing Instana MCP server](#installing-instana-mcp-server)
     - [Option 1: Install from PyPI (Recommended)](#option-1-install-from-pypi-recommended)
     - [Option 2: Development Installation](#option-2-development-installation)
       - [Installing uv](#installing-uv)
@@ -36,8 +37,7 @@
     - [Common Startup Issues](#common-startup-issues)
   - [Setup and Usage](#setup-and-usage)
     - [Supported MCP Clients](#supported-mcp-clients)
-    - [Connecting to Multiple Instana MCP servers](#connecting-to-multiple-instana-mcp-servers)
-  - [Connecting to Multiple Instana MCP Servers](#connecting-to-multiple-instana-mcp-servers)
+    - [Connecting to Multiple Instana MCP Servers](#connecting-to-multiple-instana-mcp-servers)
   - [Supported Features](#supported-features)
   - [Available Tools](#available-tools)
   - [Tool Filtering](#tool-filtering)
@@ -47,18 +47,10 @@
       - [Using Development Installation](#using-development-installation-4)
     - [Benefits of Tool Filtering](#benefits-of-tool-filtering)
   - [Docker Deployment](#docker-deployment)
-    - [Docker Architecture](#docker-architecture)
-      - [**pyproject.toml**](#pyprojecttoml)
     - [Building the Docker Image](#building-the-docker-image)
       - [**Prerequisites**](#prerequisites-1)
       - [**Build and Run**](#build-and-run)
-      - [**Run Command**](#run-command)
-  - [Troubleshooting](#troubleshooting)
-    - [**Docker Issues**](#docker-issues)
-      - [**Container Won't Start**](#container-wont-start)
-      - [**Connection Issues**](#connection-issues)
-      - [**Performance Issues**](#performance-issues)
-    - [**General Issues**](#general-issues)
+  - [General Issues](#general-issues)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -146,6 +138,12 @@ sequenceDiagram
 ```
 
 ## Prerequisites
+
+- `python` - version 3.10 or higher
+- `pip` - version 21.3 or higher (only required for pypi based installation)
+- `uv` - version 0.11.6 or higher (only required for development installation)
+
+## Installing Instana MCP server
 
 ### Option 1: Install from PyPI (Recommended)
 
@@ -367,11 +365,11 @@ mcp-instana
 # Or explicitly specify stdio mode
 mcp-instana --transport stdio
 
-# Option 2: Use --env flag to set environment variables directly
-mcp-instana --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+# Option 2: Pass the base url and api token directly 
+mcp-instana --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 
 # Or with explicit stdio mode
-mcp-instana --transport stdio --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+mcp-instana --transport stdio --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 ```
 
 #### Using Development Installation
@@ -387,18 +385,18 @@ uv run src/core/server.py
 # Or explicitly specify stdio mode
 uv run src/core/server.py --transport stdio
 
-# Option 2: Use --env flag to set environment variables directly
-uv run src/core/server.py --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+# Option 2: Pass the base url and api token directly 
+uv run src/core/server.py --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 
 # Or with explicit stdio mode
-uv run src/core/server.py --transport stdio --env INSTANA_BASE_URL=https://your-instana-instance.instana.io --env INSTANA_API_TOKEN=your_instana_api_token
+uv run src/core/server.py --transport stdio --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 ```
 
 **Key Features of Stdio Mode:**
-- Uses environment variables for authentication (can be set via `export` or `--env` flag)
+- Uses environment variables for authentication (can be set via `export` or `--env` flags)
 - Direct communication via stdin/stdout
 - Required for certain MCP client configurations
-- The `--env` flag provides a convenient way to set credentials without modifying shell environment
+- The `--api-token` and `base-url` flags provides a convenient way to set credentials without modifying shell environment
 
 ### Tool Categories
 
@@ -514,7 +512,8 @@ uv sync
 | :--- | :--- |
 | [Bob IDE](./docs/mcp-clients/bob-ide.md)| `streamable http`, `stdio` | 
 | [Claude Desktop](./docs/mcp-clients/claude-desktop.md) |  `streamable http`, `stdio` | 
-| [Kiro IDE](./docs/mcp-clients/kiro-ide.md)| `streamable http`, `stdio` | 
+| [Kiro IDE](./docs/mcp-clients/kiro-ide.md)| `streamable http`, `stdio` |
+| [Kiro CLI](./docs/mcp-clients/kiro-cli.md)| `streamable http`, `stdio` |  
 | [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` | 
 | [Mistral AI](./docs/mcp-clients/mistral-ai.md) | `streamable http` |
 
@@ -952,55 +951,81 @@ The MCP Instana server can be deployed using Docker for production environments.
 
 #### **Build and Run**
 ```bash
-# Build the image
+# Ensure you are in the mcp-instana directory of your repo
+# Build the optimized production image
 docker build -t mcp-instana:latest .
-
-# Build with a specific tag
-docker build -t mcp-instana:<image_tag> .
 ```
+
+The above command would build the image using the instructions in the `Dockerfile`. The default port is `8080` and transport mode is `streamable-http`
 
 ```bash
 # Run the container (credentials are supplied via HTTP headers at request time)
 docker run -p 8080:8080 mcp-instana
-
-# Run with a custom host port
-docker run -p 8081:8080 mcp-instana
 ```
+
+If you want to use a custom port on your host (ex: 9000)
+
+```bash
+# Run with a custom host port
+docker run -p 9000:8080 mcp-instana
+```
+
+### Connecting to mcp-instana container in streamable mode
+
+Assuming your started your container using the command: `docker run -p 8080:8080 mcp-instana`
+
+Your MCP Client would connect to the Host port (8080). By default, the container runs in streamable mode.
+
+Here is a sample configuration for your MCP client:
+
+```
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8080/mcp",
+        "--allow-http",
+        "--header",
+        "instana-base-url: https://your-instana-instance.instana.io",
+        "--header",
+            "instana-api-token: your_instana_api_token"
+      ]
+    }
+  }
+}
+```
+
+### Connecting to mcp-instana in stdio mode
+
+In stdio mode, you can have your MCP Client to start and connect to the container. Here you are explicitly specifying to run in `stdio` by providing a value for the `--transport` flag.
+
+Below is a sample configuration:
+
+```
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "INSTANA_API_TOKEN=your_instana_api_token",
+        "-e", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
+        "mcp-instana",
+        "--transport", "stdio"
+      ]
+    }
+  }
+}
+```
+
+For more details, check the Docker deployment guide [here](/DOCKER.md)
+
 
 **For comprehensive Docker documentation including multi-architecture builds, `.dockerignore`, security best practices, and production deployment examples, see [DOCKER.md](DOCKER.md).**
 
-## Troubleshooting
-
-### **Docker Issues**
-
-#### **Container Won't Start**
-```bash
-# Check container logs
-docker logs <container_id>
-# Common issues:
-# 1. Port already in use
-# 2. Invalid container image
-# 3. Missing dependencies
-# Credentials are passed via HTTP headers from the MCP client
-```
-
-#### **Connection Issues**
-```bash
-# Test container connectivity (expects 406 from a bare GET — means server is up)
-curl http://localhost:8080/mcp
-# Check port mapping
-docker port <container_id>
-```
-
-#### **Performance Issues**
-```bash
-# Check container resource usage
-docker stats <container_id>
-# Monitor container health
-docker inspect <container_id> | grep -A 10 Health
-```
-
-### **General Issues**
+## **General Issues**
 
 - **GitHub Copilot**
   - If you encounter issues with GitHub Copilot, try starting/stopping/restarting the server in the `mcp.json` file and keep only one server running at a time.
