@@ -45,7 +45,8 @@ with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     with patch('src.infrastructure.infrastructure_analyze.InfrastructureAnalyzeMCPTools', create=True) as MockAnalyze, \
          patch('src.infrastructure.infrastructure_catalog.InfrastructureCatalogMCPTools', create=True) as MockCatalog, \
          patch('src.infrastructure.infrastructure_topology.InfrastructureTopologyMCPTools', create=True) as MockTopology, \
-         patch('src.infrastructure.infrastructure_resources.InfrastructureResourcesMCPTools', create=True) as MockResources:
+         patch('src.infrastructure.infrastructure_resources.InfrastructureResourcesMCPTools', create=True) as MockResources, \
+         patch('src.infrastructure.infrastructure_alert_config.InfrastructureAlertConfigMCPTools', create=True) as MockAlertConfig:
 
         # Import the router class
         from src.router.infrastructure_smart_router_tool import (
@@ -63,12 +64,14 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
         self.mock_catalog = MagicMock()
         self.mock_topology = MagicMock()
         self.mock_resources = MagicMock()
+        self.mock_alert_config = MagicMock()
 
         # Patch the client classes at import time
         with patch('src.infrastructure.infrastructure_analyze.InfrastructureAnalyzeMCPTools', return_value=self.mock_analyze, create=True), \
              patch('src.infrastructure.infrastructure_catalog.InfrastructureCatalogMCPTools', return_value=self.mock_catalog, create=True), \
              patch('src.infrastructure.infrastructure_topology.InfrastructureTopologyMCPTools', return_value=self.mock_topology, create=True), \
-             patch('src.infrastructure.infrastructure_resources.InfrastructureResourcesMCPTools', return_value=self.mock_resources, create=True):
+             patch('src.infrastructure.infrastructure_resources.InfrastructureResourcesMCPTools', return_value=self.mock_resources, create=True), \
+             patch('src.infrastructure.infrastructure_alert_config.InfrastructureAlertConfigMCPTools', return_value=self.mock_alert_config, create=True):
 
             # Create router instance
             self.router = InfrastructureSmartRouterMCPTool(
@@ -81,6 +84,7 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
             self.router.infrastructure_catalog_client = self.mock_catalog
             self.router.infrastructure_topology_client = self.mock_topology
             self.router.infrastructure_resources_client = self.mock_resources
+            self.router.infrastructure_alert_config_client = self.mock_alert_config
 
     def test_init(self):
         """Test router initialization"""
@@ -88,8 +92,8 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
         self.assertEqual(self.router.base_url, "https://test.instana.com")
         self.assertIsNotNone(self.router.infrastructure_analyze_client)
         self.assertIsNotNone(self.router.infrastructure_catalog_client)
-        self.assertIsNotNone(self.router.infrastructure_topology_client)
         self.assertIsNotNone(self.router.infrastructure_resources_client)
+        self.assertIsNotNone(self.router.infrastructure_alert_config_client)
 
     def test_invalid_resource_type(self):
         """Test handling of invalid resource type"""
@@ -579,6 +583,255 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
 
             self.assertIn("results", result, f"Operation {op} failed")
             self.assertEqual(result["operation"], op)
+
+
+    # ===== ALERT_CONFIG TESTS =====
+
+    def test_alert_config_invalid_operation(self):
+        """Test invalid operation for alert_config"""
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="nonexistent_op"
+        ))
+
+        self.assertTrue(result.get("elicitation_needed"))
+        self.assertIn("Invalid operation", result.get("message", ""))
+
+    def test_alert_config_find_active_success(self):
+        """Test find_active routes to client and wraps result"""
+        async def mock_execute(**kwargs):
+            return {"configs": [{"id": "c1"}], "total": 1}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="find_active"
+        ))
+
+        self.assertEqual(result["resource_type"], "alert_config")
+        self.assertEqual(result["operation"], "find_active")
+        self.assertIn("results", result)
+        self.assertEqual(result["results"]["total"], 1)
+
+    def test_alert_config_find_active_with_alert_ids(self):
+        """Test find_active passes alert_ids param to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"configs": [], "total": 0}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="find_active",
+            params={"alert_ids": ["x", "y"]}
+        ))
+
+        self.assertEqual(received["alert_ids"], ["x", "y"])
+        self.assertEqual(received["operation"], "find_active")
+
+    def test_alert_config_find_success(self):
+        """Test find routes id and valid_on to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"id": "abc", "name": "My Alert"}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="find",
+            params={"id": "abc", "valid_on": 1710000000000}
+        ))
+
+        self.assertEqual(received["id"], "abc")
+        self.assertEqual(received["valid_on"], 1710000000000)
+
+    def test_alert_config_find_versions_success(self):
+        """Test find_versions routes id to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"versions": []}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="find_versions",
+            params={"id": "abc"}
+        ))
+
+        self.assertEqual(received["id"], "abc")
+        self.assertEqual(received["operation"], "find_versions")
+
+    def test_alert_config_create_success(self):
+        """Test create routes payload to client"""
+        payload = {"name": "Alert", "granularity": 600000}
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"id": "new-id", "name": "Alert"}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="create",
+            params={"payload": payload}
+        ))
+
+        self.assertEqual(received["payload"], payload)
+        self.assertEqual(result["operation"], "create")
+        self.assertIn("results", result)
+
+    def test_alert_config_update_routes_id_and_payload(self):
+        """Test update passes id and payload to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"id": "abc", "name": "Updated"}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="update",
+            params={"id": "abc", "payload": {"name": "Updated"}}
+        ))
+
+        self.assertEqual(received["id"], "abc")
+        self.assertEqual(received["payload"], {"name": "Updated"})
+
+    def test_alert_config_delete_success(self):
+        """Test delete routes id to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"success": True, "message": "Deleted abc"}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="delete",
+            params={"id": "abc"}
+        ))
+
+        self.assertEqual(received["id"], "abc")
+        self.assertEqual(received["operation"], "delete")
+        self.assertTrue(result["results"]["success"])
+
+    def test_alert_config_enable_success(self):
+        """Test enable routes id to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="enable",
+            params={"id": "abc"}
+        ))
+
+        self.assertEqual(received["operation"], "enable")
+        self.assertEqual(received["id"], "abc")
+
+    def test_alert_config_disable_success(self):
+        """Test disable routes id to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="disable",
+            params={"id": "abc"}
+        ))
+
+        self.assertEqual(received["operation"], "disable")
+
+    def test_alert_config_restore_routes_created(self):
+        """Test restore passes id and created to client"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="restore",
+            params={"id": "abc", "created": 1710000000000}
+        ))
+
+        self.assertEqual(received["created"], 1710000000000)
+        self.assertEqual(received["id"], "abc")
+
+    def test_alert_config_tool_name_and_resource_type_passed(self):
+        """Test that tool_name and resource_type are forwarded correctly"""
+        received = {}
+
+        async def mock_execute(**kwargs):
+            received.update(kwargs)
+            return {}
+
+        self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+        asyncio.run(self.router.manage_infrastructure(
+            resource_type="alert_config",
+            operation="find_active"
+        ))
+
+        self.assertEqual(received["resource_type"], "alert_config")
+        self.assertEqual(received["tool_name"], "manage_infrastructure")
+
+    def test_alert_config_all_operations_covered(self):
+        """Verify every operation in ALERT_CONFIG_VALID_OPERATIONS is routable"""
+        from src.router.infrastructure_smart_router_tool import ALERT_CONFIG_VALID_OPERATIONS
+
+        for op in ALERT_CONFIG_VALID_OPERATIONS:
+            async def mock_execute(**kwargs):
+                return {"ok": True}
+
+            self.mock_alert_config.execute_alert_config_operation = mock_execute
+
+            params = {}
+            if op in ("find", "find_versions", "delete", "enable", "disable"):
+                params = {"id": "test-id"}
+            elif op == "update":
+                params = {"id": "test-id", "payload": {}}
+            elif op == "create":
+                params = {"payload": {}}
+            elif op == "restore":
+                params = {"id": "test-id", "created": 1710000000000}
+            result = asyncio.run(self.router.manage_infrastructure(
+                resource_type="alert_config",
+                operation=op,
+                params=params
+            ))
+
+            self.assertIn("results", result, f"Operation '{op}' did not return results key")
+            self.assertEqual(result["operation"], op, f"Operation key mismatch for '{op}'")
 
 
 if __name__ == '__main__':

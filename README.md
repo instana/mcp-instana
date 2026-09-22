@@ -609,6 +609,16 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
   - [x] Infrastructure Resources (resource_type="resources")
     - [x] Get detailed information for a specific snapshot (operation="get_snapshot")
     - [x] Search and discover multiple snapshots matching criteria (operation="get_snapshots")
+  - [x] Infrastructure Smart Alert Configuration (resource_type="alert_config")
+    - [x] List all active alert configurations (operation="find_active")
+    - [x] Get alert configuration by ID (operation="find")
+    - [x] Get all historical versions of an alert configuration (operation="find_versions")
+    - [x] Create a new alert configuration with schema validation (operation="create")
+    - [x] Update an existing alert configuration (operation="update")
+    - [x] Delete an alert configuration (operation="delete")
+    - [x] Enable an alert configuration (operation="enable")
+    - [x] Disable an alert configuration (operation="disable")
+    - [x] Restore an alert configuration to a historical version (operation="restore")
 - [x] **Unified Events Management** (`manage_events`)
   - [x] Events Monitoring
     - [x] Get Event by ID (operation="get_event")
@@ -744,7 +754,7 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 | `manage_applications`                                         | Application & Infrastructure   | Unified tool for managing application metrics, alert configs, settings, and catalog |
 | `manage_websites`                                             | Website Monitoring             | Unified smart router for website analyze, catalog, configuration, and advanced config operations |
 | `manage_custom_dashboards`                                    | Custom Dashboards              | Unified tool for managing custom dashboard CRUD operations |
-| `manage_infrastructure`                                       | Infrastructure                 | Unified smart router for infrastructure analyze, catalog (`get_plugin_schema`), and snapshot resource operations |
+| `manage_infrastructure`                                       | Infrastructure                 | Unified smart router for infrastructure analyze, catalog (`get_plugin_schema`), smart alert configurations and snapshot resource operations |
 | `manage_automation`                                           | Automation                     | Unified smart router for automation: browse action catalog and view execution history |
 | `manage_events`                                               | Events                         | Unified smart router for events monitoring: get event by ID, get events by IDs, Kubernetes events, agent monitoring events and all events |
 | `manage_slo`                                                  | SLO Management                 | Unified smart router for SLO configurations, reports, alerts, and correction windows with intelligent timezone handling |
@@ -769,11 +779,12 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - Analyzes application traces and call groups
 
 - **`infra`**: Infrastructure management tools
-  - `manage_infrastructure`: Unified smart router for infrastructure analyze, catalog, and snapshot resource operations
+  - `manage_infrastructure`: Unified smart router for infrastructure analyze, catalog, smart alerts and snapshot resource operations
   - `get_plugin_schema` combines `get_metrics` + `get_tag_catalog` into a single API call
   - Dynamically supports all entity types available in your Instana installation (automatically loaded from API catalog)
   - Includes JVM, Kubernetes, Docker, hosts, databases, message queues, and any custom or newly added entity types
   - Flexible metric aggregation, filtering, grouping, and time range queries
+  - Infrastructure Smart Alert Configuration: Full CRUD lifecycle management for Infrastructure Smart Alerts (create, update, delete, enable, disable, find versions, restore)
 
 - **`events`**: Event monitoring tools
   - `manage_events`: Unified smart router for all event monitoring operations
