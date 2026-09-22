@@ -20,10 +20,12 @@
       - [Catalog Operations](#catalog-operations)
   - [2. Infrastructure Monitoring](#2-infrastructure-monitoring)
     - [Capabilities](#capabilities-1)
+      - [Resource Types:](#resource-types-1)
     - [Example Prompts](#example-prompts-1)
       - [Catalog Discovery](#catalog-discovery)
       - [Entity Queries](#entity-queries)
       - [Snapshot Resources](#snapshot-resources)
+      - [Smart Alert Configuration](#smart-alert-configuration)
   - [3. Events Monitoring](#3-events-monitoring)
     - [Capabilities](#capabilities-2)
     - [Example Prompts](#example-prompts-2)
@@ -399,6 +401,44 @@ Get detailed snapshot information for snapshot ID abc123xyz
 
 ```
 List all offline Kubernetes pod snapshots
+```
+
+#### Smart Alert Configuration
+
+> **Note:** For a plain listing, omit `alert_ids` and pagination parameters — client-side pagination
+> (default 50 per page) is applied automatically to avoid LLM context overflow. Use `alert_ids` to
+> filter by known IDs, or `page`/`page_size` only when you need to page through a large result set.
+
+```
+List all active Infrastructure Smart Alert configurations
+```
+
+```
+Show only the Infrastructure Smart Alert configurations with IDs "H5PW_lINTV6yGN8ad5jG49" and "pkPW_lINTV6yGN8ad8jG49"
+```
+
+```
+List active Infrastructure Smart Alert configurations, page 2 with 25 results per page
+```
+
+```
+Get details for Infrastructure Smart Alert configuration with ID "H5PW_lINTV6yGN8ad5jG49"
+```
+
+```
+Show all historical versions of Infrastructure Smart Alert "K8-cpu-alert-high"
+```
+
+```
+Create a new Infrastructure Smart Alert for high CPU usage on hosts triggering when cpu.used exceeds 90%
+```
+
+```
+Disable the Infrastructure Smart Alert "K8-cpu-alert-high"
+```
+
+```
+Restore Infrastructure Smart Alert "K8-cpu-alert-high" to the version created at 1710658800000
 ```
 
 ---

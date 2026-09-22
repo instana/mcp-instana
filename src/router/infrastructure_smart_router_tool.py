@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 ANALYZE_VALID_OPERATIONS = ["get_entities", "get_entity_groups"]
 CATALOG_VALID_OPERATIONS = ["get_plugins", "get_metrics", "get_tag_catalog", "get_plugin_schema"]
 RESOURCES_VALID_OPERATIONS = ["get_snapshot", "get_snapshots"]
+ALERT_CONFIG_VALID_OPERATIONS = [
+    "find_active", "find", "find_versions",
+    "create", "update", "delete",
+    "enable", "disable", "restore",
+]
 
 # Define parameter key constants
 PARAM_PAYLOAD = "payload"
@@ -58,6 +63,9 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
+        from src.infrastructure.infrastructure_alert_config import (
+            InfrastructureAlertConfigMCPTools,
+        )
         from src.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzeMCPTools,
         )
@@ -72,18 +80,20 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         self.infrastructure_analyze_client = InfrastructureAnalyzeMCPTools(read_token, base_url)
         self.infrastructure_catalog_client = InfrastructureCatalogMCPTools(read_token, base_url)
         self.infrastructure_resources_client = InfrastructureResourcesMCPTools(read_token, base_url)
+        self.infrastructure_alert_config_client = InfrastructureAlertConfigMCPTools(read_token, base_url)
 
-        logger.info("Smart Router Infrastructure initialized with Analyze, Catalog, Topology, and Resources tools")
+        logger.info("Smart Router Infrastructure initialized with Analyze, Catalog, Resources, and Alert Config tools")
 
     @register_as_tool(
         title="Manage Instana Infrastructure Resources",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana infrastructure resource manager for comprehensive infrastructure monitoring.
 
 Resource Types:
     - "analyze": Query infrastructure entity data with grouping or filtering
     - "catalog": Get available plugins, metrics, and tags for infrastructure monitoring
     - "resources": Get snapshot details and monitoring state
+    - "alert_config": Manage Instana Infrastructure Smart Alert configurations (CRUD)
 
 RECOMMENDED WORKFLOW FOR ANALYZE:
     1. FIRST: Call get_plugins to discover available entity types
@@ -192,8 +202,76 @@ RESOURCES (resource_type="resources"):
         Returns: List of snapshots matching the search criteria
         Use this to discover entities, search infrastructure, or find components
 
+ALERT_CONFIG (resource_type="alert_config"):
+    operations: find_active, find, find_versions, create, update, delete, enable, disable, restore
+    params: {id, alert_ids, valid_on, created, payload}
+
+    find_active - List all active Infra Smart Alert configurations
+        RECOMMENDED: Omit both alert_ids and page/page_size for a plain listing. Client-side
+        pagination (default page_size=50) is always applied to the full API response to prevent
+        LLM context overflow — the first page of 50 results is returned automatically.
+
+        - alert_ids (optional): Restrict results to this explicit set of config IDs. Use when
+              you already know which alerts to inspect. Omit to return all active configurations.
+              NOTE: pagination params are still applied on top of the filtered set.
+        - page (optional): 1-based page number for paging through the active list (default: 1).
+              Only needed when the total exceeds page_size and you want a later page.
+        - page_size (optional): Results per page (default: 50, max: 1000). The default of 50
+              exists specifically to avoid overwhelming the LLM context with large alert lists.
+              Increase only when you need more results in a single response.
+        Returns: {configs, count, total, page, page_size, total_pages, has_next, has_previous}
+
+    find - Get a specific configuration by ID
+        - id (required): The configuration ID
+        - valid_on (optional): Unix timestamp (ms) to retrieve the version active at that time
+        Returns: Full configuration object
+
+    find_versions - Get all historical versions of a configuration
+        - id (required): The configuration ID
+        Returns: List of all versions sorted by creation date (descending)
+
+    create - Create a new Infra Smart Alert configuration
+        - payload (required): Configuration object
+            REQUIRED fields:
+              name (string, max 256): Alert name
+              description (string): Alert description
+              granularity (int): Evaluation window in ms — one of: 60000, 300000, 600000, 900000, 1200000, 1800000
+              groupBy (list): Tag names to group by (can be empty [])
+              tagFilterExpression (dict): Entity filter — e.g. {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}
+              timeThreshold (dict): Time condition — e.g. {"type": "violationsInSequence", "timeWindow": 600000}
+            OPTIONAL fields:
+              severity (int): 5 (Warning) or 10 (Critical)
+              evaluationType (string): "PER_ENTITY" or "CUSTOM"
+              rule (dict): Single alert rule with metric and threshold
+              rules (list): Multiple rules (up to 5), each with thresholds per severity
+              threshold (dict): Threshold definition (for single-rule configs)
+              triggering (bool): Whether to also trigger an Incident
+              alertChannelIds (list): Alert channel IDs (defaults to [])
+              customPayloadFields (list): Extra notification fields (defaults to [])
+              gracePeriod (int): Duration (ms) alert stays open after conditions clear
+
+    update - Update an existing configuration
+        - id (required): The configuration ID
+        - payload (required): Full updated configuration object (same fields as create)
+
+    delete - PERMANENTLY delete a configuration (irreversible)
+        - id (required): The configuration ID
+        WARNING: This operation cannot be undone. The configuration is removed immediately.
+        PREFER "disable" over "delete" when you only want to stop the alert temporarily.
+        RECOVERY: if deleted by mistake, use "restore" with a version timestamp from "find_versions".
+
+    enable - Enable a configuration
+        - id (required): The configuration ID
+
+    disable - Disable a configuration
+        - id (required): The configuration ID
+
+    restore - Restore a deleted configuration
+        - id (required): The configuration ID
+        - created (required): Unix timestamp (ms) of the version to restore (from find_versions)
+
 Args:
-    resource_type: "analyze", "catalog", or "resources"
+    resource_type: "analyze", "catalog", "resources", or "alert_config"
     operation: Specific operation for the resource type
     params: Operation-specific parameters (optional)
 
@@ -211,7 +289,19 @@ Examples:
     resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "oTelLLM", "groupBy": ["otel.attribute.service.name"], "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "otel.attribute.service.name", "operator": "EQUALS", "value": "dispatch-agent"}, "pagination": {"retrievalSize": 20}}}
     resource_type="resources", operation="get_snapshot", params={"snapshot_id": "abc123xyz"}
     resource_type="resources", operation="get_snapshots", params={"plugin": "host", "size": 50}
-    resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": 1617994800000, "to_time": 1618081200000, "detailed": true}"""
+    resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": 1617994800000, "to_time": 1618081200000, "detailed": true}
+    resource_type="alert_config", operation="find_active"
+    resource_type="alert_config", operation="find_active", params={"alert_ids": ["H5PW_lINTV6yGN8ad5jG49", "pkPW_lINTV6yGN8ad8jG49"]}
+    resource_type="alert_config", operation="find_active", params={"page": 2, "page_size": 25}
+    resource_type="alert_config", operation="find", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
+    resource_type="alert_config", operation="find_versions", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
+    resource_type="alert_config", operation="create", params={"payload": {"name": "High CPU Alert", "description": "CPU exceeded threshold", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}, "severity": 10}}
+    resource_type="alert_config", operation="update", params={"id": "H5PW_lINTV6yGN8ad5jG49", "payload": {"name": "Updated Alert", "description": "Updated", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}}}
+    resource_type="alert_config", operation="delete", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
+    resource_type="alert_config", operation="enable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
+    resource_type="alert_config", operation="disable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
+    resource_type="alert_config", operation="restore", params={"id": "H5PW_lINTV6yGN8ad5jG49", "created": 1710658800000}
+"""
     )
     async def manage_infrastructure(
         self,
@@ -230,7 +320,7 @@ Examples:
                 params = {}
 
             # Validate resource_type
-            valid_types = ["analyze", "catalog", "resources"]
+            valid_types = ["analyze", "catalog", "resources", "alert_config"]
             if resource_type not in valid_types:
                 return {
                     "elicitation_needed": True,
@@ -252,6 +342,8 @@ Examples:
                 return await self._handle_catalog(operation, params, ctx)
             elif resource_type == "resources":
                 return await self._handle_resources(operation, params, ctx)
+            elif resource_type == "alert_config":
+                return await self._handle_alert_config(operation, params, ctx)
             else:
                 return {
                     "elicitation_needed": True,
@@ -548,4 +640,46 @@ Examples:
             "resource_type": "resources",
             "operation": operation,
             "results": result
+        }
+
+    async def _handle_alert_config(
+        self,
+        operation: str,
+        params: Dict[str, Any],
+        ctx
+    ) -> Dict[str, Any]:
+        """Handle Infrastructure Smart Alert Config operations."""
+
+        if operation not in ALERT_CONFIG_VALID_OPERATIONS:
+            return {
+                "elicitation_needed": True,
+                "reason": "invalid_operation",
+                "api_error": [
+                    {
+                        "field": "operation",
+                        "issue": f"'{operation}' is not a valid alert_config operation",
+                        "expected": ALERT_CONFIG_VALID_OPERATIONS
+                    }
+                ],
+                "message": f"Invalid operation '{operation}' for resource_type 'alert_config'. Valid operations: {ALERT_CONFIG_VALID_OPERATIONS}"
+            }
+
+        result = await self.infrastructure_alert_config_client.execute_alert_config_operation(
+            operation=operation,
+            id=params.get("id"),
+            alert_ids=params.get("alert_ids"),
+            valid_on=params.get("valid_on"),
+            created=params.get("created"),
+            payload=params.get("payload"),
+            page=params.get("page"),
+            page_size=params.get("page_size"),
+            ctx=ctx,
+            resource_type="alert_config",
+            tool_name="manage_infrastructure",
+        )
+
+        return {
+            "resource_type": "alert_config",
+            "operation": operation,
+            "results": result,
         }
