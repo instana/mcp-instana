@@ -64,7 +64,7 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
 
         # Lazy import to avoid circular dependencies
         from src.infrastructure.infrastructure_alert_config import (
-            InfrastructureAlertConfigMCPTools
+            InfrastructureAlertConfigMCPTools,
         )
         from src.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzeMCPTools,

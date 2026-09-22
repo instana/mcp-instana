@@ -807,7 +807,9 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
 
     def test_alert_config_all_operations_covered(self):
         """Verify every operation in ALERT_CONFIG_VALID_OPERATIONS is routable"""
-        from src.router.infrastructure_smart_router_tool import ALERT_CONFIG_VALID_OPERATIONS
+        from src.router.infrastructure_smart_router_tool import (
+            ALERT_CONFIG_VALID_OPERATIONS,
+        )
 
         for op in ALERT_CONFIG_VALID_OPERATIONS:
             async def mock_execute(**kwargs):

@@ -4,9 +4,9 @@ Infrastructure Smart Alert Configuration MCP Tools Module
 This module provides CRUD tools for Instana Infrastructure Smart Alert configurations.
 """
 
+import ast
 import json
 import logging
-import ast
 from typing import Any, Dict, List, Optional, Union
 
 from src.core.utils import (
@@ -326,13 +326,13 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 configs = [result]
             else:
                 configs = []
-            
+
             total = len(configs)
-            
+
             # Apply pagination
             page = page if page is not None else 1
             page_size = page_size if page_size is not None else 50
-            
+
             # Validate pagination parameters
             if page < 1:
                 page = 1
@@ -340,17 +340,17 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 page_size = 50
             if page_size > 1000:
                 page_size = 1000
-            
+
             # Calculate pagination boundaries
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
-            
+
             # Slice the results
             paginated_configs = configs[start_idx:end_idx]
-            
+
             # Calculate total pages
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-            
+
             return {
                 "configs": paginated_configs,
                 "count": len(paginated_configs),
