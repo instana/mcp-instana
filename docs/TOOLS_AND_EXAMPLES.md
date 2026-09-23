@@ -877,7 +877,7 @@ Monitor mobile application performance, analyze user sessions, track crashes, an
 - **configuration**: Get mobile app configurations
 - **advanced_config**: Retrieve advanced configurations (geo-location, IP masking, geo rules)
 - **alert**: Get mobile app alert configurations
-- **session_replay**: Retrieve paginated session replay action beacons
+- **session**: Session related operations. Retrieve paginated session replay action beacons by app ID and session ID, or retrieve all beacons (other than session replay beacons) for a session with session ID and timestamp
 
 ### Example Prompts
 

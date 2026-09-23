@@ -17,7 +17,7 @@ class NullHandler(logging.Handler):
 
 logging.basicConfig(level=logging.ERROR)
 
-app_logger = logging.getLogger("src.mobile_app.mobile_app_session_replay")
+app_logger = logging.getLogger("src.mobile_app.mobile_app_session")
 app_logger.handlers = []
 app_logger.addHandler(NullHandler())
 app_logger.propagate = False
@@ -27,22 +27,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 sys.modules["instana_client"] = MagicMock()
 sys.modules["instana_client.api"] = MagicMock()
 sys.modules["instana_client.api.mobile_app_session_replay_api"] = MagicMock()
+sys.modules["instana_client.api.mobile_app_metrics_api"] = MagicMock()
 sys.modules["instana_client.models"] = MagicMock()
 sys.modules["instana_client.models.get_action_beacons_result"] = MagicMock()
 sys.modules["instana_client.configuration"] = MagicMock()
 sys.modules["instana_client.api_client"] = MagicMock()
 
-
-class FakeModel:
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-
-    def to_dict(self):
-        return self.kwargs
-
 sys.modules["instana_client.api.mobile_app_session_replay_api"].MobileAppSessionReplayApi = MagicMock()
+sys.modules["instana_client.api.mobile_app_metrics_api"].MobileAppMetricsApi = MagicMock()
 
-from src.mobile_app.mobile_app_session_replay import (
+from src.mobile_app.mobile_app_session import (
     MobileAppSessionReplayMCPTools,
     clean_nan_values,
 )
@@ -275,4 +269,15 @@ class TestMobileAppSessionReplayMCPTools(unittest.IsolatedAsyncioTestCase):
         self.assertIn("error", result)
         self.assertIn("API connection failed", result["error"])
 
+    async def test_outer_exception_handler(self):
+        """Covers the outer except in get_session_replay_action_beacons (lines 269-271)."""
+        self.client._execute_action_beacons_call = MagicMock(side_effect=Exception("unexpected outer error"))
 
+        result = await self.client.get_session_replay_action_beacons(
+            mobile_app_id="test-app",
+            session_id="test-session",
+            api_client=self.mock_api
+        )
+
+        self.assertIn("error", result)
+        self.assertIn("unexpected outer error", result["error"])
