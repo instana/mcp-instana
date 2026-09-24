@@ -49,10 +49,12 @@ sys.modules['instana_client.api.application_catalog_api'] = MagicMock()
 sys.modules['instana_client.api.application_analyze_api'] = MagicMock()
 sys.modules['instana_client.api.events_api'] = MagicMock()
 sys.modules['instana_client.api.log_alert_configuration_api'] = MagicMock()
+sys.modules['instana_client.api.logging_analyze_api'] = MagicMock()
 sys.modules['instana_client.configuration'] = MagicMock()
 sys.modules['instana_client.api_client'] = MagicMock()
 sys.modules['instana_client.models'] = MagicMock()
 sys.modules['instana_client.models.log_alert_config'] = MagicMock()
+sys.modules['instana_client.models.logs_query'] = MagicMock()
 sys.modules['instana_client.models.get_available_metrics_query'] = MagicMock()
 sys.modules['instana_client.models.get_available_plugins_query'] = MagicMock()
 sys.modules['instana_client.models.get_infrastructure_query'] = MagicMock()
@@ -82,7 +84,9 @@ mock_app_catalog_api = MagicMock()
 mock_app_analyze_api = MagicMock()
 mock_events_api = MagicMock()
 mock_log_alert_config_api = MagicMock()
+mock_logging_analyze_api = MagicMock()
 mock_log_alert_config = MagicMock()
+mock_logs_query = MagicMock()
 mock_metrics_query = MagicMock()
 mock_plugins_query = MagicMock()
 mock_infra_query = MagicMock()
@@ -100,7 +104,9 @@ mock_app_catalog_api.__name__ = "ApplicationCatalogApi"
 mock_app_analyze_api.__name__ = "ApplicationAnalyzeApi"
 mock_events_api.__name__ = "EventsApi"
 mock_log_alert_config_api.__name__ = "LogAlertConfigurationApi"
+mock_logging_analyze_api.__name__ = "LoggingAnalyzeApi"
 mock_log_alert_config.__name__ = "LogAlertConfig"
+mock_logs_query.__name__ = "LogsQuery"
 
 sys.modules['instana_client.configuration'].Configuration = mock_configuration
 sys.modules['instana_client.api_client'].ApiClient = mock_api_client
@@ -115,7 +121,9 @@ sys.modules['instana_client.api.application_catalog_api'].ApplicationCatalogApi 
 sys.modules['instana_client.api.application_analyze_api'].ApplicationAnalyzeApi = mock_app_analyze_api
 sys.modules['instana_client.api.events_api'].EventsApi = mock_events_api
 sys.modules['instana_client.api.log_alert_configuration_api'].LogAlertConfigurationApi = mock_log_alert_config_api
+sys.modules['instana_client.api.logging_analyze_api'].LoggingAnalyzeApi = mock_logging_analyze_api
 sys.modules['instana_client.models.log_alert_config'].LogAlertConfig = mock_log_alert_config
+sys.modules['instana_client.models.logs_query'].LogsQuery = mock_logs_query
 sys.modules['instana_client.models.get_available_metrics_query'].GetAvailableMetricsQuery = mock_metrics_query
 sys.modules['instana_client.models.get_available_plugins_query'].GetAvailablePluginsQuery = mock_plugins_query
 sys.modules['instana_client.models.get_infrastructure_query'].GetInfrastructureQuery = mock_infra_query
@@ -136,6 +144,14 @@ mock_log_alert_config.return_value = mock_log_alert_config_instance
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test first
     from src.log.log_alert_configuration import LogAlertConfigurationMCPTools
+
+# The imported class retains these mocks. Remove them before pytest collects the
+# log-search tests, which require the installed SDK.
+for module_name in list(sys.modules):
+    if module_name in {"instana_client", "fastmcp", "pydantic", "mcp", "src.log"} or module_name.startswith(
+        ("instana_client.", "fastmcp.", "mcp.", "src.log.")
+    ):
+        sys.modules.pop(module_name)
 
 class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     """Test the LogAlertConfigurationMCPTools class"""
@@ -831,5 +847,3 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-

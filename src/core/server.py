@@ -92,6 +92,7 @@ class MCPState:
     smart_router_synthetic_client: Any = None
     smart_router_releases_client: Any = None
     smart_router_maintenance_window_client: Any = None
+    smart_router_log_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     smart_router_infrastructure_client: Any = None
@@ -264,6 +265,7 @@ def get_client_categories():
         from src.router.infrastructure_smart_router_tool import (
             InfrastructureSmartRouterMCPTool,
         )
+        from src.router.log_smart_router_tool import LogSmartRouterMCPTool
         from src.router.maintenance_window_smart_router import (
             MaintenanceWindowSmartRouterMCPTool,
         )
@@ -309,6 +311,9 @@ def get_client_categories():
         ],
         "maintenance": [
             ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
+        ],
+        "logs": [
+            ('smart_router_log_client', LogSmartRouterMCPTool),
         ]
     }
 
@@ -524,7 +529,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic, logs). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--list-tools",
@@ -587,7 +592,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance", "synthetic"}
+        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance", "synthetic", "logs"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -617,7 +622,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic, logs")
             sys.exit(2)
 
         # Print enabled tools for user information

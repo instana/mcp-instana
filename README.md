@@ -465,6 +465,13 @@ uv run src/core/server.py
 
 > The server logs the effective SSL verification state at startup, so you can immediately confirm whether your environment variable or CLI flag was picked up.
 
+**Available Categories:**
+- **`infra`**: Infrastructure monitoring tools and prompts (resources, catalog, topology, analyze, metrics)
+- **`app`**: Application performance tools and prompts (resources, metrics, alerts, catalog, topology, analyze, settings, global alerts)
+- **`events`**: Event monitoring tools and prompts (Kubernetes events, agent monitoring)
+- **`website`**: Website monitoring tools and prompts (metrics, catalog, analyze, configuration)
+- **`logs`**: Read-only Instana log search (`manage_logs`)
+- **`synthetic`**: Synthetic monitoring tools and prompts
 
 ### Verifying Server Status
 
@@ -762,6 +769,7 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 | `manage_maintenance_windows`                                  | Maintenance Windows            | Unified smart router for maintenance window lifecycle management: create, modify, close, and list maintenance windows with template support and ServiceNow integration |
 | `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, session replay, configuration, and alert management |
 | `manage_synthetics`                                           | Synthetic Monitoring           | Unified smart router for synthetic monitoring: catalog, metrics, settings (read-only), and test playback results |
+| `manage_logs`                                                 | Logs                           | Read-only Instana log search with caller-controlled pagination |
 
 **For detailed tool documentation, capabilities, and technical reference, see [Tools & Examples](docs/TOOLS_AND_EXAMPLES.md)**
 
@@ -853,6 +861,9 @@ The MCP server supports selective tool loading to optimize performance and reduc
   - **Metrics**: Retrieve aggregated response times and success rates grouped by location or test name
   - **Settings**: List and look up tests and locations with automatic name resolution; identify datacenter (Managed) vs self-hosted (Private) PoPs
   - **Test Playback**: Per-run raw results, LAST_VALUE analytics, per-location success rate summaries, and detail file downloads (LOGS, HAR, screenshots)
+- **`logs`**: Read-only log search
+  - `manage_logs`: Search Instana logs with up to ten requested tags and 200 results per request
+  - Pagination is caller-controlled with `offset` (maximum `2000`); responses include `canLoadMore`
 
 ### Usage Examples
 
