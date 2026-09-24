@@ -32,7 +32,7 @@ CATALOG_VALID_OPERATIONS = ["get_mobile_app_tag_catalog", "get_mobile_app_metric
 CONFIGURATION_VALID_OPERATIONS = ["get_all", "get"]
 ADVANCED_CONFIG_VALID_OPERATIONS = ["get_geo_config", "get_ip_masking", "get_geo_rules", "get_source_map_upload_config", "get_mobile_app_source_map_upload_config_by_id"]
 ALERT_VALID_OPERATIONS = ["find_active_mobile_app_alert_configs", "find_mobile_app_alert_config"]
-SESSION_REPLAY_VALID_OPERATIONS = ["get_session_replay_action_beacons"]
+SESSION_VALID_OPERATIONS = ["get_session_replay_action_beacons", "get_session_beacons"]
 
 # Define parameter key constants to avoid typos
 PARAM_METRICS = "metrics"
@@ -54,6 +54,7 @@ PARAM_ALERT_IDS = "alert_ids"
 PARAM_SESSION_ID = "session_id"
 PARAM_CURSOR = "cursor"
 PARAM_PAGE_SIZE = "page_size"
+PARAM_TIMESTAMP = "timestamp"
 
 class MobileAppSmartRouterMCPTool(BaseInstanaClient):
     """
@@ -71,7 +72,8 @@ class MobileAppSmartRouterMCPTool(BaseInstanaClient):
         from src.mobile_app.mobile_app_configuration import (
             MobileAppConfigurationMCPTools,
         )
-        from src.mobile_app.mobile_app_session_replay import (
+        from src.mobile_app.mobile_app_session import (
+            MobileAppSessionMCPTools,
             MobileAppSessionReplayMCPTools,
         )
 
@@ -79,9 +81,10 @@ class MobileAppSmartRouterMCPTool(BaseInstanaClient):
         self.mobile_app_catalog_client = MobileAppCatalogMCPTools(read_token, base_url)
         self.mobile_app_configuration_client = MobileAppConfigurationMCPTools(read_token, base_url)
         self.mobile_app_alert_client = MobileAppAlertMCPTools(read_token, base_url)
+        self.mobile_app_session_client = MobileAppSessionMCPTools(read_token, base_url)
         self.mobile_app_session_replay_client = MobileAppSessionReplayMCPTools(read_token, base_url)
 
-        logger.info("Smart Router for Mobile App Monitoring initialized with analyze, catalog, configuration, alert, and session replay tools.")
+        logger.info("Smart Router for Mobile App Monitoring initialized with analyze, catalog, configuration, alert, and session tools.")
 
     @register_as_tool(
         title="Manage Instana Mobile App Resources",
@@ -94,7 +97,7 @@ Resource Types:
     - "configuration": Get mobile app configurations
     - "advanced_config": Retrieve advanced configurations (geo-location, IP masking, geo rules, source map upload config, get_mobile_app_source_map_upload_config_by_id) - READ ONLY
     - "alert": Get available alert configurations for mobile app monitoring
-    - "session_replay": Query mobile app session replay data
+    - "session": Query mobile app session data (session beacons) and session replay data (action beacons)
 
 WORKFLOW DECISION:
 ├─ Are you using resource_type="analyze"?
@@ -121,7 +124,7 @@ ANALYZE WORKFLOW:
     Default beacon_type: "SESSION_START" | Default use_case for get_all_mobile_app_beacons: "FILTERING"
 
 ANALYZE (resource_type="analyze"):
-    operations:
+    operations: 
         - get_all_mobile_app_beacons
             params: {time_frame, beacon_type, pagination, tag_filter_expression (optional), filter_fields (optional)}
 
@@ -211,9 +214,16 @@ ALERT (resource_type="alert"):
         - id: Specific alert config ID to retrieve (required)
         - valid_on: Unix timestamp to retrieve config valid at that time (optional, defaults to latest active version)
 
-SESSION_REPLAY (resource_type="session_replay"):
-    operations: get_session_replay_action_beacons
-    params: {mobile_app_id (required), session_id (required), cursor (optional), page_size (optional)}
+SESSION (resource_type="session"):
+    operations: get_session_beacons, get_session_replay_action_beacons
+
+    get_session_beacons - Get all beacons for a session by session id and timestamp
+        Required parameters:
+            - session_id: Session ID to retrieve beacons for
+            - timestamp: The timestamp of the target session (Unix ms). For beacons to accurately be found, this value must be in the range: [first beacon timestamp - 6 hours, last beacon timestamp + 6 hours]
+
+        Response:
+            - beacons: List of beacons returned for this session (All beacons of types "SESSION_START", "VIEW_CHANGE", "HTTP_REQUEST", "CUSTOM", "CRASH", "PERF", and "DROP_BEACON" associated with the session)
 
     get_session_replay_action_beacons - Get paginated session replay action beacons by mobile app id and session id
         Required parameters:
@@ -256,7 +266,7 @@ SESSION_REPLAY (resource_type="session_replay"):
                 {"beacons": [...], "nextCursor": null, "hasMore": false}
 
 Args:
-    resource_type: "analyze", "catalog", "configuration", or "advanced_config", "alert", "session_replay"
+    resource_type: "analyze", "catalog", "configuration", "advanced_config", "alert", or "session"
     operation: Specific operation for the resource type
     params: Operation-specific parameters (optional)
 
@@ -271,7 +281,8 @@ Returns:
             resource_type="configuration", operation="get_all"
             resource_type="configuration", operation="get", params={"mobile_app_name": "robot-shop"}
             resource_type="advanced_config", operation="get_geo_config", params={"mobile_app_name": "robot-shop"}
-            resource_type="session_replay", operation="get_session_replay_action_beacons", params={"mobile_app_id": "i1IsNS7FQAegEljBTkNBMQ", "session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "cursor": 10, "page_size": 100}
+            resource_type="session", operation="get_session_replay_action_beacons", params={"mobile_app_id": "i1IsNS7FQAegEljBTkNBMQ", "session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "cursor": 10, "page_size": 100}
+            resource_type="session", operation="get_session_beacons", params={"session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "timestamp": 1785786779333}
             """
     )
     async def manage_mobile_apps(
@@ -293,7 +304,7 @@ Returns:
                 params = {}
 
             # Validate resource_type
-            valid_types = ["analyze", "catalog", "configuration", "advanced_config", "alert", "session_replay"]
+            valid_types = ["analyze", "catalog", "configuration", "advanced_config", "alert", "session"]
             if resource_type not in valid_types:
                 logger.warning(f"Invalid resource_type: {resource_type}")
                 return {
@@ -320,8 +331,8 @@ Returns:
                 return await self._handle_advanced_config(operation, params, ctx, tool_name=TOOL_NAME)
             elif resource_type == "alert":
                 return await self._handle_alert(operation, params, ctx, tool_name=TOOL_NAME)
-            elif resource_type == "session_replay":
-                return await self._handle_session_replay(operation, params, ctx, tool_name=TOOL_NAME)
+            elif resource_type == "session":
+                return await self._handle_session(operation, params, ctx, tool_name=TOOL_NAME)
             else:
                 return {
                     "elicitation_needed": True,
@@ -330,10 +341,10 @@ Returns:
                         {
                             "field": "resource_type",
                             "issue": f"Unsupported resource_type: {resource_type}",
-                            "expected": ["analyze", "catalog", "configuration", "advanced_config", "alert", "session_replay"]
+                            "expected": ["analyze", "catalog", "configuration", "advanced_config", "alert", "session"]
                         }
                     ],
-                    "message": f"Unsupported resource_type '{resource_type}'. Must be one of: analyze, catalog, configuration, advanced_config, alert, session_replay"
+                    "message": f"Unsupported resource_type '{resource_type}'. Must be one of: analyze, catalog, configuration, advanced_config, alert, session"
                 }
 
         except Exception as e:
@@ -556,9 +567,13 @@ Returns:
                     )
                 }
 
+            # Normalize beacon_type to camelCase format (API expects camelCase)
+            normalized_beacon_type = normalize_beacon_type(beacon_type, MOBILE_BEACON_TYPE_MAP)
+            if beacon_type != normalized_beacon_type:
+                logger.debug(f"Normalized beacon_type from '{beacon_type}' to '{normalized_beacon_type}'")
+                beacon_type = normalized_beacon_type
+
             # Pass parameters to the client
-            # Note: tag catalog API expects SCREAMING_SNAKE_CASE beacon_type directly;
-            # no camelCase normalization is applied here.
             logger.info(f"Routing to get_mobile_app_tag_catalog [resource_type=catalog, tool={tool_name}]")
             result = await self.mobile_app_catalog_client.get_mobile_app_tag_catalog(
                 beacon_type=beacon_type,
@@ -791,35 +806,47 @@ Returns:
             "results": result
         }
 
-    async def _handle_session_replay(
+    async def _handle_session(
         self,
         operation: str,
         params: Dict[str, Any],
         ctx: Optional[Context] = None,
         tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Handle Session Replay operations"""
+        """Handle Session operations (session lifecycle and session replay)."""
 
         # Validate operation
-        if operation not in SESSION_REPLAY_VALID_OPERATIONS:
+        if operation not in SESSION_VALID_OPERATIONS:
             return {
                 "elicitation_needed": True,
                 "reason": "invalid_operation",
                 "api_error": [
                     {
                         "field": "operation",
-                        "issue": f"'{operation}' is not a valid session_replay operation",
-                        "expected": SESSION_REPLAY_VALID_OPERATIONS
+                        "issue": f"'{operation}' is not a valid session operation",
+                        "expected": SESSION_VALID_OPERATIONS
                     }
                 ],
-                "message": f"Invalid operation '{operation}' for resource_type 'session_replay'. Valid operations: {SESSION_REPLAY_VALID_OPERATIONS}"
+                "message": f"Invalid operation '{operation}' for resource_type 'session'. Valid operations: {SESSION_VALID_OPERATIONS}"
             }
 
         # Initialize result to avoid unbound variable error
         result = None
 
-        #Route to specific operation
-        if operation == "get_session_replay_action_beacons":
+        if operation == "get_session_beacons":
+            session_id = params.get(PARAM_SESSION_ID)
+            timestamp = params.get(PARAM_TIMESTAMP)
+
+            logger.info(f"Routing to get_session_beacons [resource_type=session, tool={tool_name}]")
+            result = await self.mobile_app_session_client.get_session_beacons(
+                session_id=session_id,
+                timestamp=timestamp,
+                ctx=ctx,
+                resource_type="session",
+                tool_name=tool_name,
+            )
+
+        elif operation == "get_session_replay_action_beacons":
             mobile_app_id = params.get(PARAM_MOBILE_APP_ID)
             session_id = params.get(PARAM_SESSION_ID)
             cursor = params.get(PARAM_CURSOR)
@@ -863,34 +890,20 @@ Returns:
                     )
                 }
 
-            logger.info(f"Routing to get_session_replay_action_beacons [resource_type=session_replay, tool={tool_name}]")
+            logger.info(f"Routing to get_session_replay_action_beacons [resource_type=session, tool={tool_name}]")
             result = await self.mobile_app_session_replay_client.get_session_replay_action_beacons(
                 mobile_app_id=mobile_app_id,
                 session_id=session_id,
                 cursor=cursor,
                 page_size=page_size,
                 ctx=ctx,
-                resource_type="session_replay",
+                resource_type="session",
                 tool_name=tool_name,
             )
-        else:
-            # This should never happen due to validation above, but handle it gracefully
-            return {
-                "elicitation_needed": True,
-                "reason": "invalid_operation",
-                "api_error": [
-                    {
-                        "field": "operation",
-                        "issue": f"Unhandled operation '{operation}' for session_replay",
-                        "expected": SESSION_REPLAY_VALID_OPERATIONS
-                    }
-                ],
-                "message": f"Unhandled operation '{operation}' for resource_type 'session_replay'. Valid operations: {SESSION_REPLAY_VALID_OPERATIONS}"
-            }
 
         # Return structured response
         return {
-            "resource_type": "session_replay",
+            "resource_type": "session",
             "operation": operation,
             "results": result
         }

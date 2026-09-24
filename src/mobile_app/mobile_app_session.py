@@ -1,7 +1,9 @@
 """
-Mobile App Session Replay MCP Tools Module
+Mobile App Session MCP Tools Module
 
-This module provides mobile app session replay-specific MCP tools for Instana monitoring.
+This module provides mobile app session-related MCP tools for Instana monitoring.
+It covers both the general session lifecycle (session id, timestamp, beacons) and
+the session replay feature (recording and playback of action beacons).
 """
 
 import json
@@ -31,6 +33,7 @@ def clean_nan_values(data: Any) -> Any:
         return data
 
 try:
+    from instana_client.api.mobile_app_metrics_api import MobileAppMetricsApi
     from instana_client.api.mobile_app_session_replay_api import (
         MobileAppSessionReplayApi,
     )
@@ -49,6 +52,178 @@ from src.core.utils import (
 from src.core.validation import ValidationError, ValidationResult
 
 logger = logging.getLogger(__name__)
+
+
+class MobileAppSessionMCPTools(BaseInstanaClient):
+    """Tools for mobile app session lifecycle handling in Instana MCP.
+
+    A session represents the lifecycle of a mobile app run, identified by a
+    unique session id and a start timestamp.  This class provides operations
+    that work at the session level, such as retrieving all beacons associated
+    with a given session.
+    """
+
+    def __init__(self, read_token: str, base_url: str):
+        """Initialize the Mobile App Session MCP Tools client."""
+        super().__init__(read_token=read_token, base_url=base_url)
+
+    def _check_elicitation_for_session_beacon_required_params(
+        self,
+        session_id: Optional[str] = None,
+        timestamp: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build an elicitation response when required identifiers are missing.
+
+        Args:
+            session_id: The target session ID, if already known.
+            timestamp: The target timestamp, if already known.
+
+        Returns:
+            An elicitation dictionary describing the missing parameters, or
+            ``None`` when all required identifiers are present.
+        """
+
+        missing_params = []
+
+        if session_id is None:
+            missing_params.append({
+                "name": "session_id",
+                "description": "Target app session provided by user (REQUIRED)",
+                "examples": ["bffe55e0-4c78-4366-a5e2-be008113e37e", "1db2199a-27f8-4d09-9e5c-b50685369258", "1d616527-2635-407f-89fc-de7136b66fb4"]
+            })
+
+        if timestamp is None:
+            missing_params.append({
+                "name": "timestamp",
+                "description": "Target session timestamp provided by user (REQUIRED)",
+                "examples": [1785783898711, 1785783909505, 1785783945054]
+            })
+
+        if missing_params:
+            return {
+                "elicitation_needed": True,
+                "missing_parameters": missing_params,
+                "message": "Please provide the required parameters to get mobile app session beacons",
+                "elicitation_prompt": "To retrieve mobile app session beacons, I need:\n" +
+                 "\n".join([f"- {p['name']}: {p['description']}" for p in missing_params])
+            }
+
+        return None
+
+    async def _execute_beacons_call(
+        self,
+        session_id: Optional[str] = None,
+        timestamp: Optional[int] = None,
+        api_client = None,
+        ctx = None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Call the session beacons endpoint directly.
+
+        Args:
+            session_id: The session ID whose beacons should be fetched.
+            timestamp: The timestamp of the session in epoch milliseconds
+
+        Returns:
+            A dictionary containing the raw endpoint response on success, or
+            an error dictionary when the HTTP request fails.
+        """
+
+        try:
+            # Use without_preload_content to bypass Pydantic validation
+            response = await sdk_call_with_keepalive(
+                call_sdk_fn(
+                    api_client.get_session_without_preload_content,
+                    id=session_id,
+                    timestamp=timestamp,
+                ),
+                ctx=ctx,
+                operation_name="get_session",
+                resource_type=resource_type,
+                tool_name=tool_name,
+            )
+            # Check if the response was successful
+            if response.status != 200:
+                return self.handle_api_error_response(response, "get mobile app session beacons", logger)
+
+            # Read and parse the response content
+            response_text = decode_response(response)
+            full_response = json.loads(response_text)
+
+            return full_response
+        except Exception as e:
+            logger.error(f"[get_session_beacons] Error: {e}", exc_info=True)
+            return {"error": f"Failed to get mobile app beacons: {e!s}"}
+
+    @with_header_auth(MobileAppMetricsApi)
+    async def get_session_beacons(
+        self,
+        session_id: Optional[str] = None,
+        timestamp: Optional[int] = None,
+        ctx: Optional[Context] = None,
+        api_client=None,
+        resource_type: Optional[str] = None,
+        tool_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Retrieve all beacons for a session by ID and ingestion timestamp.
+
+        Args:
+            session_id: The session ID to retrieve beacons for.
+            timestamp: The ingestion timestamp of the session in epoch milliseconds.
+
+        Returns:
+            On success: {"beacons": [...]} containing all beacons for the session.
+            On missing params: an elicitation dict.
+            On error: an error dict.
+        """
+
+        try:
+            logger.debug(
+                f"[get_session_beacons] Called with session_id={session_id} and timestamp={timestamp}"
+            )
+
+            # STEP 1: Check required parameters
+            elicitation = self._check_elicitation_for_session_beacon_required_params(session_id, timestamp)
+
+            if elicitation:
+                return elicitation
+
+            #STEP 2: Pull beacons
+            response = await self._execute_beacons_call(session_id, timestamp, api_client, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
+
+            if "error" in response:
+                logger.debug(
+                    f"[get_session_beacons] Failed call to session beacons endpoint with session_id={session_id} and timestamp={timestamp}"
+                )
+                return response
+
+            if not isinstance(response, list):
+                logger.warning(
+                    f"[get_session_beacons] Unexpected non-list response type={type(response).__name__!r} "
+                    f"from endpoint with session_id={session_id}, timestamp={timestamp}. "
+                    f"Response: {response}"
+                )
+                beacons = []
+            else:
+                beacons = response
+
+            if not beacons:
+                logger.debug(
+                    f"[get_session_beacons] Empty beacons list returned by endpoint, possible invalid session_id or timestamp. "
+                    f"Endpoint called with session_id={session_id}, timestamp={timestamp}"
+                )
+
+            # Wrap raw list response with dictionary to match response format of other operations
+            return {"beacons": clean_nan_values(beacons)}
+
+        except Exception as e:
+            logger.error(f"[get_session_beacons] Error: {e}", exc_info=True)
+            return {"error": f"Failed to get mobile app session beacons: {e!s}"}
+
 
 class MobileAppSessionReplayMCPTools(BaseInstanaClient):
     """Tools for mobile app session replay in Instana MCP."""
@@ -204,7 +379,7 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
             return full_response
         except Exception as e:
             logger.error(f"[get_session_replay_action_beacons] Error: {e}", exc_info=True)
-            return {"error": f"Failed to get mobile app session beacons: {e!s}"}
+            return {"error": f"Failed to get mobile app action beacons: {e!s}"}
 
 
     @with_header_auth(MobileAppSessionReplayApi)
@@ -287,4 +462,4 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
 
         except Exception as e:
             logger.error(f"[get_session_replay_action_beacons] Error: {e}", exc_info=True)
-            return {"error": f"Failed to get mobile app replay action beacons: {e!s}"}
+            return {"error": f"Failed to get mobile app session replay action beacons: {e!s}"}

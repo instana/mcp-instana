@@ -29,6 +29,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.mock_analyze_client = MagicMock()
         self.mock_catalog_client = MagicMock()
         self.mock_alert_client = MagicMock()
+        self.mock_session_client = MagicMock()
         self.mock_session_replay_client = MagicMock()
 
         self.router = MobileAppSmartRouterMCPTool.__new__(MobileAppSmartRouterMCPTool)
@@ -38,6 +39,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.router.mobile_app_analyze_client = self.mock_analyze_client
         self.router.mobile_app_catalog_client = self.mock_catalog_client
         self.router.mobile_app_alert_client = self.mock_alert_client
+        self.router.mobile_app_session_client = self.mock_session_client
         self.router.mobile_app_session_replay_client = self.mock_session_replay_client
 
 
@@ -250,8 +252,8 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.assertIn("results", result)
 
     def test_catalog_beacon_type_normalization(self):
-        """Validates that a canonical SCREAMING_SNAKE beacon_type is passed through
-        unchanged to the tag catalog — the API expects SCREAMING_SNAKE, not camelCase."""
+        """Validates that a canonical SCREAMING_SNAKE beacon_type passes through and is
+        normalised to camelCase before reaching the catalog service."""
         captured = {}
 
         async def mock_tags(*args, **kwargs):
@@ -267,8 +269,8 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         ))
 
         self.assertIn("results", result)
-        # The tag catalog API expects SCREAMING_SNAKE_CASE — no normalization applied
-        self.assertEqual(captured.get("beacon_type"), "SESSION_START")
+        # The router normalises SESSION_START → sessionStart for the API
+        self.assertEqual(captured.get("beacon_type"), "sessionStart")
 
     def test_catalog_invalid_operation(self):
         result = asyncio.run(self.router.manage_mobile_apps(
@@ -536,6 +538,20 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.assertTrue(result.get("elicitation_needed"))
         self.assertTrue(any("groupbyTagEntity" in e for e in result["api_error"]))
 
+    def test_preflight_group_entity_guidance_is_eum_specific(self):
+        """Mobile callers get the EUM guidance, and must NOT be pointed at
+        catalog fields that get_mobile_app_tag_catalog does not return."""
+        result = asyncio.run(self.router.manage_mobile_apps(
+            resource_type="analyze",
+            operation="get_mobile_app_beacon_groups",
+            params={"group": {"groupbyTag": "mobileBeacon.mobileApp.name"}},
+        ))
+        msg = " ".join(result["api_error"])
+        self.assertIn("NOT_APPLICABLE", msg)
+        self.assertIn("no source/destination pair", msg)
+        self.assertNotIn("canApplyToSource", msg)
+        self.assertNotIn('Example: "groupbyTagEntity": "DESTINATION"', msg)
+
     def test_preflight_multiple_errors_consolidated(self):
         """Router collects ALL validation errors in a single response."""
         result = asyncio.run(self.router.manage_mobile_apps(
@@ -581,15 +597,15 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
 
     # --- resource_type guard ---
 
-    def test_session_replay_resource_type_is_accepted(self):
-        """resource_type='session_replay' must now pass the guard and reach the handler."""
+    def test_session_resource_type_is_accepted(self):
+        """resource_type='session' must pass the guard and reach the handler."""
         async def mock_beacons(*args, **kwargs):
             return {"beacons": [], "hasMore": False}
 
         self.mock_session_replay_client.get_session_replay_action_beacons = mock_beacons
 
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"mobile_app_id": "app-1", "session_id": "sess-1"},
         ))
@@ -643,12 +659,12 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.assertIn("results", result)
         self.assertFalse(result.get("elicitation_needed"))
 
-    # --- _handle_session_replay invalid-op format ---
+    # --- _handle_session invalid-op format ---
 
-    def test_session_replay_invalid_operation_uses_elicitation_format(self):
-        """Invalid session_replay operation must return elicitation_needed, not a bare error key."""
+    def test_session_invalid_operation_uses_elicitation_format(self):
+        """Invalid session operation must return elicitation_needed, not a bare error key."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="not_a_real_op",
             params={},
         ))
@@ -658,12 +674,12 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.assertIn("api_error", result)
         self.assertTrue(any("not_a_real_op" in e["issue"] for e in result["api_error"]))
 
-    # --- _handle_session_replay required-field guards ---
+    # --- _handle_session required-field guards for get_session_replay_action_beacons ---
 
     def test_session_replay_missing_both_required_params_consolidated(self):
         """Omitting both mobile_app_id and session_id returns both errors in one response."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={},
         ))
@@ -677,7 +693,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
     def test_session_replay_missing_mobile_app_id_only(self):
         """Omitting only mobile_app_id while session_id is present returns the right error."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"session_id": "sess-1"},
         ))
@@ -690,7 +706,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
     def test_session_replay_missing_session_id_only(self):
         """Omitting only session_id while mobile_app_id is present returns the right error."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"mobile_app_id": "app-1"},
         ))
@@ -703,7 +719,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
     def test_session_replay_page_size_too_large(self):
         """page_size > 1000 is rejected at the router level."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"mobile_app_id": "app-1", "session_id": "sess-1", "page_size": 1001},
         ))
@@ -715,7 +731,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
     def test_session_replay_page_size_zero_rejected(self):
         """page_size=0 (below minimum of 1) is rejected at the router level."""
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"mobile_app_id": "app-1", "session_id": "sess-1", "page_size": 0},
         ))
@@ -731,7 +747,7 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
         self.mock_session_replay_client.get_session_replay_action_beacons = mock_beacons
 
         result = asyncio.run(self.router.manage_mobile_apps(
-            resource_type="session_replay",
+            resource_type="session",
             operation="get_session_replay_action_beacons",
             params={"mobile_app_id": "app-1", "session_id": "sess-1", "cursor": 0, "page_size": 100},
         ))
@@ -785,6 +801,43 @@ class TestMobileAppSmartRouterTool(unittest.TestCase):
 
         self.assertIn("results", result)
         self.assertFalse(result.get("elicitation_needed"))
+
+
+    # --- _handle_session tests for get_session_beacons ---
+
+    def test_session_get_session_beacons_reaches_service(self):
+        """get_session_beacons with valid params routes to mobile_app_session_client."""
+        async def mock_beacons(*args, **kwargs):
+            return {"beacons": [{"type": "sessionStart"}]}
+
+        self.mock_session_client.get_session_beacons = mock_beacons
+
+        result = asyncio.run(self.router.manage_mobile_apps(
+            resource_type="session",
+            operation="get_session_beacons",
+            params={"session_id": "sess-1", "timestamp": 1785786779333},
+        ))
+
+        self.assertIn("results", result)
+        self.assertFalse(result.get("elicitation_needed"))
+        self.assertEqual(result["resource_type"], "session")
+
+    def test_session_get_session_beacons_missing_params_delegates_to_service(self):
+        """Missing params for get_session_beacons are handled by the service layer."""
+        async def mock_elicitation(*args, **kwargs):
+            return {"elicitation_needed": True, "missing_parameters": [{"name": "session_id"}, {"name": "timestamp"}]}
+
+        self.mock_session_client.get_session_beacons = mock_elicitation
+
+        result = asyncio.run(self.router.manage_mobile_apps(
+            resource_type="session",
+            operation="get_session_beacons",
+            params={},
+        ))
+
+        # Router delegates to service; service returns elicitation
+        self.assertIn("results", result)
+        self.assertTrue(result["results"].get("elicitation_needed"))
 
 
 if __name__ == "__main__":
