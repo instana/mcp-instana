@@ -1,3 +1,5 @@
+> 🔒 **SSL Enabled by Default** — Starting with this release, SSL certificate verification is **enabled by default** for all outgoing Instana API calls. You can customise this behaviour (disable, supply a custom CA bundle, etc.) via CLI flag, environment variable, or `config.yaml`. See [SSL Certificate Verification](#ssl-certificate-verification) for full details.
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Table of Contents

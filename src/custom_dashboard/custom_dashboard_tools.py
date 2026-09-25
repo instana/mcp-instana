@@ -78,7 +78,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
         """Validate the accessRules list; append problems to errors."""
         if not isinstance(access_rules, list) or len(access_rules) == 0:
             errors.append(
-                "'accessRules' must be a non-empty list (1-64 items). "
+                "'accessRules' must be a non-empty list (1–64 items). "
                 'Example: [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}]'
             )
             return
@@ -107,10 +107,10 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             errors.append(f"'widgets[{idx}].config' must be an object, got: {type(w_config).__name__}")
         w_width = widget.get("width")
         if w_width is not None and (not isinstance(w_width, int) or not (1 <= w_width <= 12)):
-            errors.append(f"'widgets[{idx}].width' must be an integer 1-12, got: {w_width!r}")
+            errors.append(f"'widgets[{idx}].width' must be an integer 1–12, got: {w_width!r}")
         w_x = widget.get("x")
         if w_x is not None and (not isinstance(w_x, int) or not (0 <= w_x <= 11)):
-            errors.append(f"'widgets[{idx}].x' must be an integer 0-11, got: {w_x!r}")
+            errors.append(f"'widgets[{idx}].x' must be an integer 0–11, got: {w_x!r}")
         w_y = widget.get("y")
         if w_y is not None and (not isinstance(w_y, int) or w_y < 0):
             errors.append(f"'widgets[{idx}].y' must be a non-negative integer, got: {w_y!r}")
@@ -122,7 +122,7 @@ class CustomDashboardMCPTools(BaseInstanaClient):
     def _validate_widgets(widgets: Any, errors: list) -> None:
         """Validate the widgets list; append problems to errors."""
         if not isinstance(widgets, list):
-            errors.append("'widgets' must be a list (0-128 items).")
+            errors.append("'widgets' must be a list (0–128 items).")
             return
         if len(widgets) > 128:
             errors.append(f"'widgets' exceeds maximum of 128 items (got {len(widgets)}).")
@@ -149,8 +149,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
           - id     : str, max_length=64 (required)
           - type   : str, min_length=1 (required)
           - config : dict (required)
-          - width  : int, 1-12 (optional)
-          - x      : int, 0-11 (optional)
+          - width  : int, 1–12 (optional)
+          - x      : int, 0–11 (optional)
           - y      : int, ≥0 (optional)
           - height : int, ≥1 (optional)
 
@@ -340,11 +340,21 @@ class CustomDashboardMCPTools(BaseInstanaClient):
 
             # Use _without_preload_content to bypass Pydantic validation
             # This handles cases where API returns None for fields that expect strings
+            #
+            # API pagination rules (confirmed by raw HTTP tests):
+            #   - pageSize alone (without page) is ignored by the server — must always
+            #     send both pageSize AND page together for pagination to take effect.
+            #   - withTotalHits=true changes the response shape from a flat list to
+            #     {"totalHits": N, "items": [...]} — both shapes are handled below.
+            effective_page = page
+            if page_size is not None and page is None:
+                effective_page = 1  # page is required for pageSize to have effect
+
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_custom_dashboards_without_preload_content,
                     query=query,
                     page_size=page_size,
-                    page=page,
+                    page=effective_page,
                     with_total_hits=with_total_hits,
                 ),
                 ctx=ctx, operation_name="get_custom_dashboards",
@@ -356,19 +366,31 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
-            # Parse the JSON response manually
+            # Parse the JSON response manually.
+            # The response shape depends on withTotalHits:
+            #   withTotalHits=false (default): flat list  → [...]
+            #   withTotalHits=true           : dict       → {"totalHits": N, "items": [...]}
             response_text = result.data.decode('utf-8')
-            dashboards_list = json.loads(response_text)
+            raw = json.loads(response_text)
 
-            # Build result dictionary
-            result_dict = {
-                "items": dashboards_list if isinstance(dashboards_list, list) else [],
-                "count": len(dashboards_list) if isinstance(dashboards_list, list) else 0
-            }
+            if isinstance(raw, dict):
+                # withTotalHits=true response
+                items = raw.get("items", [])
+                result_dict = {
+                    "items": items,
+                    "count": len(items),
+                    "total_hits": raw.get("totalHits"),
+                }
+            else:
+                # flat list response
+                result_dict = {
+                    "items": raw,
+                    "count": len(raw),
+                }
 
-            # Add pagination info if provided
-            if page is not None:
-                result_dict["page"] = page
+            # Echo back the pagination params that were actually sent
+            if effective_page is not None:
+                result_dict["page"] = effective_page
             if page_size is not None:
                 result_dict["page_size"] = page_size
 
