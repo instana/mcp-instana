@@ -4,19 +4,43 @@ Base Instana API Client Module
 This module provides the base client for interacting with the Instana API.
 """
 
+import ast
 import functools
 import inspect
 import json
 import logging
 import os
 import sys
+from email.message import Message
 from typing import Any, Callable, Dict, Optional, Union
 
 import anyio
 import requests
-from exceptiongroup import BaseExceptionGroup
+from fastmcp import Context
+from mcp.types import ToolAnnotations
 
-from src.core.api_headers import build_instana_api_headers
+from src.core.auth_helper import _auth_wrapper_logic, _ssl_verify_from_env
+
+# Default wall-clock timeout for every Instana SDK call (seconds).
+# Override at the process level with INSTANA_API_TIMEOUT=<seconds>.
+_DEFAULT_API_TIMEOUT: int = 180
+
+
+def _api_timeout() -> int:
+    """Return the per-call API timeout in seconds.
+
+    Reads ``INSTANA_API_TIMEOUT`` from the environment.  Falls back to
+    ``_DEFAULT_API_TIMEOUT`` (180 s) when the variable is absent or non-integer.
+    """
+    raw = os.getenv("INSTANA_API_TIMEOUT", "").strip()
+    if raw:
+        try:
+            val = int(raw)
+            if val > 0:
+                return val
+        except ValueError:
+            pass
+    return _DEFAULT_API_TIMEOUT
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -147,6 +171,12 @@ async def sdk_call_with_keepalive(
     unconditional push — real bytes on the wire that reset every idle timer
     between client and server.
 
+    A hard wall-clock timeout is also enforced.  When the SDK call does not
+    complete within *timeout* seconds the task group is cancelled and an error
+    dict is returned immediately — no more indefinitely hanging requests.  The
+    timeout defaults to the ``INSTANA_API_TIMEOUT`` environment variable
+    (integer seconds), falling back to 180 seconds when unset.
+
     Both the SDK task and the ticker run inside ``anyio.create_task_group``,
     which is the correct structured-concurrency primitive for the anyio runtime
     used by FastMCP.
@@ -178,12 +208,13 @@ async def sdk_call_with_keepalive(
             ``"manage_events"``).  Included in debug log lines when provided.
 
     Returns:
-        The return value of ``coro``.
+        The return value of ``coro``, or an error dict when the deadline fires.
     """
+    effective_timeout = _api_timeout()
     prefix = _build_log_prefix(operation_name, tool_name, resource_type)
     result_holder: list[Any] = []
 
-    logger.debug("%s Starting SDK call", prefix)
+    logger.debug("%s Starting SDK call (timeout=%ds)", prefix, effective_timeout)
 
     async def _run_sdk(cancel_scope: anyio.CancelScope) -> None:
         result_holder.append(await coro)
@@ -213,20 +244,40 @@ async def sdk_call_with_keepalive(
             except Exception:
                 pass  # Never let keepalive errors surface
 
-    if ctx:
+    async def _run_with_task_group() -> None:
+        """Run SDK + keepalive concurrently, unwrapping single-exception groups."""
         try:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(_run_sdk, tg.cancel_scope)
                 tg.start_soon(_run_keepalive)
         except BaseExceptionGroup as eg:
             # anyio wraps a task's exception in an ExceptionGroup.
-            # Unwrap and re-raise the original SDK exception directly so callers
-            # (and their except-blocks) see the real error, not the group wrapper.
+            # Unwrap and re-raise the original SDK exception directly so
+            # callers (and their except-blocks) see the real error.
             if len(eg.exceptions) == 1:
                 raise eg.exceptions[0] from None
             raise  # multiple failures - re-raise the group as-is
-    else:
-        await _run_sdk(anyio.CancelScope())  # no-op cancel scope, no keepalive
+
+    sdk_coro = _run_with_task_group() if ctx else _run_sdk(anyio.CancelScope())
+    with anyio.move_on_after(effective_timeout) as deadline_scope:
+        await sdk_coro
+
+    if deadline_scope.cancelled_caught:
+        logger.error(
+            "%s Instana API call timed out after %ds. "
+            "Increase the limit with INSTANA_API_TIMEOUT env var.",
+            prefix, effective_timeout,
+        )
+        return {
+            "error": (
+                f"Instana API call timed out after {effective_timeout}s "
+                f"({operation_name}). The Instana server did not respond in time. "
+                f"Increase the limit with the INSTANA_API_TIMEOUT environment variable."
+            ),
+            "operation": operation_name,
+            "resource_type": resource_type,
+            "timeout_seconds": effective_timeout,
+        }
 
     if not result_holder:
         raise RuntimeError("SDK call completed without result — this should not happen")
@@ -279,22 +330,14 @@ def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, 
         except json.JSONDecodeError:
             # Fall back to Python literal evaluation
             try:
-                import ast
                 return ast.literal_eval(payload)
             except (ValueError, SyntaxError) as e:
                 return {"error": f"Invalid payload format: {e!s}"}
 
     return {"error": f"Payload must be dict or JSON string, got {type(payload).__name__}"}
 
-# Import MCP dependencies
-from fastmcp import Context
-from mcp.types import ToolAnnotations
-
 # Default charset for response decoding
 DEFAULT_CHARSET = 'utf-8'
-
-# Constants for error messages
-AUTH_FAILED_MSG = "Authentication failed: %s"
 
 # Import for getting package version from meta data rather than server.py
 try:
@@ -302,7 +345,7 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "0.9.6"
+    __version__ = "0.12.100"
 
 # Registry to store all tools
 MCP_TOOLS = {}
@@ -346,446 +389,6 @@ def register_as_tool(title=None, annotations=None, description=None):
         return func
 
     return decorator
-
-def _validate_http_auth_headers(instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url):
-    """Validate HTTP authentication headers."""
-    # Check for API token auth (needs token + base_url)
-    has_api_token_auth = instana_api_token and instana_base_url
-    # Check for JWT token auth (needs jwt_token + csrf_token + base_url)
-    # JWT requires CSRF since it's treated as UI user for POST/PUT/DELETE operations
-    has_jwt_token_auth = instana_jwt_token and instana_csrf_token and instana_base_url
-    # Check for session token auth (needs auth_token + csrf_token + base_url)
-    has_session_auth = instana_auth_token and instana_csrf_token and instana_base_url
-
-    if not has_api_token_auth and not has_jwt_token_auth and not has_session_auth:
-        missing = []
-        if not instana_base_url:
-            missing.append("instana-base-url")
-        if not instana_api_token and not (instana_jwt_token and instana_csrf_token) and not (instana_auth_token and instana_csrf_token):
-            missing.append("either (instana-api-token) OR (instana-jwt-token + instana-csrf-token) OR (instana-auth-token + instana-csrf-token)")
-        error_msg = f"HTTP mode detected but missing required headers: {', '.join(missing)}"
-        logger.error(AUTH_FAILED_MSG, error_msg)
-        return {"error": error_msg}
-
-    # Validate URL format - HTTP protocol is allowed for development/testing environments
-    # In production, HTTPS should always be used for security
-    if not instana_base_url.startswith("http://") and not instana_base_url.startswith("https://"):  # NOSONAR - HTTP allowed for dev/test
-        error_msg = "Instana base URL must start with http:// or https://"
-        logger.error(AUTH_FAILED_MSG, error_msg)
-        return {"error": error_msg}
-
-    return None
-
-
-def _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token):
-    """Configure authentication type and validate tokens."""
-    if "Authorization" not in auth_headers:
-        logger.debug("Using session token authentication")
-        return None
-
-    auth_value = auth_headers["Authorization"]
-
-    if auth_value.startswith("Bearer "):
-        return _configure_jwt_auth(instana_jwt_token)
-
-    if auth_value.startswith("apiToken "):
-        return _configure_api_token_auth(configuration, instana_api_token)
-
-    return None
-
-
-def _configure_jwt_auth(instana_jwt_token):
-    """Configure JWT token authentication."""
-    if instana_jwt_token is None:
-        error_msg = "JWT token is required but not provided"
-        logger.error(AUTH_FAILED_MSG, error_msg)
-        return {"error": error_msg}
-    logger.debug("Using JWT token authentication")
-    return None
-
-
-def _configure_api_token_auth(configuration, instana_api_token):
-    """Configure API token authentication.
-
-    Note: For API token auth, we use the SDK's built-in api_key configuration
-    instead of manually setting the Authorization header. This prevents conflicts
-    where both methods might be used simultaneously.
-    """
-    if instana_api_token is None:
-        error_msg = "API token is required but not provided"
-        logger.error(AUTH_FAILED_MSG, error_msg)
-        return {"error": error_msg}
-    configuration.api_key['ApiKeyAuth'] = instana_api_token
-    configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
-    logger.debug("Using API token authentication via SDK configuration")
-    return None
-
-
-def _set_authorization_header(api_client_instance, auth_headers):
-    """Set Authorization header on API client.
-
-    Note: This should only be called for JWT and Session auth.
-    For API token auth, the SDK's configuration handles authentication.
-    """
-    if "Authorization" not in auth_headers:
-        return
-
-    auth_header_value = auth_headers["Authorization"]
-
-    # Skip setting Authorization header if it's an API token
-    # (SDK configuration handles this via api_key)
-    if auth_header_value.startswith("apiToken "):
-        logger.debug("Skipping Authorization header for API token (using SDK configuration)")
-        return
-
-    # Set header for JWT Bearer tokens and other auth types.
-    # Log only the scheme (e.g. "Bearer"), never any part of the token value.
-    scheme = auth_header_value.split(" ", 1)[0]
-    api_client_instance.set_default_header("Authorization", auth_header_value)
-    logger.debug("Set Authorization header scheme: %s", scheme)
-
-
-def _set_csrf_headers(api_client_instance, auth_headers):
-    """Set CSRF and Cookie headers on API client."""
-    if "X-CSRF-TOKEN" not in auth_headers:
-        return
-
-    csrf_value = auth_headers["X-CSRF-TOKEN"]
-    masked_csrf = f"{csrf_value[:10]}...{csrf_value[-5:]}" if len(csrf_value) > 15 else csrf_value[:5] + "..."
-    api_client_instance.set_default_header("X-CSRF-TOKEN", csrf_value)
-    logger.debug(f"Set X-CSRF-TOKEN header: {masked_csrf}")
-
-    if "Cookie" in auth_headers:
-        api_client_instance.set_default_header("Cookie", auth_headers["Cookie"])
-        logger.debug("Set session auth headers (CSRF + Cookie)")
-    else:
-        logger.debug("Set CSRF header for JWT auth (no Cookie)")
-
-
-def _ssl_verify_from_env() -> bool:
-    """Return SSL verification flag from INSTANA_SSL_VERIFY env var.
-
-    Defaults to True (verify SSL) when the variable is absent or unrecognised.
-    Set INSTANA_SSL_VERIFY=false / 0 / no to disable verification.
-    """
-    raw = os.getenv("INSTANA_SSL_VERIFY", "true").strip().lower()
-    return raw not in ("0", "false", "no")
-
-
-def _get_ctx_session_id(ctx) -> Optional[str]:
-    """Return ctx.session_id as a string, or None if unavailable."""
-    try:
-        sid = ctx.session_id
-        return str(sid) if sid else None
-    except Exception:
-        return None
-
-
-def _get_ctx_request_id(ctx) -> Optional[str]:
-    """Return ctx.request_id as a string, or None if unavailable."""
-    try:
-        rid = ctx.request_id
-        return str(rid) if rid else None
-    except Exception:
-        return None
-
-
-def _get_ctx_client_name(ctx) -> Optional[str]:
-    """Return the LLM client name from the MCP initialize handshake, or None."""
-    try:
-        session = ctx.session
-        client_params = getattr(session, "client_params", None) if session else None
-        client_info = getattr(client_params, "clientInfo", None) if client_params else None
-        name = getattr(client_info, "name", None)
-        return str(name) if name else None
-    except Exception:
-        return None
-
-
-def _build_mcp_tracking_context(ctx=None, http_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    """Build MCP tracking headers for outgoing Instana API calls (HTTP mode).
-
-    Sources (all opportunistic — missing values are silently omitted):
-      ctx.session_id                         → X-MCP-Session-ID  (stable per conversation)
-      ctx.request_id                         → X-MCP-Request-ID  (unique per tool call)
-      ctx.session.client_params.clientInfo   → X-MCP-Client      (LLM product name from MCP handshake)
-      http_headers["x-mcp-user-id"]          → X-MCP-User-ID     (injected by upstream coordinator)
-    """
-    tracking: Dict[str, str] = {}
-
-    if ctx is not None:
-        sid = _get_ctx_session_id(ctx)
-        if sid:
-            tracking["X-MCP-Session-ID"] = sid
-
-        rid = _get_ctx_request_id(ctx)
-        if rid:
-            tracking["X-MCP-Request-ID"] = rid
-
-        client = _get_ctx_client_name(ctx)
-        if client:
-            tracking["X-MCP-Client"] = client
-
-    if http_headers:
-        user_id = http_headers.get("x-mcp-user-id", "")
-        if user_id:
-            tracking["X-MCP-User-ID"] = user_id
-
-    return tracking
-
-
-def _stamp_tracking_headers(api_client_instance, tracking: Dict[str, str]) -> None:
-    """Set MCP tracking headers on an SDK ApiClient as default headers."""
-    for name, value in tracking.items():
-        if value:
-            api_client_instance.set_default_header(name, value)
-
-
-def _create_api_client_with_config(base_url, instana_api_token, instana_jwt_token, auth_headers,
-                                    tracking: Optional[Dict[str, str]] = None):
-    """Create API client with configuration based on auth type."""
-    from instana_client.api_client import ApiClient
-    from instana_client.configuration import Configuration
-
-    configuration = Configuration()
-    configuration.host = base_url
-    configuration.verify_ssl = _ssl_verify_from_env()
-    if configuration.verify_ssl:
-        ca_bundle = os.getenv("INSTANA_CA_BUNDLE")
-        if ca_bundle:
-            configuration.ssl_ca_cert = ca_bundle
-            logger.info("SSL verification is ENABLED (custom CA bundle: %s)", ca_bundle)
-        else:
-            logger.info("SSL verification is ENABLED (system CA bundle)")
-    else:
-        logger.warning("SSL verification is DISABLED. Set INSTANA_SSL_VERIFY=true or pass --verify-ssl to enable.")
-
-    # Configure authentication type
-    error = _configure_auth_type(configuration, auth_headers, instana_api_token, instana_jwt_token)
-    if error:
-        return None, error
-
-    # Create API client instance
-    api_client_instance = ApiClient(configuration=configuration)
-    user_agent_value = f"MCP-server/{__version__}"
-    api_client_instance.set_default_header("User-Agent", header_value=user_agent_value)
-
-    # Set authentication headers
-    _set_authorization_header(api_client_instance, auth_headers)
-    _set_csrf_headers(api_client_instance, auth_headers)
-
-    # Stamp MCP tracking headers so every outgoing Instana REST call carries them
-    if tracking:
-        _stamp_tracking_headers(api_client_instance, tracking)
-
-    return api_client_instance, None
-
-
-def _try_http_mode_auth(api_class, tracking: Optional[Dict[str, str]] = None):
-    """Attempt HTTP mode authentication."""
-    try:
-        from fastmcp.server.dependencies import get_http_headers
-        headers = get_http_headers()
-
-        # Extract all possible authentication headers
-        instana_api_token = headers.get("instana-api-token")
-        instana_auth_token = headers.get("instana-auth-token")
-        instana_csrf_token = headers.get("instana-csrf-token")
-        instana_base_url = headers.get("instana-base-url")
-        instana_cookie_name = headers.get("instana-cookie-name")
-        instana_jwt_token = headers.get("instana-jwt-token")
-
-        # Check if we're in HTTP mode
-        if not (instana_api_token or instana_jwt_token or instana_auth_token or instana_csrf_token or instana_base_url):
-            return None
-
-        # Validate headers
-        validation_error = _validate_http_auth_headers(
-            instana_api_token, instana_jwt_token, instana_auth_token, instana_csrf_token, instana_base_url
-        )
-        if validation_error:
-            return validation_error
-
-        # Build auth headers
-        auth_headers = build_instana_api_headers(
-            auth_token=instana_auth_token,
-            csrf_token=instana_csrf_token,
-            jwt_token=instana_jwt_token,
-            api_token=instana_api_token,
-            cookie_name=instana_cookie_name
-        )
-
-        # Enrich tracking with x-mcp-user-id forwarded by the upstream coordinator.
-        # get_http_headers() returns all non-auth request headers, so this is safe.
-        if tracking is not None:
-            user_id = headers.get("x-mcp-user-id", "")
-            if user_id:
-                tracking["X-MCP-User-ID"] = user_id
-
-        # Create API client, stamping tracking headers onto it
-        api_client_instance, error = _create_api_client_with_config(
-            instana_base_url, instana_api_token, instana_jwt_token, auth_headers, tracking
-        )
-        if error:
-            return error
-
-        return api_class(api_client=api_client_instance)
-
-    except (ImportError, AttributeError) as e:
-        logger.error("Header detection failed, using STDIO mode: %s", e)
-        return None
-
-
-def _create_api_client_from_config(base_url, api_token):
-    """Create API client from configuration (for STDIO mode)."""
-    from instana_client.api_client import ApiClient
-    from instana_client.configuration import Configuration
-
-    configuration = Configuration()
-    configuration.host = base_url
-    configuration.verify_ssl = _ssl_verify_from_env()
-    if configuration.verify_ssl:
-        ca_bundle = os.getenv("INSTANA_CA_BUNDLE")
-        if ca_bundle:
-            configuration.ssl_ca_cert = ca_bundle
-            logger.info("SSL verification is ENABLED (custom CA bundle: %s)", ca_bundle)
-        else:
-            logger.info("SSL verification is ENABLED (system CA bundle)")
-    else:
-        logger.warning("SSL verification is DISABLED. Set INSTANA_SSL_VERIFY=true or pass --verify-ssl to enable.")
-    configuration.api_key['ApiKeyAuth'] = api_token
-    configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
-
-    api_client_instance = ApiClient(configuration=configuration)
-    user_agent_value = f"MCP-server/{__version__}"
-    api_client_instance.set_default_header("User-Agent", header_value=user_agent_value)
-
-    return api_client_instance
-
-
-def _validate_stdio_credentials(self):
-    """Validate STDIO mode credentials."""
-    if not self.read_token or not self.base_url:
-        error_msg = "Authentication failed: Missing credentials "
-        if not self.read_token:
-            error_msg += " - INSTANA_API_TOKEN is missing"
-        if not self.base_url:
-            error_msg += " - INSTANA_BASE_URL is missing"
-        print(f" {error_msg}", file=sys.stderr)
-        return {"error": error_msg}
-    return None
-
-
-def _find_existing_api_client(self, api_class):
-    """Find existing API client in self attributes."""
-    api_class_name = getattr(api_class, '__name__', str(api_class))
-    for attr_name in dir(self):
-        if attr_name.endswith('_api'):
-            attr = getattr(self, attr_name)
-            if hasattr(attr, '__class__') and attr.__class__.__name__ == api_class_name:
-                print(f"🔐 Found existing API client: {attr_name}", file=sys.stderr)
-                return getattr(self, attr_name)
-    return None
-
-
-def _create_stdio_api_client(self, api_class):
-    """Create new API client using STDIO credentials."""
-    print(" Creating new API client with constructor credentials", file=sys.stderr)
-    api_client_instance = _create_api_client_from_config(self.base_url, self.read_token)
-    print(f"✅ Set User-Agent header: MCP-server/{__version__}", file=sys.stderr)
-    return api_class(api_client=api_client_instance)
-
-
-def _auth_check_mock(allow_mock, kwargs):
-    """Check if mock client should be used."""
-    if allow_mock and kwargs.get('api_client') is not None:
-        print(" Using mock client for testing", file=sys.stderr)
-        return True
-    return False
-
-
-def _auth_try_http(api_class, tracking: Optional[Dict[str, str]] = None):
-    """Try HTTP mode authentication and return (api_instance, error)."""
-    api_instance = _try_http_mode_auth(api_class, tracking)
-    if isinstance(api_instance, dict) and "error" in api_instance:
-        return None, api_instance
-    return api_instance, None
-
-
-def _auth_try_stdio(self, api_class):
-    """Try STDIO mode authentication and return (api_instance, error)."""
-    print(" Using constructor-based authentication (STDIO mode)", file=sys.stderr)
-    print(f" self.base_url: {self.base_url}", file=sys.stderr)
-
-    validation_error = _validate_stdio_credentials(self)
-    if validation_error:
-        return None, validation_error
-
-    api_instance = _find_existing_api_client(self, api_class)
-    if not api_instance:
-        api_instance = _create_stdio_api_client(self, api_class)
-
-    return api_instance, None
-
-
-async def _auth_wrapper_logic(func, self, args, kwargs, api_class, allow_mock):
-    """Execute authentication logic for the wrapper function."""
-    # Check for mock client
-    if _auth_check_mock(allow_mock, kwargs):
-        return await func(self, *args, **kwargs)
-
-    # Extract the FastMCP Context injected by FastMCP for tools that declare
-    # `ctx: Optional[Context]`. Used to read session_id, request_id, and clientInfo.
-    #
-    # ctx can arrive two ways:
-    #   1. As a keyword argument  → kwargs["ctx"]          (top-level router tools)
-    #   2. As a positional argument → args[n]              (internal helpers called as
-    #      `await self._method(id, ctx)` without an explicit keyword)
-    # We check kwargs first, then fall back to inspecting the function signature to
-    # locate the positional index of the `ctx` parameter.
-    ctx = kwargs.get("ctx")
-    if ctx is None:
-        import inspect as _inspect
-        try:
-            _param_names = list(_inspect.signature(func).parameters.keys())
-            # param_names[0] is always 'self'; args starts after self
-            _ctx_pos = _param_names.index("ctx") - 1  # -1 to skip 'self'
-            if 0 <= _ctx_pos < len(args):
-                ctx = args[_ctx_pos]
-        except (ValueError, TypeError):
-            pass  # 'ctx' not in signature or inspection failed — leave ctx as None
-
-    # Build per-call tracking context for the HTTP path.
-    # x-mcp-user-id is read later inside _try_http_mode_auth where we have the
-    # raw HTTP request headers from get_http_headers().
-    tracking = _build_mcp_tracking_context(ctx=ctx)
-
-    logger.info(
-        "MCP tool call | tool=%s session_id=%s request_id=%s client=%s user_id=%s",
-        func.__name__,
-        tracking.get("X-MCP-Session-ID", "-"),
-        tracking.get("X-MCP-Request-ID", "-"),
-        tracking.get("X-MCP-Client", "-"),
-        tracking.get("X-MCP-User-ID", "-"),
-    )
-
-    # Try HTTP mode first — passes tracking so headers are stamped on the ApiClient
-    api_instance, error = _auth_try_http(api_class, tracking)
-    if error:
-        return error
-
-    if api_instance:
-        kwargs['api_client'] = api_instance
-        return await func(self, *args, **kwargs)
-
-    # Fall back to STDIO mode (tracking not applied for POC scope)
-    api_instance, error = _auth_try_stdio(self, api_class)
-    if error:
-        return error
-
-    kwargs['api_client'] = api_instance
-    return await func(self, *args, **kwargs)
-
 
 def with_header_auth(api_class, allow_mock=True):
     """
@@ -930,8 +533,6 @@ def decode_response(response) -> str:
     Returns:
         Decoded response text
     """
-    from email.message import Message
-
     # Try to get charset from response headers using standard library parsing
     charset = DEFAULT_CHARSET  # Default fallback
 
