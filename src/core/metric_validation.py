@@ -36,6 +36,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from src.core.catalog_cache import _cache_get, _cache_set, _CACHE_MISS, DEFAULT_CATALOG_TTL
 from src.core.utils import decode_response, normalize_beacon_type, project_metric_card
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,17 @@ async def fetch_metric_catalog_internal(
     if underlying is None:
         return {"error": "Cannot access underlying ApiClient for catalog fetch"}
 
+    # Build a cache key using the API base_url (if available) and the method name.
+    # This mirrors the key scheme used by @ttl_cached on the catalog class methods.
+    base_url = getattr(getattr(underlying, "configuration", None), "host", "")
+    cache_key = f"{base_url}|{fetch_method_name}"
+    cached = _cache_get(cache_key)
+    if cached is not _CACHE_MISS:
+        logger.debug("fetch_metric_catalog_internal cache HIT  key=%s", cache_key)
+        return cached
+
+    logger.debug("fetch_metric_catalog_internal cache MISS key=%s", cache_key)
+
     try:
         catalog_instance = catalog_api_class(api_client=underlying)
     except Exception as e:
@@ -235,4 +247,11 @@ async def fetch_metric_catalog_internal(
     except Exception as e:
         return {"error": f"Failed to parse metric catalog response: {e}"}
 
-    return _validate_raw_and_project(raw_metrics)
+    result = _validate_raw_and_project(raw_metrics)
+
+    # Cache the projected result (same default TTL as all other catalog decorators).
+    # Never cache error dicts so transient failures don't poison the store.
+    if not (isinstance(result, dict) and "error" in result):
+        _cache_set(cache_key, result, ttl=DEFAULT_CATALOG_TTL)
+
+    return result

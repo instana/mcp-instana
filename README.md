@@ -33,6 +33,11 @@
       - [Using the CLI option](#using-the-cli-option)
       - [Using the environment variable](#using-the-environment-variable)
       - [Using a custom CA bundle](#using-a-custom-ca-bundle)
+    - [Catalog Response Caching](#catalog-response-caching)
+      - [Cached catalog operations](#cached-catalog-operations)
+      - [Configuring caching (stdio mode)](#configuring-caching-stdio-mode)
+      - [Configuring caching (streamable-http mode)](#configuring-caching-streamable-http-mode)
+      - [Using .bob/mcp.json (stdio mode)](#using-bobmcpjson-stdio-mode)
     - [Verifying Server Status](#verifying-server-status)
     - [Common Startup Issues](#common-startup-issues)
   - [Setup and Usage](#setup-and-usage)
@@ -471,6 +476,113 @@ uv run src/core/server.py
 
 > The server logs the effective SSL verification state at startup, so you can immediately confirm whether your environment variable, CLI flag, or config file setting was picked up.
 
+## API Call Timeout
+
+Every outgoing Instana API call is subject to a hard wall-clock timeout. If the Instana server does not respond within the deadline the call is cancelled and an error is returned immediately — no indefinitely hanging requests.
+
+The default timeout is **180 seconds**. Override it with the `INSTANA_API_TIMEOUT` environment variable:
+
+```bash
+export INSTANA_API_TIMEOUT=60   # 60-second deadline
+uv run src/core/server.py
+```
+
+`INSTANA_API_TIMEOUT` must be a positive integer (seconds). Non-integer or non-positive values are ignored and the 180-second default is used instead.
+
+### Catalog Response Caching
+
+The server caches catalog API responses (metrics, tags, and plugins) in-process to eliminate redundant round-trips. Catalog data is stable within a tenant — it only changes when new integrations are deployed — so responses are safe to reuse across the lifetime of a single server process.
+
+**Default TTL: 30 minutes.** Each unique combination of tenant URL, method, and parameters gets its own independent cache slot. Error responses are never cached, so a transient network failure cannot poison the store.
+
+#### Cached catalog operations
+
+| Domain | Operation | Cache key discriminators |
+|---|---|---|
+| Application | Get metric catalog | — |
+| Application | Get tag catalog | `use_case`, `data_source` |
+| Website | Get metrics catalog | — |
+| Website | Get tag catalog | `beacon_type`, `use_case` |
+| Mobile App | Get metric catalog | — |
+| Mobile App | Get tag catalog | `beacon_type`, `use_case` |
+| Synthetic | Get metrics catalog | — |
+| Synthetic | Get tag catalog | `use_case` |
+| Infrastructure | Get metrics catalog | `plugin`, `filter` |
+| Infrastructure | Get tag catalog | `plugin` |
+
+#### Configuring caching (stdio mode)
+
+Set environment variables before starting the server. In stdio mode these are the only values used — no restart is required when using Bob, as the server reboots automatically.
+
+```bash
+# Disable caching entirely
+export INSTANA_CACHE_ENABLED=false
+# Override TTL to 5 minutes (default: 1800)
+export INSTANA_CACHE_TTL=300
+```
+
+`INSTANA_CACHE_ENABLED` is treated as disabled when set to `false`, `0`, or `no` (case-insensitive). Any other value keeps caching **enabled**.
+
+#### Configuring caching (streamable-http mode)
+
+In addition to the environment variables above, every HTTP request can override the cache settings via headers. Per-request headers take precedence over the process-level defaults, so caching can be toggled on or off without restarting the server.
+
+```
+instana-cache-enabled: false
+instana-cache-ttl: 300
+```
+To set cache headers persistently in your MCP client config (e.g. `.bob/mcp.json` for streamable-http mode), add them alongside the existing Instana headers:
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "instana-base-url": "https://your-instana-instance.example.com",
+        "instana-api-token": "YOUR_API_TOKEN",
+        "instana-cache-enabled": "true",
+        "instana-cache-ttl": "1800"
+      }
+    }
+  }
+}
+```
+
+To disable caching for a specific client connection:
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "instana-base-url": "https://your-instana-instance.example.com",
+        "instana-api-token": "YOUR_API_TOKEN",
+        "instana-cache-enabled": "false"
+      }
+    }
+  }
+}
+```
+
+#### Using .bob/mcp.json (stdio mode)
+
+To set cache configuration persistently for Bob, add the env vars to the `env` block in `.bob/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "instana": {
+      "env": {
+        "INSTANA_CACHE_ENABLED": "true",
+        "INSTANA_CACHE_TTL": "1800"
+      }
+    }
+  }
+}
+```
+
+> The server logs the effective cache state at DEBUG level on every catalog call, showing whether a response was a cache HIT or MISS.
 
 ### Verifying Server Status
 

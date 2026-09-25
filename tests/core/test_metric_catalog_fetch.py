@@ -23,6 +23,10 @@ def _make_response(payload, status=200, content_type="application/json"):
 
 class TestFetchMetricCatalogInternal(unittest.IsolatedAsyncioTestCase):
 
+    def setUp(self):
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
     def _make_api_client(self):
         api_client = MagicMock()
         api_client.api_client = MagicMock()

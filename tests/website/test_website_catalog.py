@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 # Add src to path before any imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
@@ -48,8 +48,8 @@ sys.modules['instana_client.api.website_catalog_api'].WebsiteCatalogApi = mock_w
 # Patch the with_header_auth decorator
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test
-    from src.core.utils import decode_response as _decode_response
     from src.website.website_catalog import WebsiteCatalogMCPTools
+    from src.core.utils import decode_response as _decode_response
 
 
 class TestDecodeResponse(unittest.TestCase):
@@ -60,7 +60,7 @@ class TestDecodeResponse(unittest.TestCase):
         response = Mock()
         response.data = "test data".encode('utf-8')
         response.headers = {'Content-Type': 'application/json; charset=utf-8'}
-
+        
         result = _decode_response(response)
         self.assertEqual(result, "test data")
 
@@ -69,7 +69,7 @@ class TestDecodeResponse(unittest.TestCase):
         response = Mock()
         response.data = "test data".encode('utf-8')
         response.headers = {'Content-Type': 'application/json'}
-
+        
         result = _decode_response(response)
         self.assertEqual(result, "test data")
 
@@ -78,7 +78,7 @@ class TestDecodeResponse(unittest.TestCase):
         response = Mock()
         response.data = "test data".encode('utf-8')
         response.headers = {'Content-Type': 'application/json; charset=invalid-charset'}
-
+        
         result = _decode_response(response)
         self.assertEqual(result, "test data")
 
@@ -88,6 +88,9 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         self.catalog_api = MagicMock()
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"
@@ -138,11 +141,11 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         self.assertIn("count", result)
         self.assertIn("description", result)
         self.assertEqual(result["count"], 3)
-
+        
         # Verify full metadata is returned
         metrics = result["metrics"]
         self.assertEqual(len(metrics), 3)
-
+        
         # Check first metric has all metadata fields
         beacon_count = metrics[0]
         self.assertEqual(beacon_count["metricId"], "beaconCount")
@@ -151,7 +154,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         self.assertEqual(beacon_count["formatter"], "NUMBER")
         self.assertIn("SUM", beacon_count["aggregations"])
         self.assertIn("pageLoad", beacon_count["beaconTypes"])
-
+        
         # Check second metric has aggregations
         page_load = metrics[1]
         self.assertEqual(page_load["metricId"], "onLoadTime")
@@ -241,7 +244,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         self.catalog_api.get_website_catalog_metrics_without_preload_content = Mock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_website_catalog_metrics(
-
+            
         ))
 
         self.assertIn("error", result)
@@ -254,7 +257,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         )
 
         result = asyncio.run(self.client.get_website_catalog_metrics(
-
+            
         ))
 
         self.assertIn("error", result)
@@ -266,11 +269,11 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         mock_tag1.to_dict.return_value = {"name": "beacon.website.name", "type": "STRING"}
         mock_tag2 = Mock()
         mock_tag2.to_dict.return_value = {"name": "beacon.page.name", "type": "STRING"}
-
+        
         self.catalog_api.get_website_catalog_tags = Mock(return_value=[mock_tag1, mock_tag2])
 
         result = asyncio.run(self.client.get_website_catalog_tags(
-
+            
         ))
 
         self.assertIn("tags", result)
@@ -284,7 +287,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         self.catalog_api.get_website_catalog_tags = Mock(return_value=mock_result)
 
         result = asyncio.run(self.client.get_website_catalog_tags(
-
+            
         ))
 
         self.assertIn("data", result)
@@ -294,7 +297,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         self.catalog_api.get_website_catalog_tags = Mock(side_effect=Exception("API Error"))
 
         result = asyncio.run(self.client.get_website_catalog_tags(
-
+            
         ))
 
         self.assertIn("error", result)
@@ -324,7 +327,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type="PAGELOAD",
             use_case="GROUPING",
-
+            
         ))
 
         self.assertIn("tag_names", result)
@@ -344,7 +347,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type=None,
             use_case="GROUPING",
-
+            
         ))
 
         self.assertIn("error", result)
@@ -355,7 +358,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type="PAGELOAD",
             use_case=None,
-
+            
         ))
 
         self.assertIn("error", result)
@@ -371,7 +374,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type="PAGELOAD",
             use_case="GROUPING",
-
+            
         ))
 
         self.assertIn("error", result)
@@ -386,7 +389,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type="PAGELOAD",
             use_case="GROUPING",
-
+            
         ))
 
         self.assertIn("error", result)
@@ -402,7 +405,7 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_website_tag_catalog(
             beacon_type="PAGELOAD",
             use_case="GROUPING",
-
+            
         ))
 
         self.assertIn("tag_names", result)

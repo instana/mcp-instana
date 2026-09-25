@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 # Add src to path before any imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
@@ -50,6 +50,9 @@ class TestSyntheticCatalogMCPTools(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         self.catalog_api = MagicMock()
         self.client = SyntheticCatalogMCPTools(
             read_token="test_token",

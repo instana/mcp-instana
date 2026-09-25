@@ -17,15 +17,8 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    process_tag_catalog_response,
-    project_metric_card,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.catalog_cache import ttl_cached
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, process_tag_catalog_response, project_metric_card, sdk_call_with_keepalive, with_header_auth
 
 
 class SyntheticCatalogMCPTools(BaseInstanaClient):
@@ -36,6 +29,7 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
 
+    @ttl_cached()
     @with_header_auth(SyntheticCatalogApi)
     async def get_synthetic_catalog_metrics(
         self,
@@ -108,6 +102,7 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
             logger.error("[get_synthetic_catalog_metrics] Error: %s", e, exc_info=True)
             return {"error": f"Failed to get synthetic catalog metrics: {e!s}"}
 
+    @ttl_cached(key_args=("use_case",))
     @with_header_auth(SyntheticCatalogApi)
     async def get_synthetic_tag_catalog(
         self,
