@@ -26,6 +26,9 @@ class TestSyntheticCatalogE2E:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Set up test fixtures."""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         from src.synthetic.synthetic_catalog import SyntheticCatalogMCPTools
 
         self.base_url = os.getenv("INSTANA_BASE_URL")

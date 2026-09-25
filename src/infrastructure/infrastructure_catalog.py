@@ -19,6 +19,7 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
+from src.core.catalog_cache import ttl_cached
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -218,6 +219,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Unable to parse metrics for plugin {plugin}"}
 
     # @register_as_tool(...)  # Disabled for future reference
+    @ttl_cached(key_args=("plugin", "filter"))
     @with_header_auth(InfrastructureCatalogApi)
     async def get_infrastructure_catalog_metrics(self,
                                                  plugin: str,
@@ -514,6 +516,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to parse JSON response: {json_err}"}
 
     # @register_as_tool(...)  # Disabled for future reference
+    @ttl_cached(key_args=("plugin",))
     @with_header_auth(InfrastructureCatalogApi)
     async def get_tag_catalog(self, plugin: str, ctx=None, api_client=None,
                               resource_type: Optional[str] = None,
@@ -565,6 +568,16 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         """
         Get complete schema (metrics + tags) for a specific plugin in a single call.
         This combines get_infrastructure_catalog_metrics and get_tag_catalog to reduce API calls.
+
+        NOTE — cache-bypass propagation:
+        This method itself is not @ttl_cached, but the two inner calls
+        (get_infrastructure_catalog_metrics, get_tag_catalog) are. When running
+        in streamable-HTTP mode each inner decorator re-reads the
+        ``instana-cache-enabled`` / ``instana-cache-ttl`` request headers, so a
+        bypass sent by the caller is honoured automatically. In stdio mode (or
+        when called outside an HTTP request context) those headers are absent and
+        the process-level defaults apply — meaning a bypass requested at a higher
+        level is silently ignored for these inner calls.
 
         IMPORTANT: The plugin parameter must be a valid plugin ID from get_plugins.
         Using an invalid plugin name will result in HTTP 400/404 errors with no diagnostic message.

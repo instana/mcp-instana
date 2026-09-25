@@ -25,6 +25,9 @@ class TestWebsiteCatalogE2E:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Set up test fixtures."""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         # Import here to avoid import errors when instana_client is not available
         from src.website.website_catalog import WebsiteCatalogMCPTools
 

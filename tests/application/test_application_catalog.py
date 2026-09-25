@@ -88,6 +88,9 @@ class TestApplicationCatalogMCPTools(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         # Reset all mocks
         mock_configuration.reset_mock()
         mock_api_client.reset_mock()

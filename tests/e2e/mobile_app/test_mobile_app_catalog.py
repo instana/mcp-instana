@@ -30,6 +30,10 @@ class _MockResponse:
 class TestMobileAppCatalogE2E:
     """End-to-end tests for Mobile App Catalog MCP Tools"""
 
+    def setup_method(self):
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_get_mobile_app_tag_catalog_mocked_success(self, instana_credentials):

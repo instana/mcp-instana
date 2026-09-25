@@ -17,6 +17,10 @@ from src.infrastructure.infrastructure_catalog import InfrastructureCatalogMCPTo
 class TestInfrastructureCatalogComprehensiveE2E:
     """Comprehensive end-to-end tests for Infrastructure Catalog MCP Tools"""
 
+    def setup_method(self):
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
     # ==================== INITIALIZATION TESTS ====================
 
     @pytest.mark.asyncio

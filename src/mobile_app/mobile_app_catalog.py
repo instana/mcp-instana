@@ -17,6 +17,7 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
+from src.core.catalog_cache import ttl_cached
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -38,6 +39,7 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
         """Initialize the Mobile App Catalog MCP Tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
+    @ttl_cached(key_args=("beacon_type", "use_case"))
     @with_header_auth(MobileAppCatalogApi)
     async def get_mobile_app_tag_catalog(self,
                                          beacon_type: str,
@@ -95,6 +97,7 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get mobile app tag catalog: {e!s}"}
 
 
+    @ttl_cached()
     @with_header_auth(MobileAppCatalogApi)
     async def get_mobile_app_metric_catalog(
         self,

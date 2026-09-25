@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 
+from src.core.catalog_cache import ttl_cached
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -42,6 +43,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
         """Initialize the Application Catalog MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
+    @ttl_cached(key_args=("use_case", "data_source"))
     @with_header_auth(ApplicationCatalogApi)
     async def get_application_tag_catalog(self,
                                           use_case: Optional[str] = None,
@@ -107,6 +109,7 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get application catalog: {e!s}"}
 
 
+    @ttl_cached()
     @with_header_auth(ApplicationCatalogApi)
     async def get_application_metric_catalog(self, ctx=None, api_client=None,
                                              resource_type: Optional[str] = None,

@@ -88,6 +88,9 @@ class TestWebsiteCatalogMCPTools(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
+        from src.core.catalog_cache import clear_cache
+        clear_cache()
+
         self.catalog_api = MagicMock()
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"

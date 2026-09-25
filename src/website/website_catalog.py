@@ -18,6 +18,7 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
+from src.core.catalog_cache import ttl_cached
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -41,6 +42,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
 
+    @ttl_cached()
     @with_header_auth(WebsiteCatalogApi)
     async def get_website_catalog_metrics(
         self,
@@ -180,6 +182,7 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             logger.error(f"[get_website_catalog_tags] Error: {e}", exc_info=True)
             return {"error": f"Failed to get website catalog tags: {e!s}"}
 
+    @ttl_cached(key_args=("beacon_type", "use_case"))
     @with_header_auth(WebsiteCatalogApi)
     async def get_website_tag_catalog(self,
                                     beacon_type: str,
