@@ -249,13 +249,11 @@ class TestInstanaClientBaseE2E:
     async def test_with_header_auth_http_mode(self, instana_credentials):
         """Test with_header_auth decorator in HTTP mode."""
 
-        # Create a mock for get_http_headers
         mock_headers = {
             "instana-api-token": instana_credentials["api_token"],
             "instana-base-url": instana_credentials["base_url"]
         }
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -266,56 +264,34 @@ class TestInstanaClientBaseE2E:
                 assert isinstance(api_client, TestApiClass)
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import and get_http_headers function
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': MagicMock()}):
-            sys.modules['fastmcp.server.dependencies'].get_http_headers = (
-                MagicMock(return_value=mock_headers)
+        mock_config = MagicMock()
+        mock_config.api_key = {}
+        mock_config.api_key_prefix = {}
+        mock_api_client = MagicMock()
+
+        with patch('src.core.auth_helper.get_http_headers', return_value=mock_headers), \
+             patch('src.core.auth_helper.Configuration', return_value=mock_config), \
+             patch('src.core.auth_helper.ApiClient', return_value=mock_api_client):
+
+            client = TestClient(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
             )
+            result = await client.test_method("value1", "value2")
 
-            # Mock the Instana SDK imports
-            with patch.dict('sys.modules', {
-                'instana_client.api_client': MagicMock(),
-                'instana_client.configuration': MagicMock()
-            }):
-                # Create mock Configuration and ApiClient
-                mock_config = MagicMock()
-                sys.modules['instana_client.configuration'].Configuration = (
-                    MagicMock(return_value=mock_config)
-                )
-
-                mock_api_client = MagicMock()
-                sys.modules['instana_client.api_client'].ApiClient = (
-                    MagicMock(return_value=mock_api_client)
-                )
-
-                # Create the test client
-                client = TestClient(
-                    read_token=instana_credentials["api_token"],
-                    base_url=instana_credentials["base_url"]
-                )
-
-                # Call the decorated method
-                result = await client.test_method("value1", "value2")
-
-                # Verify the result
-                assert result == {"param1": "value1", "param2": "value2"}
-
-                # Verify the configuration was set correctly
-                assert mock_config.host == instana_credentials["base_url"]
-                # We can't verify if the methods were called in this test setup
+            assert result == {"param1": "value1", "param2": "value2"}
+            assert mock_config.host == instana_credentials["base_url"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_with_header_auth_http_mode_missing_token(self, instana_credentials):
         """Test with_header_auth decorator in HTTP mode with missing token."""
 
-        # Create a mock for get_http_headers with missing token
         mock_headers = {
             "instana-base-url": instana_credentials["base_url"]
             # Missing token
         }
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -324,22 +300,13 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import and get_http_headers function
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': MagicMock()}):
-            sys.modules['fastmcp.server.dependencies'].get_http_headers = (
-                MagicMock(return_value=mock_headers)
-            )
-
-            # Create the test client
+        with patch('src.core.auth_helper.get_http_headers', return_value=mock_headers):
             client = TestClient(
                 read_token=instana_credentials["api_token"],
                 base_url=instana_credentials["base_url"]
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the error result
             assert "error" in result
             assert "missing required headers" in result["error"]
             assert "instana-api-token" in result["error"]
@@ -349,13 +316,11 @@ class TestInstanaClientBaseE2E:
     async def test_with_header_auth_http_mode_missing_url(self, instana_credentials):
         """Test with_header_auth decorator in HTTP mode with missing URL."""
 
-        # Create a mock for get_http_headers with missing URL
         mock_headers = {
             "instana-api-token": instana_credentials["api_token"]
             # Missing URL
         }
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -364,22 +329,13 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import and get_http_headers function
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': MagicMock()}):
-            sys.modules['fastmcp.server.dependencies'].get_http_headers = (
-                MagicMock(return_value=mock_headers)
-            )
-
-            # Create the test client
+        with patch('src.core.auth_helper.get_http_headers', return_value=mock_headers):
             client = TestClient(
                 read_token=instana_credentials["api_token"],
                 base_url=instana_credentials["base_url"]
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the error result
             assert "error" in result
             assert "missing required headers" in result["error"]
             assert "instana-base-url" in result["error"]
@@ -389,13 +345,11 @@ class TestInstanaClientBaseE2E:
     async def test_with_header_auth_http_mode_invalid_url(self, instana_credentials):
         """Test with_header_auth decorator in HTTP mode with invalid URL format."""
 
-        # Create a mock for get_http_headers with invalid URL
         mock_headers = {
             "instana-api-token": instana_credentials["api_token"],
             "instana-base-url": "invalid-url-without-protocol"
         }
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -404,22 +358,13 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import and get_http_headers function
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': MagicMock()}):
-            sys.modules['fastmcp.server.dependencies'].get_http_headers = (
-                MagicMock(return_value=mock_headers)
-            )
-
-            # Create the test client
+        with patch('src.core.auth_helper.get_http_headers', return_value=mock_headers):
             client = TestClient(
                 read_token=instana_credentials["api_token"],
                 base_url=instana_credentials["base_url"]
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the error result
             assert "error" in result
             assert "must start with http:// or https://" in result["error"]
 
@@ -428,7 +373,6 @@ class TestInstanaClientBaseE2E:
     async def test_with_header_auth_stdio_mode_import_error(self, instana_credentials):
         """Test with_header_auth decorator in STDIO mode when HTTP mode import fails."""
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -439,39 +383,24 @@ class TestInstanaClientBaseE2E:
                 assert isinstance(api_client, TestApiClass)
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import to raise ImportError
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': None}):
-            # Mock the Instana SDK imports
-            with patch.dict('sys.modules', {
-                'instana_client.api_client': MagicMock(),
-                'instana_client.configuration': MagicMock()
-            }):
-                # Create mock Configuration and ApiClient
-                mock_config = MagicMock()
-                sys.modules['instana_client.configuration'].Configuration = (
-                    MagicMock(return_value=mock_config)
-                )
+        mock_config = MagicMock()
+        mock_config.api_key = {}
+        mock_config.api_key_prefix = {}
+        mock_api_client = MagicMock()
 
-                mock_api_client = MagicMock()
-                sys.modules['instana_client.api_client'].ApiClient = (
-                    MagicMock(return_value=mock_api_client)
-                )
+        # Simulate HTTP mode unavailable (AttributeError on get_http_headers)
+        with patch('src.core.auth_helper.get_http_headers', side_effect=AttributeError), \
+             patch('src.core.auth_helper.Configuration', return_value=mock_config), \
+             patch('src.core.auth_helper.ApiClient', return_value=mock_api_client):
 
-                # Create the test client
-                client = TestClient(
-                    read_token=instana_credentials["api_token"],
-                    base_url=instana_credentials["base_url"]
-                )
+            client = TestClient(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
+            )
+            result = await client.test_method("value1", "value2")
 
-                # Call the decorated method
-                result = await client.test_method("value1", "value2")
-
-                # Verify the result
-                assert result == {"param1": "value1", "param2": "value2"}
-
-                # Verify the configuration was set correctly
-                assert mock_config.host == instana_credentials["base_url"]
-                # We can't verify if the methods were called in this test setup
+            assert result == {"param1": "value1", "param2": "value2"}
+            assert mock_config.host == instana_credentials["base_url"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -487,32 +416,23 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import to raise ImportError
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': None}):
-            # Create the test client with missing credentials
+        with patch('src.core.auth_helper.get_http_headers', side_effect=AttributeError):
             client = TestClient(
                 read_token="",  # Empty token
                 base_url="https://example.com"
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the error result
             assert "error" in result
             assert "Authentication failed" in result["error"]
             assert "INSTANA_API_TOKEN is missing" in result["error"]
 
-            # Create another client with missing base_url
             client = TestClient(
                 read_token="token",
                 base_url=""  # Empty URL
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the error result
             assert "error" in result
             assert "Authentication failed" in result["error"]
             assert "INSTANA_BASE_URL is missing" in result["error"]
@@ -539,18 +459,13 @@ class TestInstanaClientBaseE2E:
                 assert api_client is mock_api_instance
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import to raise ImportError
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': None}):
-            # Create the test client
+        with patch('src.core.auth_helper.get_http_headers', side_effect=AttributeError):
             client = TestClient(
                 read_token=instana_credentials["api_token"],
                 base_url=instana_credentials["base_url"]
             )
-
-            # Call the decorated method
             result = await client.test_method("value1", "value2")
 
-            # Verify the result
             assert result == {"param1": "value1", "param2": "value2"}
 
     @pytest.mark.asyncio
@@ -558,7 +473,6 @@ class TestInstanaClientBaseE2E:
     async def test_with_header_auth_exception_handling(self, instana_credentials):
         """Test exception handling in with_header_auth decorator."""
 
-        # Create a test class with a decorated method that raises an exception
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -567,44 +481,30 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 raise Exception("Test exception")
 
-        # Mock the fastmcp import to raise ImportError
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': None}):
-            # Mock the Instana SDK imports
-            with patch.dict('sys.modules', {
-                'instana_client.api_client': MagicMock(),
-                'instana_client.configuration': MagicMock()
-            }):
-                # Create mock Configuration and ApiClient
-                mock_config = MagicMock()
-                sys.modules['instana_client.configuration'].Configuration = (
-                    MagicMock(return_value=mock_config)
-                )
+        mock_config = MagicMock()
+        mock_config.api_key = {}
+        mock_config.api_key_prefix = {}
+        mock_api_client = MagicMock()
 
-                mock_api_client = MagicMock()
-                sys.modules['instana_client.api_client'].ApiClient = (
-                    MagicMock(return_value=mock_api_client)
-                )
+        with patch('src.core.auth_helper.get_http_headers', side_effect=AttributeError), \
+             patch('src.core.auth_helper.Configuration', return_value=mock_config), \
+             patch('src.core.auth_helper.ApiClient', return_value=mock_api_client):
 
-                # Create the test client
-                client = TestClient(
-                    read_token=instana_credentials["api_token"],
-                    base_url=instana_credentials["base_url"]
-                )
+            client = TestClient(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
+            )
+            result = await client.test_method("value1", "value2")
 
-                # Call the decorated method
-                result = await client.test_method("value1", "value2")
-
-                # Verify the error result
-                assert "error" in result
-                assert "Authentication error" in result["error"]
-                assert "Test exception" in result["error"]
+            assert "error" in result
+            assert "Authentication error" in result["error"]
+            assert "Test exception" in result["error"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_with_header_auth_sdk_import_error(self, instana_credentials):
         """Test with_header_auth decorator handling SDK import errors."""
 
-        # Create a test class with a decorated method
         class TestClient(BaseInstanaClient):
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
@@ -613,29 +513,17 @@ class TestInstanaClientBaseE2E:
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
-        # Mock the fastmcp import to raise ImportError
-        with patch.dict('sys.modules', {'fastmcp.server.dependencies': None}):
-            # Mock the Instana SDK imports to raise ImportError
-            with patch.dict('sys.modules', {
-                'instana_client.api_client': None,
-                'instana_client.configuration': None
-            }):
-                # Mock the import to raise ImportError
-                with patch(
-                    'importlib.import_module',
-                    side_effect=ImportError("SDK import error")
-                ):
-                    # Create the test client
-                    client = TestClient(
-                        read_token=instana_credentials["api_token"],
-                        base_url=instana_credentials["base_url"]
-                    )
+        # Simulate HTTP mode unavailable and SDK raising on construction
+        with patch('src.core.auth_helper.get_http_headers', side_effect=AttributeError), \
+             patch('src.core.auth_helper.Configuration', side_effect=ImportError("SDK import error")):
 
-                    # Call the decorated method
-                    result = await client.test_method("value1", "value2")
+            client = TestClient(
+                read_token=instana_credentials["api_token"],
+                base_url=instana_credentials["base_url"]
+            )
+            result = await client.test_method("value1", "value2")
 
-                    # Verify the error result
-                    assert "error" in result
-                    assert "Authentication error" in result["error"]
+            assert "error" in result
+            assert "Authentication error" in result["error"]
 
 

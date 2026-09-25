@@ -124,7 +124,7 @@ ANALYZE WORKFLOW:
     Default beacon_type: "SESSION_START" | Default use_case for get_all_mobile_app_beacons: "FILTERING"
 
 ANALYZE (resource_type="analyze"):
-    operations: 
+    operations:
         - get_all_mobile_app_beacons
             params: {time_frame, beacon_type, pagination, tag_filter_expression (optional), filter_fields (optional)}
 

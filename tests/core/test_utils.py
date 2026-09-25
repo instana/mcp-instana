@@ -422,15 +422,16 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_header_based_authentication(self):
         """Test with_header_auth with header-based authentication"""
         # Mock the get_http_headers function
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-api-token": "header_token",
                 "instana-base-url": "https://header.instana.io"
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config.return_value = mock_config_instance
@@ -457,12 +458,12 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_fallback_to_constructor(self):
         """Test with_header_auth fallback to constructor-based authentication"""
         # Mock the get_http_headers function to raise an exception
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.side_effect = ImportError("Module not found")
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config.return_value = mock_config_instance
@@ -488,21 +489,12 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_with_header_auth_invalid_base_url(self):
         """Test with_header_auth with invalid base URL"""
-        # Ensure fastmcp.server.dependencies is a real mock with controllable get_http_headers
-        mock_deps = MagicMock()
-        mock_deps.get_http_headers.return_value = {
-            "instana-api-token": "header_token",
-            "instana-base-url": "invalid_url"  # Missing http/https
-        }
-        mock_fastmcp = MagicMock()
-        mock_fastmcp.server.dependencies = mock_deps
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "instana-api-token": "header_token",
+                "instana-base-url": "invalid_url"  # Missing http/https
+            }
 
-        saved = {k: sys.modules.get(k) for k in ['fastmcp', 'fastmcp.server', 'fastmcp.server.dependencies']}
-        sys.modules['fastmcp'] = mock_fastmcp
-        sys.modules['fastmcp.server'] = mock_fastmcp.server
-        sys.modules['fastmcp.server.dependencies'] = mock_deps
-
-        try:
             # Create a test API class
             class TestApiClass:
                 def __init__(self, api_client):
@@ -519,17 +511,11 @@ class TestBaseInstanaClient(unittest.TestCase):
             # Should return an error for invalid URL format
             self.assertIn("error", result)
             self.assertIn("Instana base URL must start with http:// or https://", result["error"])
-        finally:
-            for k, v in saved.items():
-                if v is None:
-                    sys.modules.pop(k, None)
-                else:
-                    sys.modules[k] = v
 
     def test_with_header_auth_missing_headers(self):
         """Test with_header_auth with missing headers"""
         # Mock the get_http_headers function
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {}  # Empty headers
 
             # Create a test API class
@@ -551,7 +537,7 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_existing_api_client(self):
         """Test with_header_auth with existing API client"""
         # Mock the get_http_headers function to trigger fallback
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.side_effect = ImportError("Module not found")
 
             # Add an existing API client to the client
@@ -576,18 +562,9 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_with_header_auth_decorator_error(self):
         """Test with_header_auth when decorator encounters an error"""
-        # Ensure fastmcp.server.dependencies is a real mock with controllable get_http_headers
-        mock_deps = MagicMock()
-        mock_deps.get_http_headers.side_effect = Exception("Decorator error")
-        mock_fastmcp = MagicMock()
-        mock_fastmcp.server.dependencies = mock_deps
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
+            mock_get_headers.side_effect = Exception("Decorator error")
 
-        saved = {k: sys.modules.get(k) for k in ['fastmcp', 'fastmcp.server', 'fastmcp.server.dependencies']}
-        sys.modules['fastmcp'] = mock_fastmcp
-        sys.modules['fastmcp.server'] = mock_fastmcp.server
-        sys.modules['fastmcp.server.dependencies'] = mock_deps
-
-        try:
             # Create a test API class
             class TestApiClass:
                 def __init__(self, api_client):
@@ -604,25 +581,19 @@ class TestBaseInstanaClient(unittest.TestCase):
             # Should return an error
             self.assertIn("error", result)
             self.assertIn("Authentication error", result["error"])
-        finally:
-            for k, v in saved.items():
-                if v is None:
-                    sys.modules.pop(k, None)
-                else:
-                    sys.modules[k] = v
     def test_with_header_auth_session_token_authentication(self):
         """Test with_header_auth now only supports API token authentication"""
         # The decorator now only supports API token authentication
         # Session tokens are no longer supported
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-api-token": "api_token_123",
                 "instana-base-url": "https://session.instana.io"
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -655,15 +626,15 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_session_with_custom_cookie_name(self):
         """Test with_header_auth with API token (session tokens no longer supported)"""
         # The decorator now only supports API token authentication
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-api-token": "api_token_456",
                 "instana-base-url": "https://session.instana.io"
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -696,15 +667,15 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_api_token_priority_over_session(self):
         """Test that decorator uses API token authentication"""
         # The decorator now only supports API token authentication
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-api-token": "api_token_789",
                 "instana-base-url": "https://test.instana.io"
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -736,7 +707,7 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_missing_csrf_token(self):
         """Test with_header_auth with auth token but missing CSRF token"""
         # Mock the get_http_headers function
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-auth-token": "session_token_123",
                 # Missing csrf token
@@ -761,7 +732,7 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_with_header_auth_jwt_token_authentication(self):
         """Test with_header_auth with JWT token authentication (requires CSRF)"""
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-jwt-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
                 "instana-csrf-token": "csrf_token_123",
@@ -769,8 +740,8 @@ class TestBaseInstanaClient(unittest.TestCase):
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -809,7 +780,7 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_with_header_auth_jwt_token_priority_over_api_token(self):
         """Test that JWT token with CSRF takes priority over API token"""
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-jwt-token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
                 "instana-csrf-token": "csrf_token_456",
@@ -818,8 +789,8 @@ class TestBaseInstanaClient(unittest.TestCase):
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -860,7 +831,7 @@ class TestBaseInstanaClient(unittest.TestCase):
 
     def test_with_header_auth_session_token_priority_over_jwt(self):
         """Test that session token takes priority over JWT token"""
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-auth-token": "session_token_123",
                 "instana-csrf-token": "csrf_token_456",
@@ -870,8 +841,8 @@ class TestBaseInstanaClient(unittest.TestCase):
             }
 
             # Mock the SDK imports
-            with patch('instana_client.configuration.Configuration') as mock_config, \
-                 patch('instana_client.api_client.ApiClient') as mock_api_client:
+            with patch('src.core.auth_helper.Configuration') as mock_config, \
+                 patch('src.core.auth_helper.ApiClient') as mock_api_client:
 
                 mock_config_instance = MagicMock()
                 mock_config_instance.api_key = {}
@@ -911,7 +882,7 @@ class TestBaseInstanaClient(unittest.TestCase):
         """Test that JWT token exceeding maximum length is rejected"""
         long_jwt_token = "a" * 2049  # Exceeds MAX_TOKEN_LENGTH of 2048
 
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_get_headers:
+        with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-jwt-token": long_jwt_token,
                 "instana-csrf-token": "valid_csrf",
@@ -1225,7 +1196,7 @@ class TestVersionImport(unittest.TestCase):
 
     def test_version_format(self):
         """Test that __version__ follows semantic versioning format (X.Y.Z)"""
-        # Version should be in format like "0.3.1" or "1.0.2"
+        # Version should be in format like "0.3.1" or "1.0.0"
         parts = __version__.split('.')
         self.assertGreaterEqual(len(parts), 2, "Version should have at least major.minor")
         # Check that parts are numeric (or contain numeric values)
@@ -1255,8 +1226,8 @@ class TestVersionImport(unittest.TestCase):
         # Re-import to trigger the version logic
         importlib.reload(src.core.utils)
 
-        # Check that the fallback version was used (updated to 0.9.6)
-        self.assertEqual(src.core.utils.__version__, "0.9.6")
+        # Check that the fallback version was used (updated to 0.12.100)
+        self.assertEqual(src.core.utils.__version__, "0.12.100")
 
     def test_version_used_in_headers(self):
         """Test that __version__ is used in User-Agent headers"""
@@ -1285,19 +1256,19 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     def test_get_ctx_session_id_returns_value(self):
         ctx = MagicMock()
         ctx.session_id = "sess-abc"
-        from src.core.utils import _get_ctx_session_id
+        from src.core.auth_helper import _get_ctx_session_id
         self.assertEqual(_get_ctx_session_id(ctx), "sess-abc")
 
     def test_get_ctx_session_id_returns_none_when_empty(self):
         ctx = MagicMock()
         ctx.session_id = ""
-        from src.core.utils import _get_ctx_session_id
+        from src.core.auth_helper import _get_ctx_session_id
         self.assertIsNone(_get_ctx_session_id(ctx))
 
     def test_get_ctx_session_id_returns_none_on_exception(self):
         ctx = MagicMock()
         type(ctx).session_id = property(lambda self: (_ for _ in ()).throw(RuntimeError("no session")))
-        from src.core.utils import _get_ctx_session_id
+        from src.core.auth_helper import _get_ctx_session_id
         self.assertIsNone(_get_ctx_session_id(ctx))
 
     # ------------------------------------------------------------------
@@ -1307,19 +1278,19 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     def test_get_ctx_request_id_returns_value(self):
         ctx = MagicMock()
         ctx.request_id = "7"
-        from src.core.utils import _get_ctx_request_id
+        from src.core.auth_helper import _get_ctx_request_id
         self.assertEqual(_get_ctx_request_id(ctx), "7")
 
     def test_get_ctx_request_id_returns_none_when_empty(self):
         ctx = MagicMock()
         ctx.request_id = ""
-        from src.core.utils import _get_ctx_request_id
+        from src.core.auth_helper import _get_ctx_request_id
         self.assertIsNone(_get_ctx_request_id(ctx))
 
     def test_get_ctx_request_id_returns_none_on_exception(self):
         ctx = MagicMock()
         type(ctx).request_id = property(lambda self: (_ for _ in ()).throw(RuntimeError("no request")))
-        from src.core.utils import _get_ctx_request_id
+        from src.core.auth_helper import _get_ctx_request_id
         self.assertIsNone(_get_ctx_request_id(ctx))
 
     # ------------------------------------------------------------------
@@ -1329,19 +1300,19 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     def test_get_ctx_client_name_returns_value(self):
         ctx = MagicMock()
         ctx.session.client_params.clientInfo.name = "github.copilot"
-        from src.core.utils import _get_ctx_client_name
+        from src.core.auth_helper import _get_ctx_client_name
         self.assertEqual(_get_ctx_client_name(ctx), "github.copilot")
 
     def test_get_ctx_client_name_returns_none_when_no_session(self):
         ctx = MagicMock()
         ctx.session = None
-        from src.core.utils import _get_ctx_client_name
+        from src.core.auth_helper import _get_ctx_client_name
         self.assertIsNone(_get_ctx_client_name(ctx))
 
     def test_get_ctx_client_name_returns_none_on_exception(self):
         ctx = MagicMock()
         type(ctx).session = property(lambda self: (_ for _ in ()).throw(RuntimeError("no session")))
-        from src.core.utils import _get_ctx_client_name
+        from src.core.auth_helper import _get_ctx_client_name
         self.assertIsNone(_get_ctx_client_name(ctx))
 
     # ------------------------------------------------------------------
@@ -1349,7 +1320,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_build_tracking_returns_empty_dict_when_no_ctx(self):
-        from src.core.utils import _build_mcp_tracking_context
+        from src.core.auth_helper import _build_mcp_tracking_context
         result = _build_mcp_tracking_context()
         self.assertEqual(result, {})
 
@@ -1358,22 +1329,98 @@ class TestMcpTrackingHelpers(unittest.TestCase):
         ctx.session_id = "sess-123"
         ctx.request_id = "5"
         ctx.session.client_params.clientInfo.name = "claude-desktop"
-        from src.core.utils import _build_mcp_tracking_context
-        result = _build_mcp_tracking_context(ctx=ctx)
+        from src.core.auth_helper import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context(
+            ctx=ctx,
+            tool_name="manage_applications",
+            resource_type="metrics",
+        )
         self.assertEqual(result["X-MCP-Session-ID"], "sess-123")
         self.assertEqual(result["X-MCP-Request-ID"], "5")
         self.assertEqual(result["X-MCP-Client"], "claude-desktop")
-        self.assertNotIn("X-MCP-User-ID", result)
+        self.assertEqual(result["X-MCP-Tool"], "manage_applications")
+        self.assertEqual(result["X-MCP-Resource-Type"], "metrics")
+        # Deploy type is resolved later in _try_http_mode_auth, not here
+        self.assertNotIn("X-MCP-Environment-Type", result)
 
-    def test_build_tracking_with_http_user_id(self):
-        from src.core.utils import _build_mcp_tracking_context
-        result = _build_mcp_tracking_context(http_headers={"x-mcp-user-id": "jay@ibm.com"})
-        self.assertEqual(result["X-MCP-User-ID"], "jay@ibm.com")
+    def test_build_tracking_tool_and_resource_type_absent_when_not_provided(self):
+        from src.core.auth_helper import _build_mcp_tracking_context
+        result = _build_mcp_tracking_context()
+        self.assertNotIn("X-MCP-Tool", result)
+        self.assertNotIn("X-MCP-Resource-Type", result)
 
-    def test_build_tracking_omits_empty_user_id(self):
-        from src.core.utils import _build_mcp_tracking_context
-        result = _build_mcp_tracking_context(http_headers={"x-mcp-user-id": ""})
-        self.assertNotIn("X-MCP-User-ID", result)
+    def test_build_tracking_deploy_type_platform_for_jwt(self):
+        """X-MCP-Environment-Type is 'platform' when a JWT token is present (Concert platform flow)."""
+        with patch('src.core.auth_helper.get_http_headers') as mock_headers, \
+             patch('src.core.auth_helper.Configuration') as mock_cfg, \
+             patch('src.core.auth_helper.ApiClient') as mock_api:
+
+            mock_headers.return_value = {
+                "instana-base-url": "https://unit0.instana.io",
+                "instana-jwt-token": "header.payload.sig",
+                "instana-csrf-token": "csrf-tok",
+            }
+            mock_cfg.return_value = MagicMock(api_key={}, api_key_prefix={})
+            mock_api.return_value = MagicMock()
+
+            from src.core.auth_helper import _try_http_mode_auth
+
+            class FakeApi:
+                def __init__(self, api_client):
+                    pass
+
+            tracking: dict = {}
+            _try_http_mode_auth(FakeApi, tracking)
+            self.assertEqual(tracking.get("X-MCP-Environment-Type"), "platform")
+
+    def test_build_tracking_deploy_type_saas_for_session_auth(self):
+        """X-MCP-Environment-Type is 'SaaS' for the UI/session flow (auth-token + csrf + cookie-name)."""
+        with patch('src.core.auth_helper.get_http_headers') as mock_headers, \
+             patch('src.core.auth_helper.Configuration') as mock_cfg, \
+             patch('src.core.auth_helper.ApiClient') as mock_api:
+
+            mock_headers.return_value = {
+                "instana-base-url": "https://unit0.instana.io",
+                "instana-auth-token": "session-tok",
+                "instana-csrf-token": "csrf-tok",
+                "instana-cookie-name": "instana-sid",
+            }
+            mock_cfg.return_value = MagicMock(api_key={}, api_key_prefix={})
+            mock_api.return_value = MagicMock()
+
+            from src.core.auth_helper import _try_http_mode_auth
+
+            class FakeApi:
+                def __init__(self, api_client):
+                    pass
+
+            tracking: dict = {}
+            _try_http_mode_auth(FakeApi, tracking)
+            self.assertEqual(tracking.get("X-MCP-Environment-Type"), "SaaS")
+
+    def test_build_tracking_deploy_type_absent_for_api_token(self):
+        """X-MCP-Environment-Type must not be set when only an API token is used (OSS/public mode)."""
+        with patch('src.core.auth_helper.get_http_headers') as mock_headers, \
+             patch('src.core.auth_helper.Configuration') as mock_cfg, \
+             patch('src.core.auth_helper.ApiClient') as mock_api:
+
+            mock_headers.return_value = {
+                "instana-api-token": "tok",
+                "instana-base-url": "https://unit0.instana.io",
+                # no jwt token
+            }
+            mock_cfg.return_value = MagicMock(api_key={}, api_key_prefix={})
+            mock_api.return_value = MagicMock()
+
+            from src.core.auth_helper import _try_http_mode_auth
+
+            class FakeApi:
+                def __init__(self, api_client):
+                    pass
+
+            tracking: dict = {}
+            _try_http_mode_auth(FakeApi, tracking)
+            self.assertNotIn("X-MCP-Environment-Type", tracking)
 
     def test_build_tracking_omits_missing_ctx_fields(self):
         """When ctx raises for session_id/request_id they are omitted, not set to None."""
@@ -1381,7 +1428,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
         type(ctx).session_id = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
         type(ctx).request_id = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
         type(ctx).session = property(lambda self: (_ for _ in ()).throw(RuntimeError()))
-        from src.core.utils import _build_mcp_tracking_context
+        from src.core.auth_helper import _build_mcp_tracking_context
         result = _build_mcp_tracking_context(ctx=ctx)
         self.assertNotIn("X-MCP-Session-ID", result)
         self.assertNotIn("X-MCP-Request-ID", result)
@@ -1392,7 +1439,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_stamp_tracking_headers_sets_all_non_empty(self):
-        from src.core.utils import _stamp_tracking_headers
+        from src.core.auth_helper import _stamp_tracking_headers
         mock_client = MagicMock()
         tracking = {
             "X-MCP-Session-ID": "sess-abc",
@@ -1406,14 +1453,14 @@ class TestMcpTrackingHelpers(unittest.TestCase):
         self.assertEqual(mock_client.set_default_header.call_count, 3)
 
     def test_stamp_tracking_headers_skips_empty_values(self):
-        from src.core.utils import _stamp_tracking_headers
+        from src.core.auth_helper import _stamp_tracking_headers
         mock_client = MagicMock()
         _stamp_tracking_headers(mock_client, {"X-MCP-Session-ID": "", "X-MCP-Client": "copilot"})
         # Only the non-empty one should be set
         mock_client.set_default_header.assert_called_once_with("X-MCP-Client", "copilot")
 
     def test_stamp_tracking_headers_no_calls_for_empty_dict(self):
-        from src.core.utils import _stamp_tracking_headers
+        from src.core.auth_helper import _stamp_tracking_headers
         mock_client = MagicMock()
         _stamp_tracking_headers(mock_client, {})
         mock_client.set_default_header.assert_not_called()
@@ -1424,9 +1471,9 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_auth_wrapper_extracts_ctx_from_kwargs(self):
         """ctx passed as keyword argument is picked up correctly."""
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_headers, \
-             patch('instana_client.configuration.Configuration') as mock_cfg, \
-             patch('instana_client.api_client.ApiClient') as mock_api:
+        with patch('src.core.auth_helper.get_http_headers') as mock_headers, \
+             patch('src.core.auth_helper.Configuration') as mock_cfg, \
+             patch('src.core.auth_helper.ApiClient') as mock_api:
 
             mock_headers.return_value = {
                 "instana-api-token": "tok",
@@ -1454,9 +1501,9 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_auth_wrapper_extracts_ctx_from_positional_args(self):
         """ctx passed positionally (as internal helpers do) is still picked up."""
-        with patch('fastmcp.server.dependencies.get_http_headers') as mock_headers, \
-             patch('instana_client.configuration.Configuration') as mock_cfg, \
-             patch('instana_client.api_client.ApiClient') as mock_api:
+        with patch('src.core.auth_helper.get_http_headers') as mock_headers, \
+             patch('src.core.auth_helper.Configuration') as mock_cfg, \
+             patch('src.core.auth_helper.ApiClient') as mock_api:
 
             mock_headers.return_value = {
                 "instana-api-token": "tok",
@@ -1992,3 +2039,76 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             asyncio.run(_check_guard())
         self.assertIn("should not happen", str(cm.exception))
+
+    def test_timeout_fires_and_returns_error_dict(self):
+        """When the SDK call exceeds the timeout an error dict is returned (no hang)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from src.core.utils import sdk_call_with_keepalive
+
+        ctx = MagicMock()
+        ctx.log = AsyncMock()
+
+        async def hanging_coro():
+            await asyncio.sleep(9999)  # simulates a stalled API call
+
+        with unittest.mock.patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "1"}):
+            result = asyncio.run(
+                sdk_call_with_keepalive(
+                    hanging_coro(),
+                    ctx=ctx,
+                    operation_name="find_global_application_alert_config",
+                    resource_type="global_alert_config",
+                    tool_name="manage_applications",
+                )
+            )
+
+        self.assertIn("error", result)
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["operation"], "find_global_application_alert_config")
+        self.assertEqual(result["resource_type"], "global_alert_config")
+        self.assertEqual(result["timeout_seconds"], 1)
+
+    def test_timeout_fires_without_ctx(self):
+        """Timeout also works when ctx is None (no-keepalive path)."""
+        from src.core.utils import sdk_call_with_keepalive
+
+        async def hanging_coro():
+            await asyncio.sleep(9999)
+
+        with unittest.mock.patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "1"}):
+            result = asyncio.run(
+                sdk_call_with_keepalive(
+                    hanging_coro(),
+                    ctx=None,
+                    operation_name="get_events",
+                )
+            )
+
+        self.assertIn("error", result)
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["operation"], "get_events")
+        self.assertIsNone(result["resource_type"])
+
+    def test_api_timeout_env_var_overrides_default(self):
+        """INSTANA_API_TIMEOUT env var is respected by _api_timeout()."""
+        from src.core.utils import _api_timeout
+
+        with patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "42"}):
+            self.assertEqual(_api_timeout(), 42)
+
+    def test_api_timeout_invalid_env_var_uses_default(self):
+        """Non-integer INSTANA_API_TIMEOUT falls back to the hardcoded default."""
+        from src.core.utils import _DEFAULT_API_TIMEOUT, _api_timeout
+
+        with patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "not_a_number"}):
+            self.assertEqual(_api_timeout(), _DEFAULT_API_TIMEOUT)
+
+    def test_api_timeout_zero_env_var_uses_default(self):
+        """Zero or negative INSTANA_API_TIMEOUT falls back to the hardcoded default."""
+        from src.core.utils import _DEFAULT_API_TIMEOUT, _api_timeout
+
+        with patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "0"}):
+            self.assertEqual(_api_timeout(), _DEFAULT_API_TIMEOUT)
+
+
