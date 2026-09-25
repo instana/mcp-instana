@@ -397,7 +397,7 @@ class TestInfrastructureResourcesE2E:
         mock_api_client = MagicMock()
         mock_response = {
             "versions": [
-                {"name": "Java", "version": "11.0.2"},
+                {"name": "Java", "version": "11.0.3"},
                 {"name": "Node.js", "version": "16.14.0"}
             ]
         }
@@ -420,7 +420,7 @@ class TestInfrastructureResourcesE2E:
         # Mock the API client to return an SDK object
         mock_api_client = MagicMock()
         mock_result = MagicMock()
-        mock_result.to_dict.return_value = {"versions": [{"name": "Java", "version": "11.0.2"}]}
+        mock_result.to_dict.return_value = {"versions": [{"name": "Java", "version": "11.0.3"}]}
         mock_api_client.software_versions.return_value = mock_result
 
         result = await client.software_versions(api_client=mock_api_client)
@@ -923,7 +923,7 @@ class TestInfrastructureResourcesE2E:
                     "data": {
                         "name": "test-process",
                         "pid": 1234,
-                        "jvm.version": "11.0.2",
+                        "jvm.version": "11.0.3",
                         "jvm.vendor": "Oracle",
                         "memory.max": 1024,
                         "jvm.pools": {"eden": {}, "survivor": {}, "old": {}}
@@ -955,7 +955,7 @@ class TestInfrastructureResourcesE2E:
                     "label": "Node.js App",
                     "data": {
                         "name": "test-app",
-                        "version": "1.0.2",
+                        "version": "1.0.3",
                         "pid": 5678,
                         "versions": {
                             "node": "14.17.0",
@@ -1045,7 +1045,7 @@ class TestInfrastructureResourcesE2E:
         # Mock the API client to return a list
         mock_api_client = MagicMock()
         mock_response = [
-            {"name": "Java", "version": "11.0.2"},
+            {"name": "Java", "version": "11.0.3"},
             {"name": "Node.js", "version": "16.14.0"}
         ]
         mock_api_client.software_versions.return_value = mock_response
@@ -1068,7 +1068,7 @@ class TestInfrastructureResourcesE2E:
         mock_api_client = MagicMock()
         mock_response = {
             "versions": [
-                {"name": "java", "version": "11.0.2", "count": 25}
+                {"name": "java", "version": "11.0.3", "count": 25}
             ],
             "tagTree": [
                 {

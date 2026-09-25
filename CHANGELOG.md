@@ -1,4 +1,12 @@
 # Changelog
+### 1.0.3
+- **IMPORTANT**: SSL certificate verification is **enabled by default** and configurable
+- **New Feature:** Added support for Infrastructure Smart Alert configurations via `manage_infrastructure`.
+- **Enhancement:** Introduced catalog response caching for all catalog operations to reduce redundant API calls and improve response times.
+- **Enhancement:** Improved MCP call tracking with better analytics segmentation
+- **Enhancement:** Extended mobile app session support with unified session and session-replay beacon handling.
+- **Chore:** Added IBM Bob CLI and Kiro CLI setup guides; updated Docker and README documentation.
+
 ### 1.0.2
 - **Enhancement:** Introduced Async functionality to all the tool calls across all MCP tools.
 - **Enhancement:** Added domain-aware `groupbyTagEntity` validation for application queries.
