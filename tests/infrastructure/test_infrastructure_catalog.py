@@ -62,11 +62,11 @@ def mock_with_header_auth(api_class, allow_mock=False):
                     if attr_name.endswith('_api'):
                         api_client = getattr(self, attr_name)
                         break
-            
+
             if api_client is None:
                 # Create a mock API client if none exists
                 api_client = MagicMock()
-                
+
             kwargs['api_client'] = api_client
             return await func(self, *args, **kwargs)
         return wrapper
@@ -83,7 +83,7 @@ _mocks = {
 
 # Save original modules
 _original_modules = {}
-for module_name in _mocks.keys():
+for module_name in _mocks:
     if module_name in sys.modules:
         _original_modules[module_name] = sys.modules[module_name]
 
@@ -282,14 +282,14 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         self.assertIn("message", result)
         self.assertIn("total_available", result)
         self.assertIn("note", result)
-        
+
         # Verify it returns exactly 422 plugins
         self.assertEqual(len(result["plugins"]), 422)
         self.assertEqual(result["total_available"], 422)
-        
+
         # Verify message indicates cached response
         self.assertIn("cached response", result["note"])
-        
+
         # Verify some known plugins are in the list
         self.assertIn("host", result["plugins"])
         self.assertIn("containerd", result["plugins"])
@@ -308,7 +308,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
 
         self.assertEqual(len(result["plugins"]), 422)
         self.assertIn("cached response", result["note"])
-        
+
         # Verify API was never called
         self.catalog_api.get_infrastructure_catalog_plugins.assert_not_called()
         self.catalog_api.get_infrastructure_catalog_plugins_without_preload_content.assert_not_called()
@@ -316,9 +316,9 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
     def test_get_infrastructure_catalog_plugins_all_plugins_present(self):
         """Test that all expected plugins are present in cached list"""
         result = asyncio.run(self.client.get_infrastructure_catalog_plugins())
-        
+
         plugins = result["plugins"]
-        
+
         # Test a comprehensive sample of plugins across different categories
         expected_plugins = [
             # Infrastructure
@@ -343,7 +343,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
             "openTelemetry", "otelHost", "otelProcess", "oTelK8sContainer",
             "oTelK8sPod", "oTelK8sNode", "oTelK8sCluster", "oTelLLM"
         ]
-        
+
         for plugin in expected_plugins:
             self.assertIn(plugin, plugins, f"Expected plugin '{plugin}' not found in cached list")
 
@@ -392,7 +392,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         # The implementation checks for pydantic errors by string matching (lines 482-490)
         # It looks for ("pydantic" in err_str and "validation" in err_str) or ("validation error" in err_str)
         # When detected, it calls the fallback method which successfully returns the result
-        
+
         class PydanticError(Exception):
             def __str__(self):
                 return "validation error for pydantic"
@@ -686,7 +686,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
             status=200,
             data=b'["metric1", "metric2", "metric3"]'
         )
-        
+
         # Mock tags response
         self.catalog_api.get_tag_catalog.return_value = {
             "tagTree": {
@@ -697,9 +697,9 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
                 ]
             }
         }
-        
+
         result = asyncio.run(self.client.get_plugin_schema(plugin="host"))
-        
+
         self.assertEqual(result["plugin"], "host")
         self.assertEqual(len(result["metrics"]), 3)
         self.assertIn("metric1", result["metrics"])
@@ -713,7 +713,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
     def test_get_plugin_schema_missing_plugin(self):
         """Test get_plugin_schema with missing plugin parameter"""
         result = asyncio.run(self.client.get_plugin_schema(plugin=""))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("required", (result.get("error") or result.get("message", "")))
 
@@ -724,16 +724,16 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
             status=400,
             data=b''
         )
-        
+
         # Mock tags response (successful)
         self.catalog_api.get_tag_catalog.return_value = {
             "tagTree": {
                 "children": [{"type": "TAG", "tagName": "tag1"}]
             }
         }
-        
+
         result = asyncio.run(self.client.get_plugin_schema(plugin="invalid"))
-        
+
         self.assertEqual(result["plugin"], "invalid")
         self.assertEqual(len(result["metrics"]), 0)
         self.assertTrue(len(result["errors"]) > 0)
@@ -746,12 +746,12 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
             status=200,
             data=b'["metric1"]'
         )
-        
+
         # Mock tags to return error
         self.catalog_api.get_tag_catalog.return_value = {"error": "Failed to get tags"}
-        
+
         result = asyncio.run(self.client.get_plugin_schema(plugin="host"))
-        
+
         self.assertEqual(result["plugin"], "host")
         self.assertEqual(len(result["metrics"]), 1)
         self.assertEqual(len(result["tags"]), 0)
@@ -765,12 +765,12 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
             status=200,
             data=b'["custom_metric1"]'
         )
-        
+
         # Mock tags response
         self.catalog_api.get_tag_catalog.return_value = {"tagTree": {"children": []}}
-        
+
         result = asyncio.run(self.client.get_plugin_schema(plugin="host", filter="custom"))
-        
+
         self.assertEqual(result["plugin"], "host")
         self.assertIn("custom_metric1", result["metrics"])
 
@@ -779,7 +779,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         # Force an exception
         with patch.object(self.client, 'get_infrastructure_catalog_metrics', side_effect=Exception("Test error")):
             result = asyncio.run(self.client.get_plugin_schema(plugin="host"))
-            
+
             # The error is in the errors list, not as a top-level error key
             self.assertTrue(result["summary"]["has_errors"])
             self.assertTrue(len(result["errors"]) > 0)
@@ -803,9 +803,9 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
                 ]
             }
         }
-        
+
         result = extract_tag_names_from_tree(tag_data)
-        
+
         self.assertEqual(len(result), 3)
         self.assertIn("nested.tag1", result)
         self.assertIn("nested.tag2", result)
@@ -820,9 +820,9 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
                 {"type": "TAG", "tagName": "tag2"}
             ]
         }
-        
+
         result = extract_tag_names_from_tree(tag_data)
-        
+
         self.assertEqual(len(result), 2)
         self.assertIn("tag1", result)
         self.assertIn("tag2", result)
@@ -831,7 +831,7 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
         """Test extract_tag_names_from_tree (moved to utils) with empty data"""
         from src.core.utils import extract_tag_names_from_tree
         result = extract_tag_names_from_tree({})
-        
+
         self.assertEqual(len(result), 0)
 
     def test_extract_tag_names_list_input(self):
@@ -843,9 +843,9 @@ class TestInfrastructureCatalogMCPTools(unittest.TestCase):
                 {"type": "TAG", "tagName": "tag2"}
             ]
         }
-        
+
         result = extract_tag_names_from_tree(tag_data)
-        
+
         # The method doesn't traverse arbitrary keys, only specific ones
         # So this should return empty list
         self.assertEqual(len(result), 0)

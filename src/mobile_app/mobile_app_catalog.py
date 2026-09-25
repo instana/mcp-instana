@@ -4,7 +4,8 @@ Mobile App Catalog MCP Tools Module
 This module provides mobile app catalog-specific MCP tools for Instana monitoring.
 """
 
-import logging, json
+import json
+import logging
 from typing import Any, Dict, Optional
 
 try:
@@ -17,7 +18,16 @@ except ImportError as e:
 from mcp.types import ToolAnnotations
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, process_tag_catalog_response, project_metric_card, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    process_tag_catalog_response,
+    project_metric_card,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -68,7 +78,7 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
                 resource_type=resource_type,
                 tool_name=tool_name,
             )
-        
+
             # Check if the response was successful
             if response.status != 200:
                 return self.handle_api_error_response(response, "get mobile app tag catalog", logger)
@@ -85,7 +95,7 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"[get_mobile_app_tag_catalog] Error: {e}", exc_info=True)
             return {"error": f"Failed to get mobile app tag catalog: {e!s}"}
-        
+
 
     @ttl_cached()
     @with_header_auth(MobileAppCatalogApi)

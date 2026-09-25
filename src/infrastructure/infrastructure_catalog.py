@@ -20,7 +20,14 @@ except ImportError as e:
     raise
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import BaseInstanaClient, call_sdk_fn, extract_tag_names_from_tree, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    extract_tag_names_from_tree,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -193,17 +200,17 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         """Handle result when it's a dict with metrics field."""
         if 'metrics' not in result_dict:
             return {"error": f"Unexpected dict structure for plugin {plugin}"}
-        
+
         metrics_list = result_dict['metrics']
         if not isinstance(metrics_list, list):
             return {"error": f"Metrics field is not a list for plugin {plugin}"}
-        
+
         return self._process_metrics_list(metrics_list, plugin)
 
     def _handle_sdk_object_result(self, result, plugin):
         """Handle result when it's an SDK object with to_dict method."""
         result_dict = result.to_dict()
-        
+
         if isinstance(result_dict, list):
             return self._process_metrics_list(result_dict, plugin)
         elif isinstance(result_dict, dict):
@@ -298,7 +305,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         'what technologies are monitored', 'available plugins in Instana', 'list of monitored entity types', or when someone wants to 'see what kinds of systems Instana is tracking'.
 
         Returns ALL plugins (422) without pagination limits.
-        
+
         NOTE: This returns a static cached list since the plugin catalog is constant across all Instana installations.
 
         Returns:
@@ -475,7 +482,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         if "406" in str(sdk_error) and "Not Acceptable" in str(sdk_error):
             return True
         try:
-            from pydantic import ValidationError as _PydanticValidationError  # type: ignore
+            from pydantic import (
+                ValidationError as _PydanticValidationError,  # type: ignore
+            )
             if isinstance(sdk_error, _PydanticValidationError):
                 return True
         except Exception:
@@ -572,21 +581,21 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
 
         IMPORTANT: The plugin parameter must be a valid plugin ID from get_plugins.
         Using an invalid plugin name will result in HTTP 400/404 errors with no diagnostic message.
-        
+
         RECOMMENDED WORKFLOW:
         1. Call get_plugins to discover available entity types (e.g., 'host', 'containerd', 'jvmRuntimePlatform')
         2. Call get_plugin_schema with a valid plugin ID to get metrics and tags
         3. Use the returned metrics and tags to build analyze queries with proper filters
-        
+
         This tool retrieves both available metrics and tags for a plugin type, providing
         a complete schema similar to the static schema files but dynamically from the API.
-        
+
         Args:
             plugin: The plugin ID from get_plugins (e.g., 'host', 'containerd', 'jvmRuntimePlatform').
                    Must be a valid plugin ID - invalid names return HTTP 400 with no error details.
             filter: Filter to restrict returned metric definitions ('custom' or 'builtin')
             ctx: The MCP context (optional)
-        
+
         Returns:
             Dictionary containing:
             - plugin: The plugin ID
@@ -594,16 +603,16 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             - tags: List of available tag names (simplified from hierarchical structure)
             - errors: List of any errors encountered (e.g., "HTTP 400" for invalid plugin)
             - summary: Summary statistics
-        
+
         Example:
             # Step 1: Get available plugins
             plugins = await get_plugins()
             # Returns: [{"id": "host", ...}, {"id": "containerd", ...}, ...]
-            
+
             # Step 2: Get schema for a specific plugin
             schema = await get_plugin_schema(plugin="containerd")
             # Returns: {"metrics": ["memory.usage", ...], "tags": ["host.name", ...]}
-            
+
             # Step 3: Use in analyze query
             result = await get_entities(payload={
                 "type": "containerd",
@@ -613,7 +622,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"get_plugin_schema called with plugin={plugin}, filter={filter}")
-            
+
             if not plugin:
                 return {
                     "elicitation_needed": True,
@@ -634,7 +643,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 "tags": [],
                 "errors": []
             }
-            
+
             # Get metrics — use static override for plugins whose tagged metrics are not
             # returned by the catalog API (e.g. oTelLLM uses the tagged-metrics path).
             if plugin in _STATIC_METRICS_OVERRIDE:
@@ -667,7 +676,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                     error_msg = f"Failed to get metrics: {e!s}"
                     logger.error(error_msg, exc_info=True)
                     result["errors"].append(error_msg)
-            
+
             # Get tags
             try:
                 tags_response = await self.get_tag_catalog(
@@ -677,7 +686,7 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                     resource_type=resource_type,
                     tool_name=tool_name,
                 )
-                
+
                 # Check if tags call returned an error
                 if isinstance(tags_response, dict) and "error" in tags_response:
                     result["errors"].append(f"Tags: {tags_response['error']}")
@@ -685,23 +694,23 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 else:
                     # Extract tag names from the hierarchical structure
                     result["tags"] = sorted(extract_tag_names_from_tree(tags_response))
-                    
+
             except Exception as e:
                 error_msg = f"Failed to get tags: {e!s}"
                 logger.error(error_msg, exc_info=True)
                 result["errors"].append(error_msg)
-            
+
             # Add summary
             result["summary"] = {
                 "total_metrics": len(result["metrics"]),
                 "total_tags": len(result["tags"]),
                 "has_errors": len(result["errors"]) > 0
             }
-            
+
             logger.debug(f"get_plugin_schema result: {result['summary']}")
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error in get_plugin_schema: {e}", exc_info=True)
             return {

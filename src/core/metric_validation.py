@@ -36,7 +36,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from src.core.catalog_cache import _cache_get, _cache_set, _CACHE_MISS, DEFAULT_CATALOG_TTL
+from src.core.catalog_cache import (
+    _CACHE_MISS,
+    DEFAULT_CATALOG_TTL,
+    _cache_get,
+    _cache_set,
+)
 from src.core.utils import decode_response, normalize_beacon_type, project_metric_card
 
 logger = logging.getLogger(__name__)

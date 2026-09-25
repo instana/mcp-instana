@@ -35,8 +35,8 @@ mock_mobile_app_catalog_api = MagicMock()
 mock_mobile_app_catalog_api.__name__ = "MobileAppCatalogApi"
 sys.modules["instana_client.api.mobile_app_catalog_api"].MobileAppCatalogApi = mock_mobile_app_catalog_api
 
-from src.mobile_app.mobile_app_catalog import MobileAppCatalogMCPTools
 from src.core.utils import decode_response as _decode_response
+from src.mobile_app.mobile_app_catalog import MobileAppCatalogMCPTools
 
 
 class MockResponse:

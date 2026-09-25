@@ -18,7 +18,15 @@ except ImportError as e:
     raise
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, process_tag_catalog_response, project_metric_card, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    process_tag_catalog_response,
+    project_metric_card,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 
 class SyntheticCatalogMCPTools(BaseInstanaClient):

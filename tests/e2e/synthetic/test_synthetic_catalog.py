@@ -8,6 +8,7 @@ Requires INSTANA_BASE_URL and INSTANA_API_TOKEN environment variables.
 """
 
 import os
+
 import pytest
 
 pytestmark = [
