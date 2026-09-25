@@ -1,7 +1,7 @@
 # Changelog
 ### 1.0.3
+- **IMPORTANT**: SSL certificate verification is **enabled by default** and configurable
 - **New Feature:** Added support for Infrastructure Smart Alert configurations via `manage_infrastructure`.
-- **Enhancement:** SSL certificate verification is now **enabled by default** and configurable
 - **Enhancement:** Introduced catalog response caching for all catalog operations to reduce redundant API calls and improve response times.
 - **Enhancement:** Improved MCP call tracking with better analytics segmentation
 - **Enhancement:** Extended mobile app session support with unified session and session-replay beacon handling.
