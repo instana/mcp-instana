@@ -2,106 +2,115 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Table of Contents
 
-- [Instana MCP Server - Tools and Example Prompts](#instana-mcp-server---tools-and-example-prompts)
-  - [Overview](#overview)
-  - [Prerequisites](#prerequisites)
-  - [Quick Start](#quick-start)
-    - [For First-Time Users](#for-first-time-users)
-    - [Recommended Learning Path](#recommended-learning-path)
-    - [Common Use Cases](#common-use-cases)
-  - [Table of Contents](#table-of-contents)
-  - [1. Application Resources](#1-application-resources)
-    - [Capabilities](#capabilities)
-      - [Resource Types:](#resource-types)
-    - [Example Prompts](#example-prompts)
-      - [Metrics Queries](#metrics-queries)
-      - [Alert Configuration](#alert-configuration)
-      - [Application Settings](#application-settings)
-      - [Catalog Operations](#catalog-operations)
-  - [2. Infrastructure Monitoring](#2-infrastructure-monitoring)
-    - [Capabilities](#capabilities-1)
-      - [Resource Types:](#resource-types-1)
-    - [Example Prompts](#example-prompts-1)
-      - [Catalog Discovery](#catalog-discovery)
-      - [Entity Queries](#entity-queries)
-      - [Snapshot Resources](#snapshot-resources)
-      - [Smart Alert Configuration](#smart-alert-configuration)
-  - [3. Events Monitoring](#3-events-monitoring)
-    - [Capabilities](#capabilities-2)
-    - [Example Prompts](#example-prompts-2)
-      - [General Event Queries](#general-event-queries)
-      - [Kubernetes Events](#kubernetes-events)
-      - [Agent Monitoring Events](#agent-monitoring-events)
-      - [Advanced Filtering](#advanced-filtering)
-  - [4. Website Monitoring](#4-website-monitoring)
-    - [Capabilities](#capabilities-3)
-    - [Example Prompts](#example-prompts-3)
-      - [Beacon Analysis](#beacon-analysis)
-      - [Geographic Analysis](#geographic-analysis)
-      - [Browser and Device Analysis](#browser-and-device-analysis)
-      - [Configuration](#configuration)
-  - [5. Automation Actions](#5-automation-actions)
-    - [Capabilities](#capabilities-4)
-    - [Example Prompts](#example-prompts-4)
-      - [Action Catalog](#action-catalog)
-      - [Action Matching](#action-matching)
-      - [Execution History](#execution-history)
-  - [6. Custom Dashboards](#6-custom-dashboards)
-    - [Capabilities](#capabilities-5)
-    - [Example Prompts](#example-prompts-5)
-      - [Dashboard Management](#dashboard-management)
-      - [Dashboard Creation](#dashboard-creation)
-      - [Dashboard Updates](#dashboard-updates)
-      - [Sharing](#sharing)
-  - [7. SLO Management](#7-slo-management)
-    - [Capabilities](#capabilities-6)
-    - [Example Prompts](#example-prompts-6)
-      - [SLO Configuration](#slo-configuration)
-      - [SLO Reporting](#slo-reporting)
-      - [SLO Alerts](#slo-alerts)
-      - [Error Budget Corrections](#error-budget-corrections)
-  - [8. Release Tracking](#8-release-tracking)
-    - [Capabilities](#capabilities-7)
-    - [Example Prompts](#example-prompts-7)
-      - [Release Management](#release-management)
-      - [Release Impact Analysis](#release-impact-analysis)
-  - [9. Mobile App Monitoring](#9-mobile-app-monitoring)
-    - [Capabilities](#capabilities-8)
-    - [Example Prompts](#example-prompts-8)
-      - [Session Replay](#session-replay)
-      - [Beacon Analysis](#beacon-analysis-1)
-      - [Performance Metrics](#performance-metrics)
-      - [Geographic Analysis](#geographic-analysis-1)
-      - [Device and Platform Analysis](#device-and-platform-analysis)
-      - [Configuration](#configuration-1)
-      - [Alert Management](#alert-management)
-  - [10. Maintenance Window Management](#10-maintenance-window-management)
-  - [11. Synthetic Monitoring](#11-synthetic-monitoring)
-    - [Capabilities](#capabilities-9)
-    - [Example Prompts](#example-prompts-9)
-      - [Creating Maintenance Windows](#creating-maintenance-windows)
-      - [Recurring Maintenance Windows](#recurring-maintenance-windows)
-      - [Bulk Operations](#bulk-operations)
-      - [Modifying Maintenance Windows](#modifying-maintenance-windows)
-      - [Closing Maintenance Windows](#closing-maintenance-windows)
-      - [Listing Maintenance Windows](#listing-maintenance-windows)
-      - [Template Management](#template-management)
-      - [Validation](#validation)
-  - [Advanced Usage Tips](#advanced-usage-tips)
-    - [Time Range Specifications](#time-range-specifications)
-    - [Filtering and Grouping](#filtering-and-grouping)
-      - [Simple Tag Filter](#simple-tag-filter)
-      - [Complex Filters with OR Logic](#complex-filters-with-or-logic)
-      - [Complex Filters with AND Logic](#complex-filters-with-and-logic)
-      - [Nested Expressions](#nested-expressions)
-    - [Combining Tools](#combining-tools)
-      - [Scenario 1: Release Impact Analysis](#scenario-1-release-impact-analysis)
-      - [Scenario 2: Infrastructure to Application Correlation](#scenario-2-infrastructure-to-application-correlation)
-      - [Scenario 3: SLO Breach Investigation](#scenario-3-slo-breach-investigation)
-      - [Scenario 4: Multi-Environment Monitoring](#scenario-4-multi-environment-monitoring)
-      - [Scenario 5: Website Performance Analysis](#scenario-5-website-performance-analysis)
-    - [Best Practices](#best-practices)
-  - [Getting Help](#getting-help)
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [For First-Time Users](#for-first-time-users)
+  - [Recommended Learning Path](#recommended-learning-path)
+  - [Common Use Cases](#common-use-cases)
+- [Tool Categories and Configuration Identifiers](#tool-categories-and-configuration-identifiers)
+- [1. Application Resources](#1-application-resources)
+  - [Capabilities](#capabilities)
+    - [Resource Types:](#resource-types)
+  - [Example Prompts](#example-prompts)
+    - [Metrics Queries](#metrics-queries)
+    - [Alert Configuration](#alert-configuration)
+    - [Application Settings](#application-settings)
+    - [Catalog Operations](#catalog-operations)
+    - [Application Resources and Topology](#application-resources-and-topology)
+    - [Trace Analysis](#trace-analysis)
+- [2. Infrastructure Analysis](#2-infrastructure-analysis)
+  - [Capabilities](#capabilities-1)
+    - [Resource Types:](#resource-types-1)
+  - [Example Prompts](#example-prompts-1)
+    - [Pass 1 - Intent-Based Queries](#pass-1---intent-based-queries)
+    - [Pass 2 - Specific Selections](#pass-2---specific-selections)
+    - [Smart Alert Configuration](#smart-alert-configuration)
+- [3. Events Monitoring](#3-events-monitoring)
+  - [Capabilities](#capabilities-2)
+    - [Resource Types:](#resource-types-2)
+  - [Example Prompts](#example-prompts-2)
+    - [General Event Queries](#general-event-queries)
+    - [Kubernetes Events](#kubernetes-events)
+    - [Agent Monitoring Events](#agent-monitoring-events)
+    - [Advanced Filtering](#advanced-filtering)
+- [4. Website Monitoring](#4-website-monitoring)
+  - [Capabilities](#capabilities-3)
+    - [Resource Types:](#resource-types-3)
+  - [Example Prompts](#example-prompts-3)
+    - [Beacon Analysis](#beacon-analysis)
+    - [Geographic Analysis](#geographic-analysis)
+    - [Browser and Device Analysis](#browser-and-device-analysis)
+    - [Configuration and Advanced Settings](#configuration-and-advanced-settings)
+    - [Website Alert Configuration](#website-alert-configuration)
+- [5. Automation Actions](#5-automation-actions)
+  - [Capabilities](#capabilities-4)
+    - [Resource Types:](#resource-types-4)
+  - [Example Prompts](#example-prompts-4)
+    - [Action Catalog](#action-catalog)
+    - [Action Matching](#action-matching)
+    - [Execution History](#execution-history)
+- [6. Custom Dashboards](#6-custom-dashboards)
+  - [Capabilities](#capabilities-5)
+    - [Resource Types:](#resource-types-5)
+  - [Example Prompts](#example-prompts-5)
+    - [Dashboard Management](#dashboard-management)
+    - [Dashboard Creation](#dashboard-creation)
+    - [Dashboard Updates](#dashboard-updates)
+    - [Sharing](#sharing)
+- [7. SLO Management](#7-slo-management)
+  - [Capabilities](#capabilities-6)
+    - [Resource Types:](#resource-types-6)
+  - [Example Prompts](#example-prompts-6)
+    - [SLO Configuration](#slo-configuration)
+    - [SLO Reporting](#slo-reporting)
+    - [SLO Alerts](#slo-alerts)
+    - [Error Budget Corrections](#error-budget-corrections)
+- [8. Release Tracking](#8-release-tracking)
+  - [Capabilities](#capabilities-7)
+    - [Resource Types:](#resource-types-7)
+  - [Example Prompts](#example-prompts-7)
+    - [Release Management](#release-management)
+    - [Release Impact Analysis](#release-impact-analysis)
+- [9. Mobile App Monitoring](#9-mobile-app-monitoring)
+  - [Capabilities](#capabilities-8)
+    - [Resource Types:](#resource-types-8)
+  - [Example Prompts](#example-prompts-8)
+    - [Beacon Analysis](#beacon-analysis-1)
+    - [Geographic Analysis](#geographic-analysis-1)
+    - [View and Device Analysis](#view-and-device-analysis)
+    - [Configuration and Alerts](#configuration-and-alerts)
+    - [Session Replay](#session-replay)
+- [10. Synthetic Monitoring](#10-synthetic-monitoring)
+  - [Capabilities](#capabilities-9)
+    - [Resource Types:](#resource-types-9)
+  - [Example Prompts](#example-prompts-9)
+    - [Test Configuration](#test-configuration)
+    - [Test Results and Health](#test-results-and-health)
+    - [Datacenter and Location Health](#datacenter-and-location-health)
+- [11. Maintenance Windows](#11-maintenance-windows)
+  - [Capabilities](#capabilities-10)
+    - [Resource Types:](#resource-types-10)
+  - [Example Prompts](#example-prompts-10)
+    - [Listing Maintenance Windows](#listing-maintenance-windows)
+    - [Creating and Managing Windows](#creating-and-managing-windows)
+    - [Bulk Operations and Templates](#bulk-operations-and-templates)
+- [Advanced Usage Tips](#advanced-usage-tips)
+  - [Time Range Specifications](#time-range-specifications)
+  - [Error Handling and Troubleshooting](#error-handling-and-troubleshooting)
+  - [Filtering and Grouping](#filtering-and-grouping)
+    - [Simple Tag Filter](#simple-tag-filter)
+    - [Complex Filters with OR Logic](#complex-filters-with-or-logic)
+    - [Complex Filters with AND Logic](#complex-filters-with-and-logic)
+    - [Nested Expressions](#nested-expressions)
+  - [Combining Tools](#combining-tools)
+    - [Scenario 1: Release Impact Analysis](#scenario-1-release-impact-analysis)
+    - [Scenario 2: Infrastructure to Application Correlation](#scenario-2-infrastructure-to-application-correlation)
+    - [Scenario 3: SLO Breach Investigation](#scenario-3-slo-breach-investigation)
+    - [Scenario 4: Multi-Environment Monitoring](#scenario-4-multi-environment-monitoring)
+    - [Scenario 5: Website Performance Analysis](#scenario-5-website-performance-analysis)
+  - [Best Practices](#best-practices)
+- [Getting Help](#getting-help)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -114,10 +123,11 @@ The Instana MCP (Model Context Protocol) Server enables AI assistants and automa
 **What you can do:**
 - Query application and infrastructure metrics
 - Analyze events and incidents
-- Monitor website and mobile app performance
+- Monitor website performance
 - Manage SLOs and releases
 - Create and configure dashboards
 - Browse automation actions
+- Monitor Mobile app performance
 
 ## Prerequisites
 
@@ -210,28 +220,23 @@ Start with these simple operations to familiarize yourself with the tools:
 
 This document provides comprehensive examples of how to interact with the Instana MCP Server tools. Each tool is designed to handle specific monitoring and observability tasks with natural language queries.
 
-## Table of Contents
+## Tool Categories and Configuration Identifiers
 
-- [Overview](#overview)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
+When starting the MCP server with the `--categories` option (e.g. `python -m src.core.server --categories app,infra`), use the corresponding category identifier:
 
-**Tools:**
-1. [Application Resources](#1-application-resources)
-2. [Infrastructure Monitoring](#2-infrastructure-monitoring)
-3. [Events Monitoring](#3-events-monitoring)
-4. [Website Monitoring](#4-website-monitoring)
-5. [Automation Actions](#5-automation-actions)
-6. [Custom Dashboards](#6-custom-dashboards)
-7. [SLO Management](#7-slo-management)
-8. [Release Tracking](#8-release-tracking)
-9. [Mobile App Monitoring](#9-mobile-app-monitoring)
-10. [Maintenance Window Management](#10-maintenance-window-management)
-11. [Synthetic Monitoring](#11-synthetic-monitoring)
-
-**Advanced:**
-- [Advanced Usage Tips](#advanced-usage-tips)
-- [Getting Help](#getting-help)
+| Section | Category Name | Category Identifier (`--categories`) | Unified Tool Name |
+|---|---|---|---|
+| 1 | Application Resources | `app` | `manage_applications` |
+| 2 | Infrastructure Analysis | `infra` | `manage_infrastructure` |
+| 3 | Events Monitoring | `events` | `manage_events` |
+| 4 | Website Monitoring | `website` | `manage_websites` |
+| 5 | Automation Actions | `automation` | `manage_automation` |
+| 6 | Custom Dashboards | `settings` | `manage_custom_dashboards` |
+| 7 | SLO Management | `slo` | `manage_slo` |
+| 8 | Release Tracking | `releases` | `manage_releases` |
+| 9 | Mobile App Monitoring | `mobile_app` | `manage_mobile_apps` |
+| 10 | Synthetic Monitoring | `synthetic` | `manage_synthetics` |
+| 11 | Maintenance Windows | `maintenance` | `manage_maintenance_windows` |
 
 ---
 
@@ -241,16 +246,80 @@ This document provides comprehensive examples of how to interact with the Instan
 
 ### Capabilities
 
-This unified tool manages all application-related operations including metrics, alerts, configurations, catalog information, trace analysis, and resource discovery.
+This unified tool manages all application-related operations including metrics, alerts, configurations, and catalog information.
 
 #### Resource Types:
-- **metrics**: Query application performance metrics, services, and endpoints
-- **alert_config**: Manage application-specific alert configurations
-- **global_alert_config**: Manage global application alert configurations
-- **settings**: Manage application configurations (perspectives, endpoints, services, manual services)
-- **catalog**: Access application tag and metric catalog information
-- **resources**: Query application perspectives, services, and endpoints
-- **analyze**: Analyze application traces and call groups
+
+**metrics**: Query application call metrics grouped by service, endpoint, or other dimensions
+
+| Operation | Description |
+|---|---|
+| `get_grouped_calls_metrics` | Query application metrics with flexible filtering, grouping by tags, and aggregating metrics |
+
+**alert_config**: Manage application-specific Smart Alert configurations (full CRUD + enable/disable/restore/update_baseline)
+
+| Operation | Description |
+|---|---|
+| `find_active` | Find active alert configurations for an application |
+| `find` | Get alert configuration by ID and optional valid_on timestamp |
+| `find_versions` | Get alert configuration versions |
+| `create` | Create application alert configuration |
+| `update` | Update existing application alert configuration |
+| `delete` | Delete application alert configuration |
+| `enable` | Enable application alert configuration |
+| `disable` | Disable application alert configuration |
+| `restore` | Restore application alert configuration to a historical version |
+| `update_baseline` | Update historic baselines for application alert configuration |
+
+**global_alert_config**: Manage global application alert configurations (full CRUD + enable/disable/restore)
+
+| Operation | Description |
+|---|---|
+| `find_active` | Find active global alert configurations |
+| `find` | Get global alert configuration by ID and optional valid_on timestamp |
+| `find_versions` | Get global alert configuration versions (version control for global alerts) |
+| `create` | Create global alert configuration |
+| `update` | Update global alert configuration |
+| `delete` | Delete global alert configuration |
+| `enable` | Enable global alert configuration |
+| `disable` | Disable global alert configuration |
+| `restore` | Restore global alert configuration to a historical version |
+
+**settings**: Manage application perspectives, endpoint configs, service configs, and manual service configs
+
+| Operation | Description |
+|---|---|
+| `get_all` | List all configurations for the given resource subtype (`application`, `endpoint`, `service`, `manual_service`) |
+| `get` | Get specific configuration by ID or name (supported for `application`, `endpoint`, `service`) |
+| `create` | Create new configuration for application perspectives, endpoints, services, or manual services |
+| `update` | Update existing configuration for application perspectives, endpoints, services, or manual services |
+| `delete` | Delete configuration for application perspectives, endpoints, services, or manual services |
+
+*Note: `manual_service` does not support the `get` operation (only `get_all`, `create`, `update`, `delete`).*
+
+**catalog**: Access application tag and metric catalogs for constructing valid queries
+
+| Operation | Description |
+|---|---|
+| `get_tag_catalog` | Get valid tag names for filtering and grouping by use case and data source |
+| `get_metric_catalog` | Get application metrics catalog with metadata (metricId, label, aggregations, beaconTypes) |
+
+**resources**: Retrieve application perspectives, services, and service endpoints
+
+| Operation | Description |
+|---|---|
+| `get_applications` | Get application perspectives with configurations and metadata |
+| `get_services` | Get all services across all applications with optional snapshot IDs |
+| `get_application_services` | Get services for a specific application perspective |
+| `get_application_endpoints` | Get endpoints for an application service with type and technology metadata |
+
+**analyze**: Analyze application traces — list all traces, fetch trace details, and group traces
+
+| Operation | Description |
+|---|---|
+| `get_all_traces` | List all traces with filtering, pagination, and time range |
+| `get_trace_details` | Get detailed information for a specific trace by ID |
+| `get_trace_groups` | Group traces by tag with aggregated metrics |
 
 ### Example Prompts
 
@@ -318,56 +387,95 @@ Get the tag catalog for application calls to understand available grouping optio
 What metrics are available for application monitoring?
 ```
 
+#### Application Resources and Topology
+
+```
+List all monitored services matching "payment" and include their snapshot IDs
+```
+
+```
+Get all HTTP endpoints configured for the checkout service in application app-123
+```
+
+#### Trace Analysis
+
+```
+Retrieve the latest 50 traces with window size 1 hour including internal and synthetic calls
+```
+
+```
+Get detailed call flow and span data for trace ID 8a2b3c4d5e6f
+```
+
+```
+Group application traces by service name and aggregate total trace counts over the last hour
+```
+
 ---
 
-## 2. Infrastructure Monitoring
+## 2. Infrastructure Analysis
 
 **Tool Name:** `manage_infrastructure`
 
 ### Capabilities
 
-This unified smart router manages all infrastructure operations — analyze, catalog, and resource snapshots — through a single tool.
+This unified tool manages all infrastructure-related operations including entity analysis, catalog metadata, snapshot resources, and Smart Alert configurations.
 
-**Recommended workflow:**
-1. `get_plugins` — discover all available entity types in your installation
-2. `get_plugin_schema` — get metrics **and** tags for a plugin in **one** call (replaces separate `get_metrics` + `get_tag_catalog`)
-3. Analyze operations — query entities or groups using discovered types, metrics, and tags
+**Key Features:**
+- **Auto-Routing**: Automatically routes to `get_entity_groups` when `groupBy` is present in the payload, and to `get_entities` when absent.
+- **Dynamic Catalog**: Automatically synchronized with your Instana installation's available plugins and entity types (hosts, JVM, Kubernetes, Docker, databases, message queues, and more).
+- **Flexible Metric Aggregation**: Supports MAX, MEAN, MIN, and SUM aggregations over custom time frames.
+- **Advanced Filtering**: Rich filtering by tags and properties for precise infrastructure querying.
 
-**Resource Types:**
-- **analyze**: Query individual infrastructure entities or grouped entity metrics
-- **catalog**: Discover plugins, metrics, tags, and full plugin schemas
-- **resources**: Retrieve or search snapshot details
+#### Resource Types:
 
-The system automatically discovers all entity types from your Instana installation, supporting Kubernetes, JVM, databases, message queues, containers, hosts, and any custom plugins. Static schema files have been removed — schema is fetched live from the Instana API.
+**analyze**: Query individual infrastructure entities or grouped entity metrics with custom time frames, filters, and aggregations
+
+| Operation | Description |
+|---|---|
+| `get_entities` | Get individual infrastructure entities with metrics (auto-routed when groupBy is absent) |
+| `get_entity_groups` | Get grouped infrastructure entities with aggregated metrics (auto-routed when groupBy is present) |
+
+**catalog**: Discover entity types (plugins), metrics, tag catalog, or full plugin schema in one call
+
+| Operation | Description |
+|---|---|
+| `get_plugins` | Get all available entity types/plugins in your Instana installation |
+| `get_plugin_schema` | Get combined metrics and tags schema for a plugin in one call |
+| `get_metrics` | Get infrastructure metrics catalog for a specific plugin |
+| `get_tag_catalog` | Get valid tag names for filtering and grouping |
+
+**resources**: Retrieve or search infrastructure snapshots by ID or query criteria
+
+| Operation | Description |
+|---|---|
+| `get_snapshot` | Get detailed information for a specific snapshot by ID |
+| `get_snapshots` | Search and discover multiple snapshots matching criteria |
+
+**alert_config**: Full CRUD management for Instana Infrastructure Smart Alert configurations (create, read, update, delete, enable, disable, restore)
+
+| Operation | Description |
+|---|---|
+| `find_active` | List all active alert configurations |
+| `find` | Get alert configuration by ID |
+| `find_versions` | Get all historical versions of an alert configuration |
+| `create` | Create a new alert configuration with schema validation |
+| `update` | Update an existing alert configuration |
+| `delete` | Delete an alert configuration |
+| `enable` | Enable an alert configuration |
+| `disable` | Disable an alert configuration |
+| `restore` | Restore an alert configuration to a historical version |
 
 ### Example Prompts
 
-#### Catalog Discovery
-
-```
-List all available infrastructure entity types (plugins) in my Instana installation
-```
-
-```
-Get the full schema (metrics and tags) for the "host" plugin in one call
-```
-
-```
-What metrics are available for JVM runtime monitoring?
-```
-
-```
-Show me the available tags I can filter by for Kubernetes pods
-```
-
-#### Entity Queries
+#### Pass 1 - Intent-Based Queries
 
 ```
 Show me the maximum heap size of JVM instances running on host galactica1
 ```
 
 ```
-Get CPU usage metrics for Kubernetes pods in the production namespace, grouped by namespace
+I want to analyze CPU usage for Kubernetes pods in the production namespace
 ```
 
 ```
@@ -382,6 +490,10 @@ Show me database connection pool metrics for DB2 instances
 Analyze IBM MQ queue depth and message rates for the order-processing queue
 ```
 
+#### Pass 2 - Specific Selections
+
+After receiving the schema from Pass 1, you can make specific selections:
+
 ```
 Get the following JVM metrics: jvm.heap.maxSize, jvm.heap.used, jvm.gc.collectionTime
 Filter by: host.name = "galactica1"
@@ -389,18 +501,11 @@ Aggregation: max
 Time range: last 1 hour
 ```
 
-#### Snapshot Resources
-
 ```
-Find all host snapshots matching "payment" from the last hour
-```
-
-```
-Get detailed snapshot information for snapshot ID abc123xyz
-```
-
-```
-List all offline Kubernetes pod snapshots
+Query Kubernetes pod metrics: kubernetes.pod.cpu.usage, kubernetes.pod.memory.usage
+Group by: kubernetes.namespace.name
+Filter by: kubernetes.cluster.name = "prod-cluster"
+Order by: cpu usage descending
 ```
 
 #### Smart Alert Configuration
@@ -450,6 +555,24 @@ Restore Infrastructure Smart Alert "K8-cpu-alert-high" to the version created at
 ### Capabilities
 
 Monitor and analyze events including incidents, issues, changes, and Kubernetes events with advanced filtering and analysis.
+
+**Key Features:**
+- **Smart Routing**: Seamlessly routes requests to specialized event retrieval and analysis tools.
+- **Unified Parameter Validation**: Robust client-side validation of time frames, pagination limits, and `max_events`.
+- **Natural Language Time Frames**: First-class support for conversational time ranges like "last 24 hours", "last 2 days", or custom datetime ranges with timezone support.
+- **Event Filtering & Optimization**: Intelligent filtering options by severity, state, affected entity types, problem description, and availability of Root Cause Analysis (RCA).
+
+#### Resource Types:
+
+**events**: Query and filter events across all types and entities
+
+| Operation | Description |
+|---|---|
+| `get_events` | Get all events with flexible filters (event types, entity type/name/label, state, problem, severity, RCA, time ranges) |
+| `get_event` | Get Event by ID |
+| `get_events_by_ids` | Get Events by IDs |
+| `get_kubernetes_info_events` | Get Kubernetes Info Events with detailed analysis |
+| `get_agent_monitoring_events` | Get Agent Monitoring Events with detailed analysis |
 
 ### Example Prompts
 
@@ -515,12 +638,49 @@ Get all warning events (severity 5) affecting Kubernetes pods in the staging nam
 
 Monitor real user monitoring (RUM) data including page loads, resource loads, errors, and custom beacons with advanced filtering and grouping.
 
-**Resource Types:**
-- **analyze**: Query beacon data with grouping (`get_beacon_groups`) or individual beacons (`get_beacons`)
-- **catalog**: Get available metrics (`get_metrics`) and tags (`get_tag_catalog`) for website beacons
-- **configuration**: Retrieve website configurations (read-only; create/update/delete via Instana UI)
-- **advanced_config**: Retrieve advanced configurations (geo-location rules, IP masking)
-- **alert**: Retrieve website alert configurations
+**Key Features:**
+- **Flexible Beacon Support**: Built-in support for multiple web beacon types, including PAGELOAD, PAGE_CHANGE, RESOURCELOAD, CUSTOM, HTTPREQUEST, and ERROR.
+- **Tag Validation & Elicitation**: Automatic tag validation against the live catalog and catalog-based elicitation workflow when user-supplied filters or group tags are missing or invalid.
+- **Response Summarization**: Intelligent payload reduction of 70-80% to deliver fast, LLM-friendly summarized answers.
+- **Advanced Beacon Analysis**: Analyze beacons either in aggregated form (beacon groups) or as detailed individual records with pagination support.
+
+#### Resource Types:
+
+**analyze**: Query website beacon metrics — grouped/aggregated or individual beacon data
+
+| Operation | Description |
+|---|---|
+| `get_beacon_groups` | Get Website Beacon Groups - grouped/aggregated beacon data |
+| `get_beacons` | Get Website Beacons - individual beacon data with pagination |
+
+**catalog**: Access website metric and tag catalogs for constructing valid queries
+
+| Operation | Description |
+|---|---|
+| `get_metrics` | Get Website Metrics Catalog |
+| `get_tag_catalog` | Get Website Tag Catalog by beacon type and use case |
+
+**configuration**: List and get website configurations (read-only; use Instana UI for modifications)
+
+| Operation | Description |
+|---|---|
+| `get_all` | Get All Websites |
+| `get` | Get Website by ID or name with automatic name resolution |
+
+**advanced_config**: Retrieve advanced website settings — geo-location, IP masking, and geo-mapping rules (read-only)
+
+| Operation | Description |
+|---|---|
+| `get_geo_config` | Get Geo-Location Configuration |
+| `get_ip_masking` | Get IP Masking Configuration |
+| `get_geo_rules` | Get Geo Mapping Rules |
+
+**alert**: Query active and version-specific website alert configurations (read-only)
+
+| Operation | Description |
+|---|---|
+| `find_active_website_alert_configs` | Get all active alert configurations for a website |
+| `find_website_alert_config` | Get smart alert configuration by ID |
 
 ### Example Prompts
 
@@ -562,7 +722,7 @@ Compare page load times across Chrome, Firefox, and Safari browsers
 Show me mobile vs desktop performance metrics for the checkout page
 ```
 
-#### Configuration
+#### Configuration and Advanced Settings
 
 ```
 List all configured websites in Instana
@@ -576,6 +736,20 @@ Get the configuration details for the "Production Website" including geo-locatio
 Show me IP masking configuration for the customer portal website
 ```
 
+```
+Get geo-mapping rules configured for the E-commerce website
+```
+
+#### Website Alert Configuration
+
+```
+Show me all active alert configurations for website ID "website-abc123"
+```
+
+```
+Get alert configuration details for alert ID "alert-123" valid on timestamp 1742349976000
+```
+
 ---
 
 ## 5. Automation Actions
@@ -586,9 +760,25 @@ Show me IP masking configuration for the customer portal website
 
 Browse automation action catalog and view execution history for automated remediation and response actions.
 
-**Resource Types:**
-- **catalog**: Browse actions, get details, search by name/description, filter by application or snapshot ID
-- **history**: List execution instances with filtering and get execution details
+#### Resource Types:
+
+**catalog**: Browse and search the automation action catalog
+
+| Operation | Description |
+|---|---|
+| `get_actions` | List all available automation actions |
+| `get_action_details` | Get detailed information about a specific action |
+| `get_action_matches` | Search for matching actions by name/description |
+| `get_action_matches_by_id_and_time_window` | Get action matches by application or snapshot ID and time window |
+| `get_action_types` | Get available action types |
+| `get_action_tags` | Get available action tags |
+
+**history**: View action execution history and retrieve instance details
+
+| Operation | Description |
+|---|---|
+| `list` | List action execution instances with filtering |
+| `get_details` | Get details of a specific action execution |
 
 ### Example Prompts
 
@@ -631,7 +821,7 @@ Show me the execution history of automation actions from the last 7 days
 ```
 
 ```
-Get execution details for action instance ID abc-123-def
+Get details for action instance execution ID abc-123-def
 ```
 
 ```
@@ -639,7 +829,7 @@ List all failed automation action executions from yesterday
 ```
 
 ```
-Show me automation actions triggered for application snapshot ID snap-12345 from the last hour
+Show me automation actions triggered by event ID evt-789
 ```
 
 ---
@@ -652,14 +842,19 @@ Show me automation actions triggered for application snapshot ID snap-12345 from
 
 Create, read, update, and delete custom dashboards with widgets for visualizing metrics and monitoring data.
 
-**Operations** (passed directly as `operation`, no `resource_type` parameter):
-- `get_all`: List dashboards with optional search filter and pagination
-- `get`: Get a specific dashboard by ID
-- `create`: Create a new dashboard with title, access rules, and widgets
-- `update`: Update an existing dashboard
-- `delete`: Delete a dashboard by ID
-- `get_shareable_users`: List all users available for dashboard sharing (global, not per-dashboard)
-- `get_shareable_api_tokens`: List all API tokens available for dashboard sharing (global, not per-dashboard)
+#### Resource Types:
+
+**custom_dashboard**: CRUD operations for custom dashboards plus sharing metadata
+
+| Operation | Description |
+|---|---|
+| `get_all` | Get all custom dashboards |
+| `get` | Get specific dashboard by ID |
+| `create` | Create new custom dashboard |
+| `update` | Update existing custom dashboard |
+| `delete` | Delete custom dashboard |
+| `get_shareable_users` | Get shareable users for dashboard |
+| `get_shareable_api_tokens` | Get shareable API tokens for dashboard |
 
 ### Example Prompts
 
@@ -725,11 +920,54 @@ List all API tokens that have dashboard access
 
 Manage Service Level Objectives including configuration, reporting, alerts, and error budget corrections.
 
-**Resource Types:**
-- **configuration**: Create, read, update, delete SLO configurations; supports time-based and event-based indicators
-- **report**: Generate SLO reports with SLI values, error budgets, burn rates, and time-series charts
-- **alert**: Manage SLO alert configurations for error budget monitoring and burn rate tracking
-- **correction**: Create and manage correction windows to exclude planned downtime from SLO calculations
+**Key Features:**
+- **Intelligent Datetime & Timezone Parsing**: Effortless datetime parsing for SLO report queries, with timezone elicitation to ensure accurate query context.
+- **Error Budget Corrections**: Rich support for scheduling correction windows (maintenance, exclusions) with recurring rules (RFC 5545 RRULE expressions).
+- **SLO Alert Lifecycle & Version Control**: Full control over alert configs, including CRUD operations, enable, disable, and restoring to historical versions.
+- **Dual Indicator Types**: Configure and monitor both time-based (latency/availability) and event-based service level objectives.
+
+#### Resource Types:
+
+**configuration**: Full CRUD management for SLO configurations plus tag listing
+
+| Operation | Description |
+|---|---|
+| `get_all` | List and filter SLO configurations with pagination |
+| `get_by_id` | Get SLO configuration by ID |
+| `create` | Create SLO configuration with time-based and event-based indicators |
+| `update` | Update SLO configuration |
+| `delete` | Delete SLO configuration |
+| `get_tags` | List SLO tags |
+
+**report**: Generate SLO performance reports with error budget and burn rate data
+
+| Operation | Description |
+|---|---|
+| `get` | Generate SLO report with SLI value, error budget, burn rates, and time-series charts (supports intelligent datetime parsing with timezone elicitation) |
+
+**alert**: Full lifecycle management for SLO alert configurations
+
+| Operation | Description |
+|---|---|
+| `find_active` | Find active alert configurations |
+| `find` | Get alert configuration by ID |
+| `find_versions` | Get alert configuration versions |
+| `create` | Create alert configurations |
+| `update` | Update alert configurations |
+| `delete` | Delete alert configurations |
+| `enable` | Enable alert configurations |
+| `disable` | Disable alert configurations |
+| `restore` | Restore alert configuration to a version |
+
+**correction**: Manage error budget correction windows (planned downtime exclusions)
+
+| Operation | Description |
+|---|---|
+| `get_all` | List correction windows with filtering |
+| `get_by_id` | Get correction window by ID |
+| `create` | Create correction windows (with support for recurring correction windows with recurrence rules) |
+| `update` | Update correction windows |
+| `delete` | Delete correction windows |
 
 ### Example Prompts
 
@@ -811,6 +1049,23 @@ Get correction details for correction ID corr-456
 
 Track software releases and analyze their impact on application performance and stability.
 
+**Key Features:**
+- **Case-Insensitive Substring Filtering**: Easily search for releases using the `name_filter` parameter.
+- **Intelligent Timezone Handling**: Robust, automatic conversion of human-entered start times (e.g., with "IST", "UTC") into valid timestamps.
+- **Scope Definition**: Define scopes to link releases to specific applications and services.
+- **Impact Analysis**: Correlate deployment events with metrics, traces, and incidents.
+
+#### Resource Types:
+**releases**: CRUD operations for release tracking and deployment records
+
+| Operation | Description |
+|---|---|
+| `get_all_releases` | List all releases with pagination and optional time range filtering (operation="get_all_releases") |
+| `get_release` | Get release details by ID including applications, services, and scopes (operation="get_release") |
+| `create_release` | Create new release with associated applications and services (operation="create_release") |
+| `update_release` | Update existing release (operation="update_release") |
+| `delete_release` | Delete release (operation="delete_release") |
+
 ### Example Prompts
 
 #### Release Management
@@ -869,254 +1124,260 @@ Get statistics on latency evolution after the Checkout Service release compared 
 
 ### Capabilities
 
-Monitor mobile application performance, analyze user sessions, track crashes, and configure mobile app settings.
+Monitor mobile app monitoring data including session starts, HTTP requests, errors, custom beacons, and user sessions with advanced filtering and grouping.
 
-**Resource Types:**
-- **analyze**: Query mobile app beacon data with grouping or filtering
-- **catalog**: Get available metrics and tags for mobile app monitoring
-- **configuration**: Get mobile app configurations
-- **advanced_config**: Retrieve advanced configurations (geo-location, IP masking, geo rules)
-- **alert**: Get mobile app alert configurations
-- **session**: Session related operations. Retrieve paginated session replay action beacons by app ID and session ID, or retrieve all beacons (other than session replay beacons) for a session with session ID and timestamp
+**Key Features:**
+- **Flexible Beacon Support**: Complete coverage of mobile beacon types, including SESSION_START, VIEW_CHANGE, HTTP_REQUEST, CUSTOM, PERF, and DROP_BEACON.
+- **Tag Validation & Elicitation**: Catalog-backed validation of filter/group tags, guiding the LLM/user via elicitation if invalid tags are used.
+- **Response Summarization**: Summarizes payloads by 70-80% for high-speed, LLM-friendly interactions.
+- **Session Replay & Action Beacons**: Retrieve session-specific beacons or step-by-step action beacons for session replay debugging.
+
+#### Resource Types:
+
+**analyze**: Query mobile app beacon metrics — grouped/aggregated or individual beacon data
+
+| Operation | Description |
+|---|---|
+| `get_mobile_app_beacon_groups` | Get Mobile App Beacon Groups - grouped/aggregated beacon data |
+| `get_all_mobile_app_beacons` | Get Mobile App Beacons - individual beacon data with pagination |
+
+**catalog**: Access mobile app metric and tag catalogs for constructing valid queries
+
+| Operation | Description |
+|---|---|
+| `get_mobile_app_metric_catalog` | Get Mobile App Metrics Catalog |
+| `get_mobile_app_tag_catalog` | Get Mobile App Tag Catalog by beacon type and use case |
+
+**configuration**: List and get mobile app configurations (read-only; use Instana UI for modifications)
+
+| Operation | Description |
+|---|---|
+| `get_all` | Get all mobile apps |
+| `get` | Get mobile app by ID or name with automatic name resolution |
+
+**advanced_config**: Retrieve advanced mobile app settings — geo-location, IP masking, geo-mapping rules, and source map upload configs (read-only)
+
+| Operation | Description |
+|---|---|
+| `get_geo_config` | Get Geo-Location Configuration |
+| `get_ip_masking` | Get IP Masking Configuration |
+| `get_geo_rules` | Get Geo Mapping Rules |
+| `get_source_map_upload_config` | Get Source Map Upload Configuration |
+| `get_mobile_app_source_map_upload_config_by_id` | Get Source Map Upload Configuration by ID |
+
+**alert**: Query active and version-specific mobile app alert configurations (read-only)
+
+| Operation | Description |
+|---|---|
+| `find_active_mobile_app_alert_configs` | Get all active alert configurations for a mobile app |
+| `find_mobile_app_alert_config` | Get smart alert configuration by ID |
+
+**session**: Retrieve session beacons and paginated session replay action beacons
+
+| Operation | Description |
+|---|---|
+| `get_session_beacons` | Get all beacons for a session by session ID and timestamp |
+| `get_session_replay_action_beacons` | Get paginated session replay action beacons by mobile app ID and session ID |
 
 ### Example Prompts
-
-#### Session Replay
-
-```
-Get session replay action beacons for mobile app "app-123" and session "1d616527-2635-407f-89fc-de7136b66fb4"
-```
-
-```
-Show me the first 100 action beacons for session ID "abc-session-xyz" in the Robot Shop mobile app
-```
-
-```
-Retrieve all session replay beacons for session "session-456" using cursor-based pagination
-```
 
 #### Beacon Analysis
 
 ```
-Show me all session start beacons for the "Robot Shop" mobile app in the last hour
+Show me session start beacon counts grouped by view name for the Robot Shop mobile app in the last hour
 ```
 
 ```
-Get beacon count per mobile app grouped by view name for the last 24 hours
+Get average view change time by user model type for the Products view
 ```
 
 ```
-Analyze crash beacons for iOS devices in the last 7 days
+List all crash beacons from the last 24 hours grouped by crash group label
 ```
 
 ```
-Show me HTTP request beacons with response time greater than 2 seconds
-```
-
-#### Performance Metrics
-
-```
-What are the available metrics for mobile app monitoring?
-```
-
-```
-Get P95 latency for all views in the "Shopping App" mobile app
-```
-
-```
-Show me beacon count and average session duration grouped by device model
-```
-
-```
-Analyze performance metrics for the "Checkout" view across different mobile OS versions
+Get performance beacons for Android mobile app sessions where the platform is Android, grouped by performance subtypes
 ```
 
 #### Geographic Analysis
 
 ```
-Show me session distribution by country for the last 30 days
+Show me session start beacon counts grouped by country for the last week
+```
+
+#### View and Device Analysis
+
+```
+Compare session start times across Google Pixel 4XL, iPhone 7, and iPhone 13
 ```
 
 ```
-Get beacon count grouped by city for the "Delivery App"
+Show me android vs ios performance metrics for the products view
+```
+
+#### Configuration and Alerts
+
+```
+List all monitored mobile apps in Instana
 ```
 
 ```
-Analyze crash rates by geographic region
-```
-
-#### Device and Platform Analysis
-
-```
-Show me beacon distribution across iOS and Android platforms
+Show me all active alert configurations for mobile app ID "mobile-app-123"
 ```
 
 ```
-Get session count grouped by device manufacturer
+Get source map upload configuration details for mobile app "Robot Shop Mobile"
 ```
 
-```
-Analyze app version adoption rates across different devices
-```
-
-#### Configuration
+#### Session Replay
 
 ```
-List all mobile apps configured in Instana
+Get session replay action beacons for mobile app ID "i1IsNS7FQAegEljBTkNBMQ" and session ID "1d616527-2635-407f-89fc-de7136b66fb4"
 ```
-
-```
-Get configuration details for the "Robot Shop" mobile app
-```
-
-```
-Show me geo-location configuration for the mobile app
-```
-
-```
-Get IP masking settings for the "Shopping App"
-```
-
-#### Alert Management
-
-```
-Show me all active alert configurations for the "Robot Shop" mobile app
-```
-
-```
-Get details for mobile app alert configuration with ID "alert-123"
-```
-
-```
-List all alert configurations for mobile app ID "app-abc123"
-```
-
-**Important Notes:**
-- Always call `resource_type="catalog", operation="get_mobile_app_metric_catalog"` first to get valid metrics
-- Then call `resource_type="catalog", operation="get_mobile_app_tag_catalog"` to get valid tag names
-- Tag names MUST start with "mobileBeacon." (e.g., "mobileBeacon.mobileApp.name")
-- ALWAYS include `"entity": "NOT_APPLICABLE"` in every tag filter
-- Default beacon type is "SESSION_START"
 
 ---
 
-## 10. Maintenance Window Management
+## 10. Synthetic Monitoring
+
+**Tool Name:** `manage_synthetics`
+
+### Capabilities
+
+Monitor synthetic tests and locations including test configuration, playback results, metrics, and location health with advanced filtering and grouping.
+
+#### Resource Types:
+
+**catalog**: Access metric and tag catalogs for constructing valid synthetic queries
+
+| Operation | Description |
+|---|---|
+| `get_synthetic_catalog_metrics` | Get available metrics with supported aggregations for query planning |
+| `get_synthetic_tag_catalog` | Get valid tag names for filtering, grouping, and smart alerts |
+
+**metrics**: Retrieve one or more aggregated metrics for synthetic monitoring beacons with optional grouping and filtering
+
+| Operation | Description |
+|---|---|
+| `get_metrics_result` | Retrieve aggregated synthetic metrics grouped by location or test name |
+
+**settings**: Look up synthetic test configuration, location metadata, and datacenter fleet information
+
+| Operation | Description |
+|---|---|
+| `get_synthetic_test` | Get a synthetic test's full configuration by ID or name |
+| `get_synthetic_tests` | List synthetic tests with optional filtering by application, location, or credential |
+| `get_locations` | List all monitoring locations with type, geo, and capability metadata |
+| `get_location_by_id` | Get a single location by ID or name with automatic name resolution |
+| `get_all_datacenters` | Get all datacenter (Managed) locations with online count |
+
+**test_playback**: Retrieve per-run results, analytic summaries, location summaries, test health summaries, and detailed result files
+
+| Operation | Description |
+|---|---|
+| `get_synthetic_result` | Get aggregated playback metrics per test |
+| `get_synthetic_result_analytic` | Get the most recent result per test using LAST_VALUE analytic |
+| `get_synthetic_result_list` | Get individual test run results with raw status, errors, and timestamps |
+| `get_location_summary_list` | Get location-level summary metadata including last run time and PoP version |
+| `get_test_summary_list` | Get per-test success rates with per-location breakdown |
+| `get_synthetic_result_metadata` | Get available detail data types for a specific test result |
+| `get_synthetic_result_detail_data` | Get detail data file contents such as logs, HAR, or screenshots |
+
+### Example Prompts
+
+#### Test Configuration
+
+```
+List all synthetic tests configured in Instana
+```
+
+```
+Get the full configuration details of synthetic test named e2e-api-ScriptTest-automation
+```
+
+```
+Show me all synthetic tests for application id 6peoVq6pTcGGEvZY4fjkAg
+```
+
+```
+Get the full details of location named E2ETest PoP
+```
+
+#### Test Results and Health
+
+```
+Get the most recent status for every synthetic test and highlight any that are failing
+```
+
+```
+Give me the success rate summary for all the synthetic tests over the last 30 minutes
+```
+
+```
+Give me the sum of response times for synthetic tests grouped by location over the last 12 hours
+```
+
+```
+Show me the last 20 individual runs of test Test_SimplePing with timestamps, response times, and errors
+```
+
+#### Datacenter and Location Health
+
+```
+Show me all datacenter locations — how many are there and how many are currently Online?
+```
+
+```
+List all datacenters and for each one show the datacenterFlag from custom properties and how many tests are linked to it.
+```
+
+```
+Are any datacenters currently showing failures across all synthetic test types simultaneously — indicating a full location outage?
+```
+
+---
+
+## 11. Maintenance Windows
 
 **Tool Name:** `manage_maintenance_windows`
 
 ### Capabilities
 
-Comprehensive maintenance window lifecycle management for preventing false alerts during planned operational activities. Supports creation, modification, closure, and listing of maintenance windows with template support and optional ServiceNow integration.
+Create, modify, close, and list maintenance windows to suppress alerts during planned downtime.
 
-**Resource Types:**
-- **window**: Create, modify, close, and list maintenance windows
-- **templates**: Retrieve available maintenance window templates
+**Key Features:**
+- **Predefined Templates**: Fast creation using standardized templates, including `deployment`, `database_migration`, `infrastructure_upgrade`, `emergency`, and `routine`.
+- **ServiceNow Integration**: Optional integration to link maintenance windows with ServiceNow change request IDs (e.g. `CHG0012345`).
+- **Recurring Windows**: Full support for recurring windows via RFC 5545 RRULE expressions (e.g. daily, weekly recurrence).
+- **Bulk Creation**: Create maintenance windows for multiple applications or IMAP codes simultaneously.
 
-**Window Operations:**
-- `create`: Create a new maintenance window
-- `modify`: Modify an existing maintenance window
-- `close`: Close and document a maintenance window
-- `list_active`: List all currently active maintenance windows
-- `list_scheduled`: List all upcoming scheduled maintenance windows
-- `list_all`: List all maintenance windows (active, scheduled, and expired)
-- `list_expired`: List all expired/completed maintenance windows
-- `bulk_create`: Create maintenance windows for multiple applications at once
-- `validate`: Validate maintenance window parameters without creating
+#### Resource Types:
 
-**Template Operations:**
-- `get`: Retrieve all available maintenance window templates
+**window** Full lifecycle management of maintenance windows
 
-**Available Templates:**
-- `deployment`: Standard deployment window (60 minutes default)
-- `database_migration`: Extended database maintenance (180 minutes default)
-- `infrastructure_upgrade`: Infrastructure changes (240 minutes default)
-- `emergency`: Emergency maintenance (120 minutes default)
-- `routine`: Routine maintenance activities (30 minutes default)
+| Operation | Description |
+|---|---|
+| `create` | Create maintenance windows with template support |
+| `modify` | Modify existing maintenance windows |
+| `close` | Close and document completed maintenance windows |
+| `bulk_create` | Bulk create maintenance windows for multiple IMAP codes |
+| `list_active` | List active maintenance windows |
+| `list_scheduled` | List scheduled maintenance windows |
+| `list_expired` | List expired maintenance windows |
+| `list_all` | List all maintenance windows |
+| `validate` | Validate maintenance window parameters without creating |
+
+**templates**: Retrieve pre-defined maintenance window templates
+
+| Operation | Description |
+|---|---|
+| `get` | Retrieve all available maintenance window templates |
 
 ### Example Prompts
-
-#### Creating Maintenance Windows
-
-```
-Create a maintenance window for application EAL-012471 starting in 2 hours for 120 minutes with reason "Database migration"
-```
-
-```
-Schedule a deployment maintenance window for IMAP code EAL-012471 starting at 2026-06-01T02:00:00Z for 2 hours
-```
-
-```
-Create a maintenance window using the deployment template for application EAL-012471 starting tomorrow at 10 AM for 1 hour
-```
-
-```
-Schedule an emergency maintenance window for EAL-012471 starting now for 90 minutes with change request CHG0012345
-```
-
-#### Recurring Maintenance Windows
-
-```
-Create a recurring maintenance window for EAL-012471 every day at 2 AM for 30 minutes until June 30th
-```
-
-```
-Schedule a weekly maintenance window for ORZ-000012 every Sunday at midnight for 2 hours
-```
-
-```
-Create a monthly maintenance window on the first Monday of each month for application EAL-012471
-```
-
-#### Bulk Operations
-
-```
-Create maintenance windows for applications EAL-012471, ORZ-000012, and MUR-123456 starting in 1 hour for 2 hours
-```
-
-```
-Schedule coordinated deployment windows for IMAP codes EAL-012471 and ORZ-000012 starting at 2026-06-01T02:00:00Z
-```
-
-```
-Create maintenance windows for multiple applications using the infrastructure_upgrade template
-```
-
-#### Modifying Maintenance Windows
-
-```
-Extend maintenance window mw-789 by 60 minutes
-```
-
-```
-Modify maintenance window mw-789 to end at 2026-06-01T06:00:00Z
-```
-
-```
-Update maintenance window mw-789 with reason "Extended due to complications"
-```
-
-```
-Change the recurrence of maintenance window mw-789 to run every 2 days
-```
-
-#### Closing Maintenance Windows
-
-```
-Close maintenance window mw-789
-```
-
-```
-Close maintenance window mw-789 with completion notes "Migration completed successfully"
-```
-
-```
-Close maintenance window mw-789 with notes "Completed with issues - rollback performed"
-```
 
 #### Listing Maintenance Windows
 
 ```
-Show me all active maintenance windows
+Show me all currently active maintenance windows
 ```
 
 ```
@@ -1124,122 +1385,39 @@ List all scheduled maintenance windows for application EAL-012471
 ```
 
 ```
-Show me all maintenance windows (active, scheduled, and expired) for IMAP code EAL-012471
+Show me all expired maintenance windows from the last week
+```
+
+#### Creating and Managing Windows
+
+```
+Create a 2-hour maintenance window for EAL-012471 starting at 2026-06-01 10:00 AM UTC with reason "Scheduled deployment"
 ```
 
 ```
-List all expired maintenance windows for application EAL-012471
+Create a recurring daily maintenance window for ORZ-000012 starting at midnight for 30 minutes
 ```
 
 ```
-Show me all currently active maintenance windows across all applications
-```
-
-#### Template Management
-
-```
-Show me all available maintenance window templates
+Modify maintenance window mw-789 to extend it by 60 minutes
 ```
 
 ```
-What are the predefined maintenance window templates?
+Close maintenance window mw-789 with the note "Completed successfully, no issues found"
+```
+
+#### Bulk Operations and Templates
+
+```
+Create maintenance windows for EAL-012471 and ORZ-000012 simultaneously for the upcoming infrastructure upgrade
 ```
 
 ```
-Get details about maintenance window templates including default durations
-```
-
-#### Validation
-
-```
-Validate maintenance window parameters for application EAL-012471 starting in 2 hours for 120 minutes
+What maintenance window templates are available?
 ```
 
 ```
-Check if I can create a maintenance window for EAL-012471 using the deployment template
-```
-
-**Important Notes:**
-- Start times can be specified as Unix timestamps (milliseconds), ISO strings, or natural language (e.g., "in 2 hours", "tomorrow at 10 AM")
-- Duration can be specified in minutes, hours, or days using `duration_minutes`, `duration_hours`, or `duration_days`
-- Templates provide predefined configurations for common maintenance scenarios
-- Recurring windows use RFC 5545 RRULE format (e.g., "FREQ=DAILY;INTERVAL=1")
-- ServiceNow integration is optional and requires configuration
-- Use `imap_code` (e.g., "EAL-012471") or `application_id` to identify applications
-- Bulk operations support comma-separated lists or JSON arrays
-
----
-
-## 11. Synthetic Monitoring
-
-**Tool Name:** `manage_synthetics`
-
-### Capabilities
-
-Manage and query synthetic monitoring tests, locations, metrics, and test playback results.
-
-**Resource Types:**
-- **catalog**: Discover valid metric IDs (`get_synthetic_catalog_metrics`) and tag names (`get_synthetic_tag_catalog`) before building queries
-- **metrics**: Retrieve aggregated response times and success rates grouped by location or test name
-- **settings**: List and look up tests and locations with automatic name resolution; identify datacenter (Managed) vs self-hosted (Private) PoPs
-- **test_playback**: Per-run raw results, `LAST_VALUE` analytics, per-location success rate summaries, and detail file downloads (LOGS, HAR, screenshots)
-
-### Example Prompts
-
-#### Catalog Discovery
-
-```
-What metrics are available for synthetic monitoring?
-```
-
-```
-Show me available tag names for filtering synthetic tests
-```
-
-#### Metrics
-
-```
-Get average response times for all synthetic tests over the last hour grouped by test name
-```
-
-```
-Show me success rates for synthetic tests in the last 24 hours grouped by location
-```
-
-#### Settings
-
-```
-List all synthetic tests configured in Instana
-```
-
-```
-Get details for the synthetic test named "Login Flow"
-```
-
-```
-Show me all synthetic monitoring locations and their status
-```
-
-```
-Find the synthetic location ID for "ap-south-1(Mumbai)"
-```
-
-#### Test Playback
-
-```
-Get the latest test results for all synthetic tests using LAST_VALUE analytics
-```
-
-```
-Show me per-location success rate summaries for synthetic tests in the last 30 minutes
-```
-
-```
-Get raw playback results for synthetic test ID abc123 and result ID res456
-```
-
-```
-Download the HAR file for synthetic test run abc123, result res456
+Create a deployment maintenance window for EAL-012471 with change request ID CHG0012345
 ```
 
 ---
