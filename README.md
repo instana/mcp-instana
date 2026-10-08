@@ -633,7 +633,8 @@ uv sync
 | [Claude Desktop](./docs/mcp-clients/claude-desktop.md) |  `streamable http`, `stdio` | 
 | [Kiro IDE](./docs/mcp-clients/kiro-ide.md)| `streamable http`, `stdio` |
 | [Kiro CLI](./docs/mcp-clients/kiro-cli.md)| `streamable http`, `stdio` |  
-| [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` | 
+| [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` |
+| [Copilot CLI](./docs/mcp-clients/copilot-cli.md) | `streamable http`, `stdio` |
 | [Mistral AI](./docs/mcp-clients/mistral-ai.md) | `streamable http` |
 
 ### Connecting to Multiple Instana MCP Servers
