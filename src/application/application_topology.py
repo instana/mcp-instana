@@ -47,7 +47,7 @@ class ApplicationTopologyMCPTools(BaseInstanaClient):
             # Create an API client with this configuration
             api_client = ApiClient(configuration=configuration)
 
-            # Initialize the Instana SDK's ApplicationTopologyMCPTools with our configured client
+            # Initialize the Instana SDK's ApplicationTopologyApi with the configured client
             self.topology_api = ApplicationTopologyApi(api_client=api_client)
 
         except Exception as e:

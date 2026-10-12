@@ -22,7 +22,7 @@ try:
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
-    logger.error("Failed to import event resources API", exc_info=True)
+    logger.error("Failed to import Events API", exc_info=True)
     raise
 
 from mcp.types import ToolAnnotations
@@ -209,7 +209,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
         Process time range parameters to get standardized from_time and to_time values.
 
-        DEPRECATED: This method is kept for backward compatibility but should be replaced
+        DEPRECATED: This method is retained for backward compatibility and should be replaced
         with _convert_time_range_to_window_size for API calls.
 
         Args:
@@ -603,7 +603,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             # Use the raw response path directly to avoid Pydantic model
             # validation errors in the SDK's ServiceEventResult model, which
             # rejects the flat primitive shapes the API actually returns for
-            # fields like `metrics`, `recentEvents`, and `probableCause.found`.
+            # fields such as `metrics`, `recentEvents`, and `probableCause.found`.
             try:
                 response_data = await sdk_call_with_keepalive(
                     call_sdk_fn(api_client.get_event_without_preload_content, event_id=event_id),

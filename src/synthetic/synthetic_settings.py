@@ -44,7 +44,7 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Get a synthetic test by ID or name, returning its id, label, and description.
+        Get a synthetic test by ID or name, returning its ID, label, and description.
 
         If test_name is provided instead of test_id, fetches all tests and resolves
         the name to an ID before retrieving the full test record.
@@ -308,13 +308,13 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
 
         Args:
             location_id: The location ID (e.g. "BeeOPKtHGtIOBvaPEMpH")
-            location_name: The location label or displayLabel. On no match, the error
+            location_name: The location label or displayLabel. If no match is found, the error
                 response includes available_location_names with id, label, and displayLabel
                 for every known location.
             ctx: The MCP context (optional)
 
         Returns:
-            Dictionary with the full location record, or error information.
+            Dictionary with the full location record, or information about an error.
         """
         try:
             if not location_id and not location_name:

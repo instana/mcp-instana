@@ -32,10 +32,10 @@ from src.core.utils import (
 logger = logging.getLogger(__name__)
 
 class ActionCatalogMCPTools(BaseInstanaClient):
-    """Tools for application alerts in Instana MCP."""
+    """Tools for the automation action catalog in Instana MCP."""
 
     def __init__(self, read_token: str, base_url: str):
-        """Initialize the Application Alert MCP tools client."""
+        """Initialize the Automation Action Catalog MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
     @staticmethod
@@ -45,7 +45,7 @@ class ActionCatalogMCPTools(BaseInstanaClient):
         """
         Parse and validate the raw payload for get_action_matches.
 
-        Returns the parsed dict on success, or a (elicitation_dict,) 1-tuple on failure
+        Returns the parsed dictionary on success, or a one-element tuple containing an elicitation dictionary on failure.
         so callers can distinguish a parse error from a valid empty dict.
         """
         if not payload:

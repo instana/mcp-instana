@@ -40,7 +40,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
     """Tools for infrastructure metrics in Instana MCP."""
 
     def __init__(self, read_token: str, base_url: str):
-        """Initialize the Infrastructure Analyze MCP tools client."""
+        """Initialize the Infrastructure Metrics MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
     # @register_as_tool(...)  # Disabled for future reference
@@ -64,7 +64,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
 
         Args:
             metrics: List of metrics to retrieve with their aggregations
-            snapshot_ids: Snapshot ID to retrieve metrics for
+            snapshot_ids: Snapshot ID or IDs for which to retrieve metrics
             time_frame: Dictionary with 'from' and 'to' timestamps in milliseconds
                 Example: {"from": 1617994800000, "to": 1618081200000}
             offline: Whether to include offline snapshots.
@@ -73,7 +73,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
             ctx: The MCP context (optional)
 
         Returns:
-            Dictionary containing application metrics data or error information
+            Dictionary containing infrastructure metrics data or error information
         """
 
         try:
@@ -177,7 +177,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
         """
         Check if required parameters are missing and create elicitation request (Two-Pass).
 
-        Infrastructure metrics require plugin and query parameters.
+        Infrastructure metrics require metrics, plugin, and query parameters.
 
         Args:
             metrics: Metrics list if provided

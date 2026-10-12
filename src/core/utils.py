@@ -113,7 +113,7 @@ def _build_log_prefix(
     return "[%s]" % operation_name
 
 
-_PREVIEW = 500  # max chars shown for any response body preview
+_PREVIEW = 500  # Maximum number of characters shown in a response-body preview.
 
 
 def _json_preview(obj: Any) -> str:
@@ -242,7 +242,7 @@ async def sdk_call_with_keepalive(
                         logger_name=operation_name,
                     )
             except Exception:
-                pass  # Never let keepalive errors surface
+                pass  # Never allow keepalive errors to propagate.
 
     async def _run_with_task_group() -> None:
         """Run SDK + keepalive concurrently, unwrapping single-exception groups."""
@@ -339,7 +339,7 @@ def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, 
 # Default charset for response decoding
 DEFAULT_CHARSET = 'utf-8'
 
-# Import for getting package version from meta data rather than server.py
+# Import for getting package version from metadata rather than server.py
 try:
     from importlib.metadata import version
     __version__ = version("mcp-instana")
@@ -357,7 +357,7 @@ def register_as_tool(title=None, annotations=None, description=None):
     Args:
         title: Title for the MCP tool (optional, defaults to function name)
         annotations: ToolAnnotations for the MCP tool (optional)
-        description: Explicit description for the tool (optional, uses docstring if not provided)
+        description: Explicit description for the tool (optional, uses the docstring when no description is provided)
     """
     def decorator(func):
         # Get function metadata

@@ -15,7 +15,7 @@ class SLOReportPrompts:
         exclude_correction_id: Optional[list] = None,
         include_correction_id: Optional[list] = None,
     ) -> str:
-        """Generate Service Levels report for a specific SLO configuration"""
+        """Generate a Service Level Objective report for a specific SLO configuration"""
         return f"""
         Get SLO report:
         - SLO ID: {slo_id}

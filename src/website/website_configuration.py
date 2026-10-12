@@ -234,7 +234,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """ Create a new website. """
+        """Create a new website."""
 
         if not name:
             return {"error": "Website name is required for create operation"}
@@ -250,7 +250,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """ Delete a website. """
+        """Delete a website."""
 
         if not website_id:
             return {"error": "website_id is required for delete operation"}
@@ -625,7 +625,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                 logger.debug(f"Error importing GeoLocationConfiguration: {e}")
                 return {"error": f"Failed to import GeoLocationConfiguration: {e!s}"}
 
-            # Create an GeoLocationConfiguration object from the request body
+            # Create a GeoLocationConfiguration object from the request body
             try:
                 query_params = {}
 
@@ -730,7 +730,7 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             Dictionary containing updated configuration or error information
         """
         try:
-            logger.debug("update_website_geo_location_configuration called")
+            logger.debug("update_website_ip_masking_configuration called")
 
             # Parse the payload
             if isinstance(payload, str):

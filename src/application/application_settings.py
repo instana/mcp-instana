@@ -3,7 +3,7 @@ Application Settings MCP Tools Module
 
 This module provides application settings-specific MCP tools for Instana monitoring.
 
-The API endpoints of this group provides a way to create, read, update, delete (CRUD) for various configuration settings.
+The API endpoints in this group provide a way to create, read, update, and delete (CRUD) for various configuration settings.
 """
 
 import ast
@@ -860,7 +860,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                                       api_client=None,
                                       resource_type: Optional[str] = None,
                                       tool_name: Optional[str] = None) -> Dict[str, Any]:
-        """Create or update endpoint configuration for a service."""
+        """Create or update an endpoint configuration for a service."""
         try:
             if isinstance(payload, str):
                 try:

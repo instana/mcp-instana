@@ -81,7 +81,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         Called by the smart router tool.
 
         Args:
-            operation: Operation to perform (get_all_traces, get_trace_details)
+            operation: Operation to perform: get_all_traces, get_trace_details or get_trace_groups
             params: Dictionary containing operation-specific parameters
             ctx: MCP context
 

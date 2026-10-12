@@ -30,7 +30,7 @@ try:
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
-    logger.error("Failed to import mobile app alert configuration API", exc_info=True)
+    logger.error("Failed to import website app alert configuration API", exc_info=True)
     raise
 
 # Configure logger for this module

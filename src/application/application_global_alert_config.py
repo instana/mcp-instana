@@ -27,14 +27,14 @@ try:
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
-    logger.error("Failed to import application alert configuration API", exc_info=True)
+    logger.error("Failed to import global application alert configuration API", exc_info=True)
     raise
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
 class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
-    """Tools for application alerts in Instana MCP."""
+    """Tools for global application alert configurations in the Instana MCP."""
 
     def __init__(self, read_token: str, base_url: str):
         """Initialize the Application Alert MCP tools client."""
@@ -1044,7 +1044,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                     if isinstance(app_config, dict) and 'services' not in app_config:
                         app_config['services'] = {}
 
-            # Create an GlobalApplicationsAlertConfig object from the request body
+            # Create a GlobalApplicationsAlertConfig object from the request body
             # NOTE: must use from_dict() (not model_validate()) so that discriminated-union
             # fields like threshold/rules[*].thresholds are resolved via their from_dict()
             # dispatcher, which preserves subclass fields (e.g. StaticThreshold.value).
@@ -1217,14 +1217,14 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                     if isinstance(app_config, dict) and 'services' not in app_config:
                         app_config['services'] = {}
 
-            # Create an GlobalApplicationsAlertConfig object from the request body
+            # Create a GlobalApplicationsAlertConfig object from the request body
             # NOTE: must use from_dict() (not model_validate()) — same reason as create above.
             try:
                 logger.debug(f"Creating GlobalApplicationsAlertConfig with params: {request_body}")
                 config_object = GlobalApplicationsAlertConfig.from_dict(request_body)
                 logger.debug("Successfully created config object")
             except Exception as e:
-                logger.debug(f"Error creating ApplicationAlertConfig: {e}")
+                logger.debug(f"Error creating GlobalApplicationAlertConfig: {e}")
                 return {"error": f"Failed to create config object: {e!s}"}
 
             # Call the update_global_application_alert_config method from the SDK

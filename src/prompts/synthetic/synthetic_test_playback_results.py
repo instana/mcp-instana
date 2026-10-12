@@ -72,7 +72,7 @@ class SyntheticTestPlaybackResultsPrompts:
         3. For each datacenter: collect locationStatusList entries where locationType="Managed"; PASS if ALL have successRate=1.0, FAIL if ANY < 1.0, UNKNOWN if no entries
         4. fleet_health_score = count(PASS) / N x 100 - report headline score, failing datacenters (with lowest successRate), passing datacenters, and unknowns
 
-        Note: Each datacenter is binary PASS or FAIL — do NOT average successRates or use sum(successRuns)/sum(totalTestRuns).
+        Note: Each datacenter is PASS, FAIL, or UNKNOWN — do NOT average successRates or use sum(successRuns)/sum(totalTestRuns).
         """
 
     @auto_register_prompt
