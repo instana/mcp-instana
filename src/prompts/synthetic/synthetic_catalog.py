@@ -15,9 +15,9 @@ class SyntheticCatalogPrompts:
     @auto_register_prompt
     @staticmethod
     def get_synthetic_tag_catalog() -> str:
-        """Retrieve synthetic monitoring tag names filtered by beacon type and use case"""
+        """Retrieve all available synthetic monitoring tag names"""
         return """
-        Get complete list of all synthetic monitoring tags available.
+        Get complete list of all synthetic monitoring tags.
         """
 
     @classmethod

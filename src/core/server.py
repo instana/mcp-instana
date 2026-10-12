@@ -1,7 +1,7 @@
 """
-Standalone MCP Server for Instana Events and Infrastructure Resources
+Standalone MCP server for Instana
 
-This module provides a dedicated MCP server that exposes Instana MCP Server.
+This module provides a dedicated MCP server that exposes Instana monitoring tools.
 Supports stdio and Streamable HTTP transports.
 """
 

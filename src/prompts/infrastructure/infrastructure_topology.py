@@ -17,7 +17,7 @@ class InfrastructureTopologyPrompts:
         return f"""
         Get related hosts:
         - Snapshot ID: {snapshot_id}
-        - To time: {to_time or '1 hour'}
+        - To time: {to_time or 'current time'}
         - Window size: {window_size or '1 hour'}
         """
 
@@ -25,7 +25,7 @@ class InfrastructureTopologyPrompts:
     @staticmethod
     def get_topology(include_data: Optional[bool] = False) -> str:
         """Retrieve the complete infrastructure topology"""
-        return f"Get complete topology with include_data: {include_data or 'False'}"
+        return f"Get the complete infrastructure topology with include_data set to {include_data or 'False'}"
 
     @classmethod
     def get_prompts(cls):

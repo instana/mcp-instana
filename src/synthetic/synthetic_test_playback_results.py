@@ -45,7 +45,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     @staticmethod
     def _normalize_tag_filter_key(payload: Any) -> Any:
         """
-        Normalise the TagFilterExpression key in a payload dict.
+        Normalise the TagFilterExpression key in a payload dictionary.
 
         The SDK model uses 'tagFilterExpression' (lowercase t) as the JSON alias,
         but callers (including LLM-generated tool calls) often pass
@@ -671,7 +671,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
             testresultid: ID of the specific test result record
             detail_type: Type of the detail file to retrieve. Valid values: "HAR", "IMAGES", "LOGS", "SUBTRANSACTIONS", "VIDEOS"
             name: Name of a specific detail file when multiple files exist for the same
-                type (optional, most relevant when type="LOGS")
+                type (optional, most relevant when detail_type="LOGS")
             start_time: Start timestamp in milliseconds (optional)
             ctx: The MCP context (optional)
 
@@ -687,7 +687,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
 
             if not detail_type:
                 logger.warning("[get_synthetic_result_detail_data] Missing required param: detail_type")
-                return {"error": "'type' parameter is required. Valid values: 'HAR', 'IMAGES', 'LOGS', 'SUBTRANSACTIONS', 'VIDEOS'"}
+                return {"error": "'detail_type' parameter is required. Valid values: 'HAR', 'IMAGES', 'LOGS', 'SUBTRANSACTIONS', 'VIDEOS'"}
 
             # Use without_preload_content to bypass Pydantic validation
             response = await sdk_call_with_keepalive(

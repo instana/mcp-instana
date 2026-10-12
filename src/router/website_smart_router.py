@@ -85,7 +85,7 @@ Resource Types:
     - "catalog": Get available metrics and tags for website monitoring
     - "configuration": Get website configurations
     - "advanced_config": Retrieve advanced configurations (geo-location, IP masking, geo rules) - READ ONLY
-    - "alert": Get mobile app alert configurations
+    - "alert": Get website alert configurations
 
 CRITICAL WORKFLOW:
     BEFORE calling analyze operations, you MUST call get_tag_catalog to get valid tag names.
@@ -182,7 +182,7 @@ Examples:
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """Unified Instana website resource manager for beacon monitoring, catalog, and configuration operations."""
+        """Unified Instana website resource manager for beacon monitoring, catalog, configuration, advanced configuration, and alert operations."""
 
         try:
             logger.debug(f"Website Router: resource_type={resource_type}, operation={operation}")

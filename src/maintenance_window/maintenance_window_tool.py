@@ -252,13 +252,16 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             {
                 "operation": str,
                 "status": "success" | "error",
-                "window_id": str (for create operations),
-                "details": Dict[str, Any],
+                "details": {
+                    "window_id": str,  # present for create operations
+                    ...
+                },
                 "message": str
             }
 
         Raises:
-            ValueError: If required parameters are missing or invalid
+            No exceptions are raised. All errors are returned as dicts
+            with an "error" key (or "elicitation_needed" for missing params).
 
         Examples:
             # New style with params dict (recommended)

@@ -8,8 +8,10 @@ version = "1.0.3"
 description = "MCP server for Instana"
 authors = [
     {name = "Jay Sharma", email = "Jay.Sharma3@ibm.com"},
-    {name = "Riya Kumari", email = "Riya.Kumari3@ibm.com"},
-    {name = "Niyatha V S", email = "Niyatha.V.S1@ibm.com"}
+    {name = "Niyatha V S", email = "Niyatha.V.S1@ibm.com"},
+    {name = "Sunjit Tara", email = "sunjit.tara@us.ibm.com"},
+    {name = "Nithin Thomas", email = "Nithin.Thomas2@ibm.com"},
+    {name = "Sachin Govind", email = "Sachin.Govind@ibm.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10,<3.15"

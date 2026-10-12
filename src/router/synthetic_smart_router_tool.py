@@ -192,7 +192,7 @@ Examples:
         params: Optional[Dict[str, Any]] = None,
         ctx: Optional[Context] = None
     ) -> Dict[str, Any]:
-        """Unified Instana synthetic resource manager for catalog, metrics, and settings operations."""
+        """Unified Instana synthetic resource manager for catalog, metrics, settings, and test playback operations."""
 
         try:
             logger.debug("[manage_synthetics] resource_type=%s, operation=%s", resource_type, operation)

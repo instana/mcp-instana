@@ -13,7 +13,7 @@ class WebsiteAlertPrompts:
         alert_ids: Optional[List[str]] = None
     ) -> str:
         """
-        Retrieve all alert configurations for a specific website.
+        Retrieve all active alert configurations for a specific website.
 
         Use this to fetch all alert configurations associated with a website,
         optionally filtered by specific alert IDs.
