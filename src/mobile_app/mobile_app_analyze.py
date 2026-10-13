@@ -950,6 +950,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             "rooted", "viewportWidth", "viewportHeight",
             # Trace correlation
             "backendTraceId", "parentBeaconId",
+            # Custom event metadata (user-defined key/value pairs — primary
+            # payload of CUSTOM beacons)
+            "meta",
             # Other
             "batchSize", "bytesIngested", "agentVersion"
         ]
