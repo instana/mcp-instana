@@ -177,6 +177,64 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
     def test_summarize_beacons_non_dict(self):
         self.assertEqual(self.client._summarize_beacons_response(["x"]), ["x"])
 
+    def test_convert_tag_filter_flat_and_expression(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "mobileBeacon.view.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Home"},
+                {"type": "TAG_FILTER", "name": "mobileBeacon.customEvent.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "my_event"},
+            ],
+        })
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+
+    def test_convert_tag_filter_rejects_key_in_single_filter(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "TAG_FILTER", "name": "mobileBeacon.meta", "key": "myKey",
+            "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "some_value",
+        })
+        self.assertIsInstance(result, dict)
+        self.assertIn("'key'", result["error"])
+
+    def test_convert_tag_filter_rejects_key_in_expression_element(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "mobileBeacon.meta", "key": "myKey", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "some_value"},
+            ],
+        })
+        self.assertIsInstance(result, dict)
+        self.assertIn("'key'", result["error"])
+
+    def test_convert_tag_filter_rejects_or_operator(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "EXPRESSION", "logicalOperator": "OR",
+            "elements": [
+                {"type": "TAG_FILTER", "name": "mobileBeacon.view.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Home"},
+            ],
+        })
+        self.assertIsInstance(result, dict)
+        self.assertIn("OR", result["error"])
+
+    def test_convert_tag_filter_rejects_nested_expression(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "EXPRESSION", "logicalOperator": "AND",
+            "elements": [{"type": "EXPRESSION", "logicalOperator": "OR", "elements": []}],
+        })
+        self.assertIsInstance(result, dict)
+        self.assertIn("error", result)
+
+    def test_convert_tag_filter_rejects_unknown_type(self):
+        result = self.client._convert_tag_filter_to_deprecated({"type": "SOMETHING_ELSE"})
+        self.assertIsInstance(result, dict)
+        self.assertIn("error", result)
+
+    def test_convert_tag_filter_empty_expression_is_noop(self):
+        result = self.client._convert_tag_filter_to_deprecated({
+            "type": "EXPRESSION", "logicalOperator": "AND", "elements": [],
+        })
+        self.assertEqual(result, [])
+
     async def test_get_all_mobile_app_beacons_success(self):
         payload = {
             "totalHits": 1,
