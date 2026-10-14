@@ -50,7 +50,6 @@ You can directly create or update `.vscode/mcp.json` with the following configur
 
 Create `.vscode/mcp.json` in your project root:
 
-**Option 1: Using environment variables in config:**
 ```json:.vscode/mcp.json
 {
   "servers": {
@@ -66,27 +65,10 @@ Create `.vscode/mcp.json` in your project root:
 }
 ```
 
-**Option 2: Using --env flag (alternative method):**
-```json:.vscode/mcp.json
-{
-  "servers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": [
-        "--transport", "stdio",
-        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
-        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
-      ]
-    }
-  }
-}
-```
-
 **Using Development Installation:**
 
 Create `.vscode/mcp.json` in your project root:
 
-**Option 1: Using environment variables in config:**
 ```json:.vscode/mcp.json
 {
   "servers": {
@@ -102,25 +84,6 @@ Create `.vscode/mcp.json` in your project root:
         "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
         "INSTANA_API_TOKEN": "your_instana_api_token"
       }
-    }
-  }
-}
-```
-
-**Option 2: Using --env flag (alternative method):**
-```json:.vscode/mcp.json
-{
-  "servers": {
-    "Instana MCP Server": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/absolute/path/to/your/project/mcp-instana",
-        "run",
-        "src/core/server.py",
-        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
-        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
-      ]
     }
   }
 }

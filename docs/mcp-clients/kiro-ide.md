@@ -40,7 +40,6 @@ mcp-instana --transport streamable-http
 
 ### Stdio Mode
 
-**Option 1: Using environment variables in config:**
 ```json
 {
   "mcpServers": {
@@ -51,22 +50,6 @@ mcp-instana --transport streamable-http
         "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
         "INSTANA_API_TOKEN": "your_instana_api_token"
       }
-    }
-  }
-}
-```
-
-**Option 2: Using --env flag (alternative method):**
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": [
-        "--transport", "stdio",
-        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
-        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
-      ]
     }
   }
 }
