@@ -27,14 +27,7 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, stream_filter_events, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -1045,22 +1038,41 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            # _parse_events_response (json.loads on potentially 30k+ events) and
-            # _optimize_and_limit (per-event dict building loop) are synchronous
-            # CPU-bound work.  Running them directly on the event loop freezes the
-            # entire async scheduler — no other requests, log lines, or keepalives
-            # can progress until they complete.  Offload to a worker thread so the
+            if response_data.status != 200:
+                raise ValueError(f"HTTP {response_data.status}")
+
+            # Stream-parse the response one object at a time, applying post-API
+            # filters per object and discarding non-matching items immediately.
+            # Peak memory is O(chunk_size + max_events × avg_item_size) rather
+            # than O(full_response_body).
+            #
+            # The work is CPU-bound synchronous I/O (urllib3 .read calls +
+            # json.JSONDecoder.raw_decode).  Offload to a worker thread so the
             # event loop stays responsive throughout.
-            result, optimized = await anyio.to_thread.run_sync(
-                functools.partial(self._parse_and_optimize, response_data, extracted),
+            has_filters = self._has_active_filters(extracted)
+
+            def _filter_fn(obj):
+                if not isinstance(obj, dict):
+                    return False
+                return not has_filters or self._event_matches_filters(obj, extracted)
+
+            matched, total_seen = await anyio.to_thread.run_sync(
+                functools.partial(
+                    stream_filter_events,
+                    response_data,
+                    _filter_fn,
+                    extracted["max_events"],
+                ),
                 abandon_on_cancel=True,
             )
+
+            optimized = [self._optimize_event_data(event) for event in matched]
 
             return {
                 "events": optimized,
                 "events_returned": len(optimized),
-                "total_events": len(result),
-                "time_range": time_params.get("human_readable", "N/A")
+                "total_events": total_seen,
+                "time_range": time_params.get("human_readable", "N/A"),
             }
 
         except Exception as e:
@@ -1134,48 +1146,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 + "\n".join(f"  - {e}" for e in errors)
             ),
         }
-
-    def _parse_and_optimize(self, response_data, extracted):
-        """Parse HTTP response and optimize events in a single thread-safe call.
-
-        Designed to be called via ``anyio.to_thread.run_sync`` so that the
-        CPU-bound json.loads + per-event dict building never blocks the event loop.
-
-        Returns:
-            Tuple of (raw_events_list, optimized_events_list).
-        """
-        result = self._parse_events_response(response_data)
-        optimized = self._optimize_and_limit(result, extracted, extracted["max_events"])
-        return result, optimized
-
-    def _parse_events_response(self, response_data):
-        if response_data.status != 200:
-            raise ValueError(f"HTTP {response_data.status}")
-
-        text = decode_response(response_data)
-
-        if not text:
-            return []
-
-        try:
-            result = json.loads(text)
-        except json.JSONDecodeError as exc:
-            # The body was truncated or malformed.  A simple rfind("}") cannot
-            # reliably find a real object boundary — it would match "}" inside
-            # string values and produce different malformed JSON.  Return an
-            # empty list with a warning instead of risking a misleading result.
-            logger.warning("[get_events] Could not parse response as JSON: %s", exc)
-            return []
-
-        if not isinstance(result, list):
-            return []
-
-        return result
+    
     def _has_active_filters(self, f):
         """Return True if any post-API filter is active."""
         return any([
             f["entity_type"], f["state"], f["entity_name"], f["entity_label"],
-            f["problem"], f["severity"], f["query"], f["rca"] is not None
+            f["problem"], f["severity"], f["query"], f["event_specification_id"],
+            f["rca"] is not None
         ])
 
     def _event_matches_filters(self, event, f):

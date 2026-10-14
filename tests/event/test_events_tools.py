@@ -88,6 +88,34 @@ def create_agent_monitoring_events_client(read_token: str, base_url: str):
             base_url=base_url,
         )
 
+def make_streaming_response(body: bytes, status: int = 200):
+    """Return a mock HTTPResponse whose .read(n) yields chunks like a real stream.
+
+    stream_filter_events calls response.read(chunk_size) rather than response.data,
+    so tests must provide a mock that responds to .read() correctly.
+    """
+    buf = bytearray(body)
+    pos = [0]  # mutable closure cell
+
+    mock = MagicMock()
+    mock.status = status
+    mock.headers = {}
+
+    def _read(n=-1):
+        if pos[0] >= len(buf):
+            return b""
+        if n < 0:
+            chunk = bytes(buf[pos[0]:])
+            pos[0] = len(buf)
+        else:
+            chunk = bytes(buf[pos[0]:pos[0] + n])
+            pos[0] += len(chunk)
+        return chunk
+
+    mock.read = _read
+    return mock
+
+
 class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
     """Test the AgentMonitoringEventsMCPTools class"""
 
@@ -1071,9 +1099,7 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *args: datetime.fromtimestamp(ts))
 
         # Prepare API response with entityType at root level
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data.decode = MagicMock(return_value='''[
+        body = b'''[
             {
                 "eventId": "event1",
                 "eventType": "incident",
@@ -1088,8 +1114,8 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
                 "entityType": "host",
                 "start": 900000
             }
-        ]''')
-
+        ]'''
+        mock_response = make_streaming_response(body)
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(
@@ -1674,35 +1700,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertTrue(result.get("elicitation_needed"))
         self.assertTrue(any("string" in e for e in result["api_error"]))
 
-    def test_parse_events_response_success(self):
-        """Should parse a 200 JSON list response."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'[{"eventId": "e1"}, {"eventId": "e2"}]'
-
-        result = self.client._parse_events_response(mock_response)
-
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["eventId"], "e1")
-
-    def test_parse_events_response_non_200_raises(self):
-        """Non-200 status should raise ValueError."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-
-        with self.assertRaises(ValueError):
-            self.client._parse_events_response(mock_response)
-
-    def test_parse_events_response_non_list_returns_empty(self):
-        """If JSON body is not a list, return empty list."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'{"key": "value"}'
-
-        result = self.client._parse_events_response(mock_response)
-
-        self.assertEqual(result, [])
-
     def test_matches_entity_type_case_insensitive(self):
         """Entity type matching should be case-insensitive."""
         event = {"entityType": "SERVICE"}
@@ -1886,9 +1883,9 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'[{"eventId": "e1", "type": "incident", "state": "open", "start": 1699900000000}]'
+        mock_response = make_streaming_response(
+            b'[{"eventId": "e1", "type": "incident", "state": "open", "start": 1699900000000}]'
+        )
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={}))
@@ -1922,12 +1919,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "state": "open", "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "state": "closed", "type": "incident", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"state": "open"}))
@@ -1943,14 +1938,15 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        body = b'''[
             {"eventId": "e1", "probableCause": {"found": true}, "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "probableCause": {"found": false}, "type": "incident", "start": 1699900000000},
             {"eventId": "e3", "type": "incident", "start": 1699900000000}
         ]'''
-        self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
+        # Two separate streaming responses — each call gets its own fresh reader
+        self.events_api.get_events_without_preload_content = AsyncMock(
+            side_effect=[make_streaming_response(body), make_streaming_response(body)]
+        )
 
         result_with_rca = asyncio.run(self.client.get_events(filters={"rca": True}))
         self.assertEqual(result_with_rca["total_events"], 3)  # raw API count
@@ -1966,12 +1962,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "severity": 10, "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "severity": 5, "type": "issue", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"severity": 10}))
@@ -2000,9 +1994,7 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'[]'
+        mock_response = make_streaming_response(b'[]')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters=None))
@@ -2021,9 +2013,7 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         events_data = [{"eventId": f"e{i}", "type": "incident", "start": 1699900000000 + i}
                        for i in range(10)]
         import json as _json
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = _json.dumps(events_data).encode()
+        mock_response = make_streaming_response(_json.dumps(events_data).encode())
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"max_events": 3}))
@@ -2039,12 +2029,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "problem": "memory usage high", "type": "issue", "start": 1699900000000},
             {"eventId": "e2", "problem": "cpu spike", "type": "issue", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"problem": "memory"}))
@@ -2059,12 +2047,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "entityName": "Kubernetes Pod", "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "entityName": "Process", "type": "incident", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"entity_name": "kubernetes"}))
@@ -2079,12 +2065,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "entityLabel": "pod/payment-service-abc", "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "entityLabel": "pod/other-service-xyz", "type": "incident", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         result = asyncio.run(self.client.get_events(filters={"entity_label": "payment-service"}))
@@ -2099,12 +2083,10 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         mock_datetime.now = MagicMock(return_value=mock_now)
         mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *a: datetime.fromtimestamp(ts))
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.data = b'''[
+        mock_response = make_streaming_response(b'''[
             {"eventId": "e1", "eventSpecificationId": "spec-001", "state": "open", "type": "incident", "start": 1699900000000},
             {"eventId": "e2", "eventSpecificationId": "spec-002", "state": "open", "type": "incident", "start": 1699900000000}
-        ]'''
+        ]''')
         self.events_api.get_events_without_preload_content = AsyncMock(return_value=mock_response)
 
         # Also provide state filter to ensure _apply_event_filters doesn't short-circuit

@@ -297,7 +297,9 @@ uv run src/core/server.py [OPTIONS]
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events,website). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
 - `--list-tools`: List all available tool categories and exit
 - `--port <port>`: MCP server port (default: 8080, can be overridden with PORT env var)
-- `--verify-ssl` [BOOL]`: Enable or disable SSL certificate verification for outgoing Instana API calls (default: `true`). Pass `false`/`0`/`no` to disable. Equivalent to setting `INSTANA_SSL_VERIFY=false`.
+- `--admin-port <port>`: Admin server port for health checks (default: 8601, can be overridden with ADMIN_PORT env var)
+- `--verify-ssl [BOOL]`: Enable or disable SSL certificate verification for outgoing Instana API calls (default: `true`). Pass `false`/`0`/`no` to disable. Equivalent to setting `INSTANA_SSL_VERIFY=false`.
+- `--stream-read-buffer-size <SIZE>`: Bytes per I/O read call used by streaming parsers (default: `65536` / `64k`). Accepts a plain byte count or a human-friendly suffix: `64k`, `64kb`, `64m`, `64mb`, `64g`, `64gb`. Can also be set via the `STREAM_READ_BUFFER_SIZE` environment variable.
 - `--help`: Show help message and exit
 
 ### Starting in Streamable HTTP Mode
