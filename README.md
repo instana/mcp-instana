@@ -292,7 +292,6 @@ uv run src/core/server.py [OPTIONS]
 
 **Available Options:**
 - `--transport <mode>`: Transport mode (choices: `streamable-http`, `stdio`)
-- `--env KEY=VALUE`: Set environment variable (can be repeated for multiple variables, e.g., `--env INSTANA_BASE_URL=https://... --env INSTANA_API_TOKEN=...`)
 - `--debug`: Enable debug mode with additional logging
 - `--log-level <level>`: Set the logging level (choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events,website). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
@@ -360,7 +359,7 @@ uv run src/core/server.py --transport streamable-http --log-level DEBUG --tools 
 #### Using CLI (PyPI Installation)
 
 ```bash
-# Option 1: Set environment variables first
+# Set environment variables first
 export INSTANA_BASE_URL="https://your-instana-instance.instana.io"
 export INSTANA_API_TOKEN="your_instana_api_token"
 
@@ -370,17 +369,12 @@ mcp-instana
 # Or explicitly specify stdio mode
 mcp-instana --transport stdio
 
-# Option 2: Pass the base url and api token directly 
-mcp-instana --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
-
-# Or with explicit stdio mode
-mcp-instana --transport stdio --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 ```
 
 #### Using Development Installation
 
 ```bash
-# Option 1: Set environment variables first
+# Set environment variables first
 export INSTANA_BASE_URL="https://your-instana-instance.instana.io"
 export INSTANA_API_TOKEN="your_instana_api_token"
 
@@ -390,18 +384,12 @@ uv run src/core/server.py
 # Or explicitly specify stdio mode
 uv run src/core/server.py --transport stdio
 
-# Option 2: Pass the base url and api token directly 
-uv run src/core/server.py --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
-
-# Or with explicit stdio mode
-uv run src/core/server.py --transport stdio --base-url https://your-instana-instance.instana.io --api-token your_instana_api_token
 ```
 
 **Key Features of Stdio Mode:**
-- Uses environment variables for authentication (can be set via `export` or `--env` flags)
+- Uses environment variables for authentication (can be set via `export` or `.env` file)
 - Direct communication via stdin/stdout
 - Required for certain MCP client configurations
-- The `--api-token` and `base-url` flags provides a convenient way to set credentials without modifying shell environment
 
 ### Tool Categories
 
@@ -636,6 +624,7 @@ uv sync
 | [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` |
 | [Copilot CLI](./docs/mcp-clients/copilot-cli.md) | `streamable http`, `stdio` |
 | [Mistral AI](./docs/mcp-clients/mistral-ai.md) | `streamable http` |
+| [Gemini Cli](./docs/mcp-clients/gemini-cli.md) | `streamable http`, `stdio` |
 
 ### Connecting to Multiple Instana MCP Servers
 

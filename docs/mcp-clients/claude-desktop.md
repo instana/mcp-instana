@@ -56,7 +56,6 @@ get me all endpoints from Instana
 
 **Configuration using CLI (PyPI Installation - Recommended):**
 
-**Option 1: Using environment variables in config:**
 ```json
 {
   "mcpServers": {
@@ -72,27 +71,10 @@ get me all endpoints from Instana
 }
 ```
 
-**Option 2: Using --env flag (alternative method):**
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": [
-        "--transport", "stdio",
-        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
-        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
-      ]
-    }
-  }
-}
-```
-
 **Note:** If you encounter "command not found" errors, use the full path to mcp-instana. Find it with `which mcp-instana` and use that path instead.
 
 **Configuration using Development Installation:**
 
-**Option 1: Using environment variables in config:**
 ```json
 {
   "mcpServers": {
@@ -108,25 +90,6 @@ get me all endpoints from Instana
         "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
         "INSTANA_API_TOKEN": "your_instana_api_token"
       }
-    }
-  }
-}
-```
-
-**Option 2: Using --env flag (alternative method):**
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "<path-to-mcp-instana-folder>",
-        "run",
-        "src/core/server.py",
-        "--env", "INSTANA_BASE_URL=https://your-instana-instance.instana.io",
-        "--env", "INSTANA_API_TOKEN=your_instana_api_token"
-      ]
     }
   }
 }
