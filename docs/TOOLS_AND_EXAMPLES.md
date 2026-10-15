@@ -231,12 +231,12 @@ When starting the MCP server with the `--categories` option (e.g. `python -m src
 | 3 | Events Monitoring | `events` | `manage_events` |
 | 4 | Website Monitoring | `website` | `manage_websites` |
 | 5 | Automation Actions | `automation` | `manage_automation` |
-| 6 | Custom Dashboards | `settings` | `manage_custom_dashboards` |
+| 6 | Custom Dashboards | `custom_dashboards` | `manage_custom_dashboards` |
 | 7 | SLO Management | `slo` | `manage_slo` |
 | 8 | Release Tracking | `releases` | `manage_releases` |
 | 9 | Mobile App Monitoring | `mobile_app` | `manage_mobile_apps` |
 | 10 | Synthetic Monitoring | `synthetic` | `manage_synthetics` |
-| 11 | Maintenance Windows | `maintenance` | `manage_maintenance_windows` |
+| 11 | Maintenance Windows | `maintenance_windows` | `manage_maintenance_windows` |
 
 ---
 

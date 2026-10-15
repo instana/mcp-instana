@@ -3,7 +3,6 @@ Unit tests for the MCP Server module
 """
 
 import asyncio
-import contextlib
 import io
 import os
 import sys
@@ -12,8 +11,38 @@ from unittest.mock import MagicMock, patch
 
 # Mock dependencies before importing the module
 sys.modules['dotenv'] = MagicMock()
-sys.modules['fastmcp'] = MagicMock()
+
+# Import the real fastmcp middleware module BEFORE replacing sys.modules['fastmcp']
+# so that InstanaToolsFilterMiddleware can be subclassed and tested correctly.
+import importlib as _importlib
+
+_real_fastmcp_server_mw_mod = _importlib.import_module(
+    "fastmcp.server.middleware.middleware"
+)
+
+mock_fastmcp_mod = MagicMock()
+mock_prompt_cls = MagicMock()
+mock_prompt_cls.from_function = MagicMock(side_effect=lambda fn: fn)
+mock_fastmcp_prompts_base = MagicMock()
+mock_fastmcp_prompts_base.Prompt = mock_prompt_cls
+mock_fastmcp_prompts = MagicMock()
+mock_fastmcp_prompts.base = mock_fastmcp_prompts_base
+mock_fastmcp_mod.prompts = mock_fastmcp_prompts
+sys.modules['fastmcp'] = mock_fastmcp_mod
+sys.modules['fastmcp.prompts'] = mock_fastmcp_prompts
+sys.modules['fastmcp.prompts.base'] = mock_fastmcp_prompts_base
 sys.modules['src.prompts.prompt_loader'] = MagicMock()
+
+# Mock fastmcp.server sub-packages.  Register the real middleware module so
+# that ``from fastmcp.server.middleware.middleware import Middleware`` in
+# server.py resolves to the actual class (not a MagicMock), allowing
+# InstanaToolsFilterMiddleware to subclass it correctly.
+mock_fastmcp_server = MagicMock()
+mock_fastmcp_server_middleware = MagicMock()
+sys.modules['fastmcp.server'] = mock_fastmcp_server
+sys.modules['fastmcp.server.middleware'] = mock_fastmcp_server_middleware
+sys.modules['fastmcp.server.middleware.middleware'] = _real_fastmcp_server_mw_mod
+sys.modules['fastmcp.server.dependencies'] = MagicMock()
 
 mock_src_core = MagicMock()
 mock_src_core_utils = MagicMock()
@@ -62,7 +91,11 @@ for submod in model_submodules:
     sys.modules[f'instana_client.models.{submod}'] = MagicMock()
 
 # Import the module to test
+import contextlib
+
 from src.core.server import (
+    _CATEGORY_TO_TOOLS,
+    InstanaToolsFilterMiddleware,
     MCPState,
     create_app,
     create_clients,
@@ -147,10 +180,9 @@ class TestMCPServer(unittest.TestCase):
         # Verify that logger.error was called but don't actually log anything
         mock_logger.error.assert_called_with("Failed to create events_client: Test error", exc_info=True)
 
-    @patch('src.core.server.Prompt')
     @patch('src.core.server.FastMCP')
     @patch('src.core.server.create_clients')
-    def test_create_app(self, mock_create_clients, mock_fast_mcp, mock_prompt):
+    def test_create_app(self, mock_create_clients, mock_fast_mcp):
         mock_server = MagicMock()
         mock_fast_mcp.return_value = mock_server
         mock_state = MCPState()
@@ -327,6 +359,7 @@ class TestMCPServer(unittest.TestCase):
         mock_arg_parser.return_value = mock_parser
         mock_args = MagicMock()
         mock_args.transport = "streamable-http"
+        mock_args.host = "0.0.0.0"
         mock_args.debug = False
         mock_args.tools = None
         mock_args.help = False
@@ -451,11 +484,10 @@ class TestPromptCategories(unittest.TestCase):
         self.assertIn("events", registered_categories)
         self.assertNotIn("app", registered_categories)
 
-    @patch('src.core.server.Prompt')
     @patch('src.core.server.FastMCP')
     @patch('src.core.server.create_clients')
     @patch('src.core.server.logger')
-    def test_both_categories(self, mock_logger, mock_create_clients, mock_fast_mcp, mock_prompt):
+    def test_both_categories(self, mock_logger, mock_create_clients, mock_fast_mcp):
         """Test that both app and events prompts are registered when both categories are enabled"""
         mock_server = MagicMock()
         mock_fast_mcp.return_value = mock_server
@@ -1578,3 +1610,526 @@ class TestListToolsGrammar(unittest.TestCase):
             any("2 tools" in m for m in info_messages),
             f"Expected '2 tools' (plural) in --list-tools output. Got: {info_messages}"
         )
+
+
+class TestInstanaToolsFilterMiddleware(unittest.TestCase):
+    """Tests for the InstanaToolsFilterMiddleware and _CATEGORY_TO_TOOLS map."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_tool(self, name):
+        """Return a minimal object whose .name attribute equals *name*."""
+        t = MagicMock()
+        t.name = name
+        return t
+
+    async def _run_middleware(self, tools, header_value=None, omit_header_value=None):
+        """Exercise InstanaToolsFilterMiddleware.on_list_tools with the given tools list.
+
+        Patches get_http_headers so the test controls which headers are present.
+        Returns the filtered tool list.
+        """
+        mw = InstanaToolsFilterMiddleware()
+
+        headers = {}
+        if header_value is not None:
+            headers["select-tools"] = header_value
+        if omit_header_value is not None:
+            headers["omit-tools"] = omit_header_value
+
+        async def call_next(_ctx):
+            return tools
+
+        with patch(
+            "fastmcp.server.dependencies.get_http_headers",
+            return_value=headers,
+        ):
+            return await mw.on_list_tools(MagicMock(), call_next)
+
+    # ------------------------------------------------------------------
+    # _CATEGORY_TO_TOOLS sanity checks
+    # ------------------------------------------------------------------
+
+    def test_category_map_has_all_known_categories(self):
+        """Every category known to the server must be represented in the map."""
+        expected = {
+            "app", "infra", "automation", "website", "mobile_app",
+            "events", "custom_dashboards", "slo", "synthetic", "releases", "maintenance_windows",
+        }
+        self.assertEqual(set(_CATEGORY_TO_TOOLS.keys()), expected)
+
+    def test_category_map_tool_names_non_empty(self):
+        """Every category must map to at least one tool name."""
+        for cat, tool_names in _CATEGORY_TO_TOOLS.items():
+            self.assertTrue(tool_names, f"Category '{cat}' has no tool names")
+
+    # ------------------------------------------------------------------
+    # Middleware behaviour
+    # ------------------------------------------------------------------
+
+    def test_no_header_returns_all_tools(self):
+        """Without the select-tools header all tools are returned unchanged."""
+        all_tools = [self._make_tool(n) for n in [
+            "manage_applications", "manage_infrastructure", "manage_events"
+        ]]
+        result = asyncio.run(self._run_middleware(all_tools, header_value=None))
+        self.assertEqual(result, all_tools)
+
+    def test_empty_header_returns_all_tools(self):
+        """An empty select-tools header value is treated as absent."""
+        all_tools = [self._make_tool(n) for n in [
+            "manage_applications", "manage_infrastructure",
+        ]]
+        result = asyncio.run(self._run_middleware(all_tools, header_value="   "))
+        self.assertEqual(result, all_tools)
+
+    def test_header_key_normalisation_on_list_tools(self):
+        """Header keys are normalised to lowercase-with-dashes before lookup.
+
+        Variants like 'Select-Tools', 'SELECT_TOOLS', or 'Omit_Tools' must be
+        treated identically to 'select-tools' / 'omit-tools'.
+        """
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+        ]
+        mw = InstanaToolsFilterMiddleware()
+
+        async def call_next(_ctx):
+            return all_tools
+
+        async def run(headers):
+            with patch(
+                "fastmcp.server.dependencies.get_http_headers",
+                return_value=headers,
+            ):
+                return await mw.on_list_tools(MagicMock(), call_next)
+
+        # Uppercase key with underscore separator
+        result = asyncio.run(run({"SELECT_TOOLS": "infra"}))
+        self.assertEqual([t.name for t in result], ["manage_infrastructure"])
+
+        # Mixed-case key with dash separator
+        result = asyncio.run(run({"Select-Tools": "app"}))
+        self.assertEqual([t.name for t in result], ["manage_applications"])
+
+        # Uppercase omit key
+        result = asyncio.run(run({"OMIT-TOOLS": "infra"}))
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_applications"],
+        )
+
+
+    def test_header_value_normalisation_on_list_tools(self):
+        """Header values are lowercased before category lookup.
+
+        A client sending 'Infra,Events' must get the same result as 'infra,events'.
+        Mixed-case values must not be silently dropped as unknown categories.
+        """
+        all_tools = [
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+            self._make_tool("manage_applications"),
+        ]
+        # Mixed-case value — should match exactly the same as lowercase
+        result = asyncio.run(self._run_middleware(all_tools, header_value="Infra,Events"))
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_infrastructure", "manage_events"],
+        )
+
+    def test_header_value_normalisation_on_call_tool(self):
+        """Value lowercasing also applies in on_call_tool enforcement.
+
+        A client whose header says 'Infra' must be able to call manage_infrastructure.
+        """
+        result = asyncio.run(
+            self._run_call_tool("manage_infrastructure", header_value="Infra")
+        )
+        self.assertEqual(result, "ok")
+
+
+
+
+    def test_single_category_filter(self):
+        """Only tools belonging to the requested category are returned."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+        ]
+        result = asyncio.run(self._run_middleware(all_tools, header_value="infra"))
+        self.assertEqual([t.name for t in result], ["manage_infrastructure"])
+
+    def test_multiple_category_filter(self):
+        """Tools for all requested categories are included."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+            self._make_tool("manage_automation"),
+        ]
+        result = asyncio.run(self._run_middleware(all_tools, header_value="app,events"))
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_applications", "manage_events"],
+        )
+
+    def test_unknown_category_is_ignored(self):
+        """Unknown category names produce a warning but do not crash."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+        ]
+        with patch("src.core.server.logger") as mock_logger:
+            result = asyncio.run(self._run_middleware(all_tools, header_value="app,unknown_cat"))
+        # Only the valid category 'app' should be used
+        self.assertEqual([t.name for t in result], ["manage_applications"])
+        # A warning must have been logged for the unknown category
+        warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+        self.assertTrue(
+            any("unknown_cat" in msg for msg in warning_calls),
+            f"Expected warning about 'unknown_cat'. Got: {warning_calls}",
+        )
+
+    def test_all_unknown_categories_returns_no_tools(self):
+        """When every requested category is unknown/typo'd, zero tools are returned.
+
+        The header was explicitly sent (non-empty), so the intent was to filter.
+        An all-invalid header must not silently fall back to exposing all tools.
+        """
+        all_tools = [self._make_tool("manage_applications")]
+        with patch("src.core.server.logger"):
+            result = asyncio.run(
+                self._run_middleware(all_tools, header_value="bogus,nonsense")
+            )
+        self.assertEqual(result, [])
+
+    def test_no_http_context_returns_all_tools(self):
+        """When get_http_headers raises RuntimeError (stdio mode), all tools are returned."""
+        mw = InstanaToolsFilterMiddleware()
+        all_tools = [self._make_tool("manage_applications")]
+
+        async def call_next(_ctx):
+            return all_tools
+
+        async def run():
+            with patch(
+                "fastmcp.server.dependencies.get_http_headers",
+                side_effect=RuntimeError("not in http context"),
+            ):
+                return await mw.on_list_tools(MagicMock(), call_next)
+
+        result = asyncio.run(run())
+        self.assertEqual(result, all_tools)
+
+    def test_middleware_registered_in_create_app(self):
+        """create_app() must attach exactly one InstanaToolsFilterMiddleware."""
+        with patch("src.core.server.get_enabled_client_configs", return_value=[]):
+            with patch("src.core.server.get_prompt_categories", return_value={}):
+                with patch("src.core.server.FastMCP") as mock_fastmcp_cls:
+                    mock_server = MagicMock()
+                    mock_fastmcp_cls.return_value = mock_server
+                    create_app("token", "https://example.com", 8080, "all")
+
+        add_middleware_calls = mock_server.add_middleware.call_args_list
+        # Use class-name comparison so the check is stable regardless of how the
+        # class object was imported (avoids false negatives from identity drift
+        # between test isolation states).
+        filter_middleware_calls = [
+            c for c in add_middleware_calls
+            if type(c.args[0] if c.args else c.kwargs.get("middleware")).__name__
+            == "InstanaToolsFilterMiddleware"
+        ]
+        self.assertEqual(
+            len(filter_middleware_calls), 1,
+            "Expected exactly one InstanaToolsFilterMiddleware registration in create_app()",
+        )
+
+
+    # ------------------------------------------------------------------
+    # omit-tools header
+    # ------------------------------------------------------------------
+
+    def test_omit_header_removes_category(self):
+        """omit-tools removes the specified category from the full list."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+        ]
+        result = asyncio.run(
+            self._run_middleware(all_tools, omit_header_value="infra")
+        )
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_applications", "manage_events"],
+        )
+
+    def test_omit_header_removes_multiple_categories(self):
+        """omit-tools accepts comma-separated categories."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+            self._make_tool("manage_automation"),
+        ]
+        result = asyncio.run(
+            self._run_middleware(all_tools, omit_header_value="infra,automation")
+        )
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_applications", "manage_events"],
+        )
+
+    def test_omit_unknown_category_warns_and_ignores(self):
+        """Unknown category in omit-tools logs a warning and is ignored."""
+        all_tools = [self._make_tool("manage_applications")]
+        with patch("src.core.server.logger") as mock_logger:
+            result = asyncio.run(
+                self._run_middleware(all_tools, omit_header_value="bogus")
+            )
+        self.assertEqual(result, all_tools)
+        warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+        self.assertTrue(
+            any("bogus" in msg for msg in warning_calls),
+            f"Expected warning about 'bogus'. Got: {warning_calls}",
+        )
+
+    def test_select_then_omit_combined(self):
+        """select-tools allowlist is applied first, then omit-tools removes."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_infrastructure"),
+            self._make_tool("manage_events"),
+            self._make_tool("manage_automation"),
+        ]
+        # Select app+infra+events, then omit infra → only app+events remain
+        result = asyncio.run(
+            self._run_middleware(
+                all_tools,
+                header_value="app,infra,events",
+                omit_header_value="infra",
+            )
+        )
+        self.assertCountEqual(
+            [t.name for t in result],
+            ["manage_applications", "manage_events"],
+        )
+
+    def test_omit_all_registered_results_in_empty_list(self):
+        """Omitting every category from the tool list returns an empty list (no server error)."""
+        all_tools = [
+            self._make_tool("manage_applications"),
+            self._make_tool("manage_events"),
+        ]
+        result = asyncio.run(
+            self._run_middleware(all_tools, omit_header_value="app,events")
+        )
+        self.assertEqual(result, [])
+
+
+    # ------------------------------------------------------------------
+    # on_call_tool enforcement
+    # ------------------------------------------------------------------
+
+    async def _run_call_tool(self, tool_name, header_value=None, omit_header_value=None):
+        """Exercise InstanaToolsFilterMiddleware.on_call_tool.
+
+        Builds a minimal MiddlewareContext whose .message.name equals *tool_name*,
+        then runs the middleware with the given header values.
+        Raises ToolError when the tool is blocked; returns sentinel "ok" otherwise.
+        """
+        from fastmcp.exceptions import ToolError as _ToolError
+        from fastmcp.server.middleware.middleware import MiddlewareContext
+
+        mw = InstanaToolsFilterMiddleware()
+
+        msg = MagicMock()
+        msg.name = tool_name
+        ctx = MagicMock(spec=MiddlewareContext)
+        ctx.message = msg
+
+        headers = {}
+        if header_value is not None:
+            headers["select-tools"] = header_value
+        if omit_header_value is not None:
+            headers["omit-tools"] = omit_header_value
+
+        async def call_next(_ctx):
+            return "ok"
+
+        with patch(
+            "fastmcp.server.dependencies.get_http_headers",
+            return_value=headers,
+        ):
+            return await mw.on_call_tool(ctx, call_next)
+
+    def test_call_tool_allowed_category_passes(self):
+        """A tools/call for a tool in the allowed category is not blocked."""
+        result = asyncio.run(
+            self._run_call_tool("manage_infrastructure", header_value="infra")
+        )
+        self.assertEqual(result, "ok")
+
+    def test_call_tool_blocked_by_select(self):
+        """A tools/call for a tool outside the select-tools allowlist raises ToolError."""
+        from fastmcp.exceptions import ToolError as _ToolError
+        with self.assertRaises(_ToolError):
+            asyncio.run(
+                self._run_call_tool("manage_applications", header_value="infra")
+            )
+
+    def test_call_tool_blocked_by_omit(self):
+        """A tools/call for an omitted tool raises ToolError."""
+        from fastmcp.exceptions import ToolError as _ToolError
+        with self.assertRaises(_ToolError):
+            asyncio.run(
+                self._run_call_tool("manage_infrastructure", omit_header_value="infra")
+            )
+
+    def test_call_tool_no_header_passes(self):
+        """Without any filter header, all tools/call requests pass through."""
+        result = asyncio.run(self._run_call_tool("manage_applications"))
+        self.assertEqual(result, "ok")
+
+    def test_call_tool_all_unknown_categories_blocks(self):
+        """All-invalid select-tools header blocks every tools/call (safe-fail)."""
+        from fastmcp.exceptions import ToolError as _ToolError
+        with self.assertRaises(_ToolError):
+            asyncio.run(
+                self._run_call_tool("manage_applications", header_value="bogus,typo")
+            )
+
+    def test_call_tool_no_http_context_passes(self):
+        """In stdio mode (RuntimeError from get_http_headers), call passes through."""
+        from fastmcp.server.middleware.middleware import MiddlewareContext
+
+        mw = InstanaToolsFilterMiddleware()
+        msg = MagicMock()
+        msg.name = "manage_applications"
+        ctx = MagicMock(spec=MiddlewareContext)
+        ctx.message = msg
+
+        async def call_next(_ctx):
+            return "ok"
+
+        async def run():
+            with patch(
+                "fastmcp.server.dependencies.get_http_headers",
+                side_effect=RuntimeError("not in http context"),
+            ):
+                return await mw.on_call_tool(ctx, call_next)
+
+        result = asyncio.run(run())
+        self.assertEqual(result, "ok")
+
+
+
+class TestOmitToolsCLI(unittest.TestCase):
+    """Tests for the --omit-tools CLI flag in main()."""
+
+    def setUp(self):
+        self.original_env = os.environ.copy()
+        os.environ["INSTANA_API_TOKEN"] = "test_token"
+        os.environ["INSTANA_BASE_URL"] = "https://example.com"
+        self._log_level_patcher = patch('src.core.server.set_log_level')
+        self._log_level_patcher.start()
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self.original_env)
+        self._log_level_patcher.stop()
+
+    def _make_args(self, transport="streamable-http", tools=None, omit_tools=None):
+        args = MagicMock()
+        args.transport = transport
+        args.debug = False
+        args.tools = tools
+        args.omit_tools = omit_tools
+        args.help = False
+        args.list_tools = False
+        args.log_level = "INFO"
+        args.api_token = None
+        args.base_url = None
+        args.port = 8080
+        args.verify_ssl = True
+        return args
+
+    def _setup_parser(self, mock_arg_parser, args):
+        mock_parser = MagicMock()
+        mock_arg_parser.return_value = mock_parser
+        mock_parser.parse_args.return_value = args
+        return mock_parser
+
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['server.py', '--transport', 'streamable-http', '--omit-tools', 'maintenance_windows'])
+    def test_omit_tools_removes_from_enabled(self, mock_create_app, mock_arg_parser):
+        """--omit-tools removes the specified category from the enabled set passed to create_app."""
+        mock_app = MagicMock()
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        args = self._make_args(omit_tools="maintenance_windows")
+        self._setup_parser(mock_arg_parser, args)
+
+        with patch('src.core.server.sys.exit'):
+            main()
+
+        call_kwargs = mock_create_app.call_args
+        enabled_categories_str = call_kwargs[0][3] if call_kwargs[0] else call_kwargs[1].get('enabled_categories', '')
+        enabled = {c.strip() for c in enabled_categories_str.split(",")}
+        self.assertNotIn("maintenance_windows", enabled)
+        self.assertIn("app", enabled)
+
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.exit')
+    @patch('src.core.server.sys.argv', ['server.py', '--omit-tools', 'unknown_cat'])
+    def test_omit_tools_unknown_category_exits(self, mock_exit, mock_create_app, mock_arg_parser):
+        """--omit-tools with an unknown category exits with code 2."""
+        mock_app = MagicMock()
+        mock_create_app.return_value = (mock_app, 0, 8080)
+        args = self._make_args(omit_tools="unknown_cat")
+        self._setup_parser(mock_arg_parser, args)
+
+        mock_exit.reset_mock()
+        main()
+        mock_exit.assert_called_with(2)
+
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.exit')
+    @patch('src.core.server.sys.argv', ['server.py', '--tools', 'infra', '--omit-tools', 'infra'])
+    def test_omit_all_enabled_exits(self, mock_exit, mock_create_app, mock_arg_parser):
+        """--omit-tools that removes every enabled category exits with code 2."""
+        mock_app = MagicMock()
+        mock_create_app.return_value = (mock_app, 0, 8080)
+        args = self._make_args(tools="infra", omit_tools="infra")
+        self._setup_parser(mock_arg_parser, args)
+
+        mock_exit.reset_mock()
+        main()
+        mock_exit.assert_called_with(2)
+
+    @patch('src.core.server.argparse.ArgumentParser')
+    @patch('src.core.server.create_app')
+    @patch('src.core.server.sys.argv', ['server.py', '--transport', 'streamable-http', '--tools', 'app,infra,events', '--omit-tools', 'events'])
+    def test_tools_and_omit_tools_combined(self, mock_create_app, mock_arg_parser):
+        """--tools selects categories, --omit-tools further removes from that selection."""
+        mock_app = MagicMock()
+        mock_create_app.return_value = (mock_app, 1, 8080)
+        args = self._make_args(tools="app,infra,events", omit_tools="events")
+        self._setup_parser(mock_arg_parser, args)
+
+        with patch('src.core.server.sys.exit'):
+            main()
+
+        call_kwargs = mock_create_app.call_args
+        enabled_categories_str = call_kwargs[0][3] if call_kwargs[0] else call_kwargs[1].get('enabled_categories', '')
+        enabled = {c.strip() for c in enabled_categories_str.split(",")}
+        self.assertIn("app", enabled)
+        self.assertIn("infra", enabled)
+        self.assertNotIn("events", enabled)
