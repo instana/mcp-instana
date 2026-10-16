@@ -20,6 +20,7 @@ from src.core.utils import (
     MCP_TOOLS,
     BaseInstanaClient,
     __version__,
+    _make_chunk_reader,
     register_as_tool,
     with_header_auth,
 )
@@ -2112,3 +2113,399 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
             self.assertEqual(_api_timeout(), _DEFAULT_API_TIMEOUT)
 
 
+
+
+class TestParseBufferSize(unittest.TestCase):
+    """Tests for parse_buffer_size in src.core.utils."""
+
+    def setUp(self):
+        from src.core.utils import parse_buffer_size
+        self.parse = parse_buffer_size
+
+    # --- plain integer ---
+
+    def test_plain_integer(self):
+        self.assertEqual(self.parse("65536"), 65536)
+
+    def test_plain_integer_zero(self):
+        self.assertEqual(self.parse("0"), 0)
+
+    # --- k / kb (kibibytes) ---
+
+    def test_k_suffix(self):
+        self.assertEqual(self.parse("64k"), 64 * 1024)
+
+    def test_kb_suffix(self):
+        self.assertEqual(self.parse("64kb"), 64 * 1024)
+
+    def test_kb_suffix_uppercase(self):
+        self.assertEqual(self.parse("64KB"), 64 * 1024)
+
+    # --- m / mb (mebibytes) ---
+
+    def test_m_suffix(self):
+        self.assertEqual(self.parse("1m"), 1024 ** 2)
+
+    def test_mb_suffix(self):
+        self.assertEqual(self.parse("1mb"), 1024 ** 2)
+
+    def test_mb_suffix_uppercase(self):
+        self.assertEqual(self.parse("1MB"), 1024 ** 2)
+
+    # --- g / gb (gibibytes) ---
+
+    def test_g_suffix(self):
+        self.assertEqual(self.parse("2g"), 2 * 1024 ** 3)
+
+    def test_gb_suffix(self):
+        self.assertEqual(self.parse("2gb"), 2 * 1024 ** 3)
+
+    def test_gb_suffix_uppercase(self):
+        self.assertEqual(self.parse("2GB"), 2 * 1024 ** 3)
+
+    # --- whitespace tolerance ---
+
+    def test_leading_trailing_whitespace(self):
+        self.assertEqual(self.parse("  64k  "), 64 * 1024)
+
+    # --- fractional numeric part ---
+
+    def test_fractional_kb(self):
+        self.assertEqual(self.parse("0.5k"), int(0.5 * 1024))
+
+    def test_fractional_mb(self):
+        self.assertEqual(self.parse("1.5mb"), int(1.5 * 1024 ** 2))
+
+    # --- error cases ---
+
+    def test_invalid_plain_string_raises(self):
+        with self.assertRaises(ValueError):
+            self.parse("abc")
+
+    def test_invalid_suffix_non_numeric_part_raises(self):
+        with self.assertRaises(ValueError):
+            self.parse("xyzk")
+
+    def test_empty_string_raises(self):
+        with self.assertRaises(ValueError):
+            self.parse("")
+
+    def test_suffix_only_raises(self):
+        with self.assertRaises(ValueError):
+            self.parse("mb")
+
+
+class TestResolveStreamChunkSize(unittest.TestCase):
+    """Tests for _resolve_stream_chunk_size in src.core.utils."""
+
+    def test_explicit_valid_chunk_size(self):
+        from src.core.utils import _resolve_stream_chunk_size
+        self.assertEqual(_resolve_stream_chunk_size(12345), 12345)
+
+    def test_env_var_valid_plain(self):
+        from src.core.utils import _resolve_stream_chunk_size
+        with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "32768"}):
+            self.assertEqual(_resolve_stream_chunk_size(), 32768)
+
+    def test_env_var_valid_suffix(self):
+        from src.core.utils import _resolve_stream_chunk_size
+        with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "128k"}):
+            self.assertEqual(_resolve_stream_chunk_size(), 128 * 1024)
+
+    def test_env_var_invalid_string_falls_back_and_logs(self):
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
+        with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "invalid_size"}):
+            with patch("src.core.utils.logger.warning") as mock_warn:
+                result = _resolve_stream_chunk_size()
+                self.assertEqual(result, DEFAULT_STREAM_READ_BUFFER_SIZE)
+                mock_warn.assert_called_once()
+
+    def test_env_var_zero_falls_back_and_logs(self):
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
+        with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "0"}):
+            with patch("src.core.utils.logger.warning") as mock_warn:
+                result = _resolve_stream_chunk_size()
+                self.assertEqual(result, DEFAULT_STREAM_READ_BUFFER_SIZE)
+                mock_warn.assert_called_once()
+
+    def test_env_unset_uses_default(self):
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_resolve_stream_chunk_size(), DEFAULT_STREAM_READ_BUFFER_SIZE)
+
+
+class TestMakeChunkReader(unittest.TestCase):
+    """Tests for the _make_chunk_reader exception handling in _read_chunk."""
+
+    def _make_response(self, read_side_effect=None, data=None):
+        """Helper: build a mock response object."""
+        response = MagicMock()
+        if read_side_effect is not None:
+            response.read.side_effect = read_side_effect
+        else:
+            response.read.return_value = b""
+        if data is not None:
+            response.data = data
+        else:
+            # Remove the data attribute so the fallback branch is not triggered
+            del response.data
+        return response
+
+    # ------------------------------------------------------------------
+    # Happy-path baseline
+    # ------------------------------------------------------------------
+
+    def test_returns_decoded_bytes_from_read(self):
+        response = self._make_response(read_side_effect=None)
+        response.read.return_value = b"hello"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "hello")
+
+    def test_falls_back_to_data_when_no_read_attr(self):
+        response = MagicMock(spec=["data"])
+        response.data = b"buffered"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "buffered")
+
+    def test_returns_empty_when_read_returns_empty_bytes(self):
+        response = self._make_response(read_side_effect=None)
+        response.read.return_value = b""
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "")
+
+    # ------------------------------------------------------------------
+    # Network / I/O exceptions during read() must propagate
+    # ------------------------------------------------------------------
+
+    @patch("src.core.utils.logger")
+    def test_read_timeout_logs_warning_and_raises(self, mock_logger):
+        import requests
+        response = self._make_response(
+            read_side_effect=requests.exceptions.ReadTimeout("timed out")
+        )
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        with self.assertRaises(requests.exceptions.ReadTimeout):
+            read_chunk()
+        mock_logger.warning.assert_called_once()
+        self.assertIn("Read timeout", mock_logger.warning.call_args[0][0])
+
+    @patch("src.core.utils.logger")
+    def test_chunked_encoding_error_logs_warning_and_raises(self, mock_logger):
+        import requests
+        response = self._make_response(
+            read_side_effect=requests.exceptions.ChunkedEncodingError("chunked error")
+        )
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        with self.assertRaises(requests.exceptions.ChunkedEncodingError):
+            read_chunk()
+        mock_logger.warning.assert_called_once()
+        self.assertIn("Incomplete or truncated", mock_logger.warning.call_args[0][0])
+
+    @patch("src.core.utils.logger")
+    def test_connection_error_logs_warning_and_raises(self, mock_logger):
+        import requests
+        response = self._make_response(
+            read_side_effect=requests.exceptions.ConnectionError("conn reset")
+        )
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            read_chunk()
+        mock_logger.warning.assert_called_once()
+        self.assertIn("Connection closed or reset", mock_logger.warning.call_args[0][0])
+
+    @patch("src.core.utils.logger")
+    def test_os_error_logs_warning_and_raises(self, mock_logger):
+        response = self._make_response(read_side_effect=OSError("broken pipe"))
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        with self.assertRaises(OSError):
+            read_chunk()
+        mock_logger.warning.assert_called_once()
+        self.assertIn("Socket/I/O error", mock_logger.warning.call_args[0][0])
+
+    # ------------------------------------------------------------------
+    # Fallback decoding (invalid charset / UnicodeDecodeError)
+    # ------------------------------------------------------------------
+
+    def test_unicode_decode_error_falls_back_to_replace(self):
+        # Byte sequence invalid in utf-8; should fall back to DEFAULT_CHARSET with replace
+        response = MagicMock()
+        response.read.return_value = b"\xff\xfe"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        result = read_chunk()
+        # Must not raise; replaced characters are returned
+        self.assertIsInstance(result, str)
+        self.assertGreater(len(result), 0)
+
+    def test_unknown_charset_falls_back_to_replace(self):
+        response = MagicMock()
+        response.read.return_value = b"hello"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="no-such-encoding")
+        result = read_chunk()
+        self.assertIsInstance(result, str)
+
+    # ------------------------------------------------------------------
+    # Data fallback variants
+    # ------------------------------------------------------------------
+
+    def test_data_attribute_as_str_is_encoded_then_decoded(self):
+        response = MagicMock(spec=["data"])
+        response.data = "string-data"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "string-data")
+
+    def test_data_attribute_drained_on_second_call(self):
+        response = MagicMock(spec=["data"])
+        response.data = b"first"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "first")
+        # After the first call, data should have been cleared
+        self.assertEqual(response.data, b"")
+
+    def test_data_attribute_none_returns_empty(self):
+        response = MagicMock(spec=["data"])
+        response.data = None
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        self.assertEqual(read_chunk(), "")
+
+    def test_exception_during_read_does_not_fall_back_to_data(self):
+        import requests
+        response = MagicMock()
+        response.read.side_effect = requests.exceptions.ReadTimeout("timeout")
+        response.data = b"fallback-data"
+        read_chunk = _make_chunk_reader(response, chunk_size=64, charset="utf-8")
+        with self.assertRaises(requests.exceptions.ReadTimeout):
+            read_chunk()
+
+
+def _make_chunked_response(data: bytes, chunk_size: int = 16):
+    """Helper: create mock HTTPResponse yielding bytes in small chunks."""
+    pos = [0]
+    response = MagicMock()
+    del response.data
+
+    def _read(n=chunk_size):
+        if pos[0] >= len(data):
+            return b""
+        chunk = data[pos[0]:pos[0] + n]
+        pos[0] += len(chunk)
+        return chunk
+
+    response.read = _read
+    return response
+
+
+class TestIterJsonArray(unittest.TestCase):
+    """Tests for _iter_json_array generator in src.core.utils."""
+
+    def test_empty_response(self):
+        from src.core.utils import _iter_json_array
+        resp = _make_chunked_response(b"")
+        items = list(_iter_json_array(resp))
+        self.assertEqual(items, [])
+
+    def test_non_array_response(self):
+        from src.core.utils import _iter_json_array
+        resp = _make_chunked_response(b'{"key": "value"}')
+        items = list(_iter_json_array(resp))
+        self.assertEqual(items, [])
+
+    def test_empty_array(self):
+        from src.core.utils import _iter_json_array
+        resp = _make_chunked_response(b"[]")
+        items = list(_iter_json_array(resp))
+        self.assertEqual(items, [])
+
+    def test_empty_array_with_whitespace(self):
+        from src.core.utils import _iter_json_array
+        resp = _make_chunked_response(b"  [   ]  ")
+        items = list(_iter_json_array(resp))
+        self.assertEqual(items, [])
+
+    def test_multiple_objects(self):
+        from src.core.utils import _iter_json_array
+        payload = b'[{"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "c"}]'
+        resp = _make_chunked_response(payload, chunk_size=5)
+        items = list(_iter_json_array(resp, chunk_size=5))
+        self.assertEqual(items, [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "c"}])
+
+    def test_truncated_stream(self):
+        from src.core.utils import _iter_json_array
+        payload = b'[{"id": 1}, {"id": 2'  # truncated mid-array
+        resp = _make_chunked_response(payload, chunk_size=8)
+        items = list(_iter_json_array(resp))
+        self.assertEqual(items, [{"id": 1}])
+
+
+class TestStreamJsonArrayPage(unittest.TestCase):
+    """Tests for stream_json_array_page in src.core.utils."""
+
+    def test_page_slice_and_total(self):
+        from src.core.utils import stream_json_array_page
+        payload = b'[{"id": 0}, {"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]'
+        resp = _make_chunked_response(payload, chunk_size=8)
+        items, total = stream_json_array_page(resp, start_idx=1, end_idx=3, chunk_size=8)
+        self.assertEqual(items, [{"id": 1}, {"id": 2}])
+        self.assertEqual(total, 5)
+
+    def test_page_empty_array(self):
+        from src.core.utils import stream_json_array_page
+        resp = _make_chunked_response(b"[]")
+        items, total = stream_json_array_page(resp, start_idx=0, end_idx=10)
+        self.assertEqual(items, [])
+        self.assertEqual(total, 0)
+
+    def test_page_non_array(self):
+        from src.core.utils import stream_json_array_page
+        resp = _make_chunked_response(b'{"message": "error"}')
+        items, total = stream_json_array_page(resp, start_idx=0, end_idx=10)
+        self.assertEqual(items, [])
+        self.assertEqual(total, 0)
+
+
+class TestStreamFilterEvents(unittest.TestCase):
+    """Tests for stream_filter_events in src.core.utils."""
+
+    def test_filter_and_max_results(self):
+        from src.core.utils import stream_filter_events
+        payload = b'[{"type": "A", "val": 1}, {"type": "B", "val": 2}, {"type": "A", "val": 3}, {"type": "A", "val": 4}]'
+        resp = _make_chunked_response(payload, chunk_size=10)
+        matched, total = stream_filter_events(
+            resp,
+            filter_fn=lambda x: x.get("type") == "A",
+            max_results=2,
+            chunk_size=10,
+        )
+        self.assertEqual(matched, [{"type": "A", "val": 1}, {"type": "A", "val": 3}])
+        self.assertEqual(total, 4)
+
+    def test_filter_no_matches(self):
+        from src.core.utils import stream_filter_events
+        payload = b'[{"type": "B"}, {"type": "C"}]'
+        resp = _make_chunked_response(payload)
+        matched, total = stream_filter_events(
+            resp,
+            filter_fn=lambda x: x.get("type") == "A",
+            max_results=5,
+        )
+        self.assertEqual(matched, [])
+        self.assertEqual(total, 2)
+
+    def test_filter_empty_array(self):
+        from src.core.utils import stream_filter_events
+        resp = _make_chunked_response(b"[]")
+        matched, total = stream_filter_events(
+            resp,
+            filter_fn=lambda x: True,
+            max_results=5,
+        )
+        self.assertEqual(matched, [])
+        self.assertEqual(total, 0)

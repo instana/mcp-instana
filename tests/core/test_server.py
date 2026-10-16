@@ -282,6 +282,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -300,8 +301,10 @@ class TestMCPServer(unittest.TestCase):
     @patch('src.core.server.sys.argv', ['mcp_server.py'])
     @patch('src.core.server.os.getenv')
     def test_main_function_missing_token(self, mock_getenv, mock_create_app, mock_arg_parser):
-        # Set up getenv to return None for INSTANA_API_TOKEN and handle PORT correctly
-        mock_getenv.side_effect = lambda key, default=None: default if key == "INSTANA_API_TOKEN" else (default if key == "PORT" else "value")
+        # Set up getenv to return None for INSTANA_API_TOKEN and handle PORT/STREAM_READ_BUFFER_SIZE correctly
+        mock_getenv.side_effect = lambda key, default=None: (
+            default if key in ("INSTANA_API_TOKEN", "PORT", "STREAM_READ_BUFFER_SIZE") else "value"
+        )
 
         # Set up the mock app
         mock_app = MagicMock()
@@ -316,6 +319,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.tools = None
         mock_args.help = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function
@@ -340,6 +344,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
         mock_app = MagicMock()
         mock_create_app.return_value = (mock_app, 0, 0)
@@ -365,6 +370,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
         with patch('src.core.server.sys.exit'):
             main()
@@ -391,6 +397,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # KeyboardInterrupt now logs "stdio transport stopped cleanly" from the
@@ -414,6 +421,7 @@ class TestMCPServer(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch both print and logger.error since the implementation might use either
@@ -695,6 +703,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -726,6 +735,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.error instead of capturing stderr
@@ -761,6 +771,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -832,6 +843,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -863,6 +875,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -894,6 +907,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Run the main function with patched sys.exit
@@ -941,6 +955,7 @@ class TestMCPServerAsync(unittest.TestCase):
         mock_args.help = False
         mock_args.list_tools = False
         mock_args.verify_ssl = False
+        mock_args.stream_read_buffer_size = 65536
         mock_parser.parse_args.return_value = mock_args
 
         # Patch logger.info instead of capturing stderr
@@ -999,6 +1014,8 @@ class TestHTTPServerShutdownBehaviour(unittest.TestCase):
         args.api_token = None
         args.base_url = None
         args.port = 8600
+        args.verify_ssl = False
+        args.stream_read_buffer_size = 65536
         return args
 
     def _setup_parser(self, mock_arg_parser, args):
@@ -1325,6 +1342,7 @@ class TestStdioShutdownBehaviour(unittest.TestCase):
         args.base_url = None
         args.port = 8080
         args.verify_ssl = False
+        args.stream_read_buffer_size = 65536
         return args
 
     def _setup_parser(self, mock_arg_parser, args):

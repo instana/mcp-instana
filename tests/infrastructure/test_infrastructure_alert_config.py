@@ -104,12 +104,32 @@ def _make_client():
     )
 
 
-def _mock_response(status: int, body: dict):
-    """Build a fake HTTPResponse-like object."""
+def _mock_response(status: int, body):
+    """Build a fake HTTPResponse-like object.
+
+    ``stream_json_array_page`` reads the body via ``.read(n)`` rather than
+    ``.data``, so we must wire up a real chunked-read implementation.
+    """
+    raw = json.dumps(body).encode('utf-8')
+    buf = bytearray(raw)
+    pos = [0]
+
+    def _read(n=-1):
+        if pos[0] >= len(buf):
+            return b""
+        if n < 0:
+            chunk = bytes(buf[pos[0]:])
+            pos[0] = len(buf)
+        else:
+            chunk = bytes(buf[pos[0]:pos[0] + n])
+            pos[0] += len(chunk)
+        return chunk
+
     r = MagicMock()
     r.status = status
-    r.data = json.dumps(body).encode('utf-8')
+    r.data = raw
     r.headers = {'Content-Type': 'application/json'}
+    r.read = _read
     return r
 
 
@@ -392,12 +412,14 @@ class TestInfraAlertConfigOperations(unittest.TestCase):
         self.assertIn('error', result)
 
     def test_find_active_single_dict_result(self):
+        """A bare JSON object (no '[') is treated as an empty result by stream_json_array_page."""
         self.client.alert_api.find_active_infra_alert_configs_without_preload_content.return_value = \
             _mock_response(200, {'id': 'c1', 'name': 'Alert 1'})
 
         result = asyncio.run(self.client.execute_alert_config_operation(operation='find_active'))
-        self.assertEqual(result['total'], 1)
-        self.assertEqual(len(result['configs']), 1)
+        # Non-array body → ([], 0) from stream_json_array_page → "No active" message
+        self.assertEqual(result['total'], 0)
+        self.assertEqual(len(result['configs']), 0)
 
     def test_find_active_exception(self):
         self.client.alert_api.find_active_infra_alert_configs_without_preload_content.side_effect = Exception('network err')

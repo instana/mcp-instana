@@ -70,7 +70,13 @@ if project_root not in sys.path:
 
 # Import the necessary modules
 try:
-    from src.core.utils import MCP_TOOLS, _ssl_verify_from_env, register_as_tool
+    from src.core.utils import (
+        MCP_TOOLS,
+        _resolve_stream_chunk_size,
+        _ssl_verify_from_env,
+        parse_buffer_size,
+        register_as_tool,
+    )
 except ImportError:
     logger.error("Failed to import required modules", exc_info=True)
     sys.exit(1)
@@ -743,6 +749,15 @@ def main():
             metavar="BOOL",
             help="Enable or disable SSL certificate verification (default: true). Pass false/0/no to disable."
         )
+        parser.add_argument(
+            "--stream-read-buffer-size",
+            type=parse_buffer_size,
+            default=_resolve_stream_chunk_size(),
+            metavar="SIZE",
+            help="Bytes per I/O read call used by streaming parsers (default: 65536 / 64k). "
+                 "Accepts plain bytes or a suffix: 64k, 64kb, 64m, 64mb, 64g, 64gb. "
+                 "Can also be set via STREAM_READ_BUFFER_SIZE env var."
+        )
         # Check for help arguments before parsing
         if len(sys.argv) > 1 and any(arg in ['-h', '--help'] for arg in sys.argv[1:]):
             # Check if help is combined with other arguments
@@ -851,6 +866,9 @@ def main():
         # --verify-ssl / --no-verify-ssl flag overrides INSTANA_SSL_VERIFY env var
         if args.verify_ssl is not None:
             os.environ["INSTANA_SSL_VERIFY"] = "true" if args.verify_ssl else "false"
+
+        # --stream-read-buffer-size overrides STREAM_READ_BUFFER_SIZE env var for streaming parsers
+        os.environ["STREAM_READ_BUFFER_SIZE"] = str(args.stream_read_buffer_size)
 
         if args.transport == "stdio" or args.transport is None:
             if not validate_credentials(INSTANA_API_TOKEN, INSTANA_BASE_URL):

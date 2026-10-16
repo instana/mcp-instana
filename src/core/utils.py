@@ -6,16 +6,19 @@ This module provides the base client for interacting with the Instana API.
 
 import ast
 import functools
+import http.client
 import inspect
 import json
 import logging
 import os
+import ssl
 import sys
 from email.message import Message
 from typing import Any, Callable, Dict, Optional, Union
 
 import anyio
 import requests
+import urllib3
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -128,7 +131,13 @@ def _json_preview(obj: Any) -> str:
 def _result_summary(result: Any) -> str:
     """Return a compact, safe summary string for *result* suitable for debug logging."""
     if hasattr(result, "status"):          # raw HTTPResponse (without_preload_content)
-        body = getattr(result, "data", None)
+        # Never access .data via getattr here: on a without_preload_content response
+        # .data is a urllib3 property that buffers the entire body on first access.
+        # If the caller intends to stream the body via .read(n) (e.g.
+        # stream_filter_events), touching .data would exhaust the stream before
+        # parsing begins.  Only peek when .data has already been materialised as a
+        # plain bytes instance in the instance __dict__ (preload_content responses).
+        body = result.__dict__.get("data") if hasattr(result, "__dict__") else None
         if not isinstance(body, bytes) or not body:
             return f"HTTPResponse status={result.status}"
         try:
@@ -336,8 +345,98 @@ def parse_payload(payload: Union[Dict[str, Any], str, None]) -> Union[Dict[str, 
 
     return {"error": f"Payload must be dict or JSON string, got {type(payload).__name__}"}
 
+
+_BUFFER_SIZE_UNITS = {
+    "kb": 1024,
+    "k":  1024,
+    "mb": 1024 ** 2,
+    "m":  1024 ** 2,
+    "gb": 1024 ** 3,
+    "g":  1024 ** 3,
+}
+
+DEFAULT_STREAM_READ_BUFFER_SIZE: int = 65536
+
+
+def parse_buffer_size(value: str) -> int:
+    """Parse a human-friendly buffer size string into an integer number of bytes.
+
+    Accepted formats (case-insensitive):
+        ``65536``        plain integer string
+        ``64k`` / ``64kb``   kibibytes  (x 1 024)
+        ``64m`` / ``64mb``   mebibytes  (x 1 048 576)
+        ``64g`` / ``64gb``   gibibytes  (x 1 073 741 824)
+
+    Returns:
+        The size as a plain ``int`` (bytes).
+
+    Raises:
+        ``ValueError`` if the string cannot be parsed.
+    """
+    text = str(value).strip().lower()
+    # Try longest suffix first so "mb" is matched before "m"
+    for suffix in ("kb", "mb", "gb", "k", "m", "g"):
+        if text.endswith(suffix):
+            numeric_part = text[: -len(suffix)]
+            try:
+                return int(float(numeric_part) * _BUFFER_SIZE_UNITS[suffix])
+            except ValueError:
+                raise ValueError(
+                    f"Invalid buffer size {value!r}: '{numeric_part}' is not a number"
+                )
+    # Plain integer
+    try:
+        return int(text)
+    except ValueError:
+        raise ValueError(
+            f"Invalid buffer size {value!r}: expected a number optionally followed by "
+            "k/kb, m/mb, or g/gb (e.g. 65536, 64k, 64kb, 64m, 64mb)"
+        )
+
+
+def _resolve_stream_chunk_size(chunk_size: Optional[int] = None) -> int:
+    """Resolve stream chunk size from argument or STREAM_READ_BUFFER_SIZE env var.
+
+    Falls back to DEFAULT_STREAM_READ_BUFFER_SIZE (65536 bytes) with a warning
+    if the environment variable or chunk_size is invalid (e.g. non-positive).
+    """
+    if chunk_size is not None and chunk_size > 0:
+        return chunk_size
+
+    env_val = os.environ.get("STREAM_READ_BUFFER_SIZE")
+    if env_val:
+        try:
+            parsed = parse_buffer_size(env_val)
+            if parsed > 0:
+                return parsed
+            logger.warning(
+                "Invalid STREAM_READ_BUFFER_SIZE=%r (must be > 0); falling back to default %d bytes",
+                env_val,
+                DEFAULT_STREAM_READ_BUFFER_SIZE,
+            )
+        except ValueError as exc:
+            logger.warning(
+                "Invalid STREAM_READ_BUFFER_SIZE=%r (%s); falling back to default %d bytes",
+                env_val,
+                exc,
+                DEFAULT_STREAM_READ_BUFFER_SIZE,
+            )
+    return DEFAULT_STREAM_READ_BUFFER_SIZE
+
+
 # Default charset for response decoding
 DEFAULT_CHARSET = 'utf-8'
+
+
+def _charset_from_content_type(content_type: str) -> str:
+    """Return the charset parameter from a Content-Type header value, or DEFAULT_CHARSET."""
+    if not isinstance(content_type, str):
+        return DEFAULT_CHARSET
+    for part in content_type.split(";"):
+        key, _, value = part.strip().partition("=")
+        if key.strip().lower() == "charset" and value.strip():
+            return value.strip().strip('"')
+    return DEFAULT_CHARSET
 
 # Import for getting package version from metadata rather than server.py
 try:
@@ -445,6 +544,7 @@ def with_header_auth(api_class, allow_mock=True):
         return wrapper
 
     return decorator
+
 class BaseInstanaClient:
     """Base client for Instana API with common functionality."""
 
@@ -539,20 +639,262 @@ def decode_response(response) -> str:
     # Check if response has charset information
     if hasattr(response, 'headers') and response.headers:
         content_type = response.headers.get('Content-Type', '')
-        if content_type:
-            # Use email.message.Message for proper RFC-compliant Content-Type parsing
-            # This handles quoted values, whitespace, case-insensitivity, etc.
-            msg = Message()
-            msg['content-type'] = content_type
-            parsed_charset = msg.get_content_charset()
-            if parsed_charset:
-                charset = parsed_charset
+        if isinstance(content_type, str) and content_type:
+            charset = _charset_from_content_type(content_type)
 
-    try:
-        return response.data.decode(charset)
-    except (UnicodeDecodeError, LookupError):
-        # Fallback to DEFAULT_CHARSET if specified charset fails
-        return response.data.decode(DEFAULT_CHARSET, errors='replace')
+    if hasattr(response, 'data'):
+        data = response.data
+        if isinstance(data, (bytes, bytearray)):
+            try:
+                return data.decode(charset)
+            except (UnicodeDecodeError, LookupError):
+                return data.decode(DEFAULT_CHARSET, errors='replace')
+        elif hasattr(data, 'decode'):
+            return data.decode(charset)
+        elif isinstance(data, str):
+            return data
+
+    return ""
+
+
+def _resolve_response_charset(response) -> str:
+    """Return the charset declared in *response*'s Content-Type header, or UTF-8."""
+    if hasattr(response, "headers") and response.headers:
+        ct = response.headers.get("Content-Type", "")
+        if ct:
+            return _charset_from_content_type(ct)
+    return DEFAULT_CHARSET
+
+
+def _make_chunk_reader(response, chunk_size: int, charset: str):
+    """Return a callable that reads the next decoded text chunk from *response*.
+
+    The returned ``_read_chunk()`` calls ``response.read(chunk_size)`` for
+    streaming responses. For pre-buffered responses without a callable ``read``
+    attribute, it falls back to ``response.data``, draining it on the first call
+    so subsequent calls return "".
+
+    Network and I/O exceptions during ``read()`` are not swallowed so that
+    callers can distinguish a broken stream from normal end-of-stream.
+    """
+    def _read_chunk() -> str:
+        read_attr = getattr(response, "read", None)
+        raw = None
+        if callable(read_attr):
+            try:
+                result = response.read(chunk_size)
+                if isinstance(result, (bytes, bytearray)):
+                    raw = result
+            except (requests.exceptions.ReadTimeout, urllib3.exceptions.ReadTimeoutError, TimeoutError) as e:
+                logger.warning("Read timeout while streaming response chunk: %s", e)
+                raise
+            except (requests.exceptions.ChunkedEncodingError, urllib3.exceptions.IncompleteRead, http.client.IncompleteRead) as e:
+                logger.warning("Incomplete or truncated response chunk received: %s", e)
+                raise
+            except (requests.exceptions.ConnectionError, urllib3.exceptions.ProtocolError, ConnectionError) as e:
+                logger.warning("Connection closed or reset while streaming response: %s", e)
+                raise
+            except (requests.exceptions.SSLError, ssl.SSLError) as e:
+                logger.warning("SSL/TLS error during stream read: %s", e)
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.warning("HTTP request exception during chunk read: %s", e)
+                raise
+            except OSError as e:
+                logger.warning("Socket/I/O error during chunk read: %s", e)
+                raise
+            except Exception as e:
+                logger.warning(
+                    "Unexpected error reading chunk from response stream: %s",
+                    e,
+                    exc_info=True,
+                )
+                raise
+
+        if raw is None:
+            raw_data = getattr(response, "data", None)
+            if isinstance(raw_data, (bytes, bytearray)):
+                raw = bytes(raw_data)
+                try:
+                    response.data = b""
+                except Exception:
+                    pass
+            elif isinstance(raw_data, str):
+                raw = raw_data.encode(charset)
+                try:
+                    response.data = b""
+                except Exception:
+                    pass
+            else:
+                raw = b""
+
+        if not raw:
+            return ""
+        try:
+            return raw.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            return raw.decode(DEFAULT_CHARSET, errors="replace")
+
+    return _read_chunk
+
+
+def _iter_json_array(response, chunk_size: Optional[int] = None):
+    """Yield items one by one from a streaming JSON array HTTP response.
+
+    Reads the raw response in ``chunk_size`` byte chunks and uses
+    ``json.JSONDecoder.raw_decode`` to peel objects off a rolling text buffer.
+    If the response body is empty or non-array, iteration terminates immediately
+    without yielding any items.
+    """
+    chunk_size = _resolve_stream_chunk_size(chunk_size)
+    charset = _resolve_response_charset(response)
+    _read_chunk = _make_chunk_reader(response, chunk_size, charset)
+
+    decoder = json.JSONDecoder()
+    buf = ""
+
+    # Scan forward to the opening '['
+    while "[" not in buf:
+        chunk = _read_chunk()
+        if not chunk:
+            return
+        buf += chunk
+
+    bracket_pos = buf.index("[")
+    buf = buf[bracket_pos + 1:]
+
+    # Check for empty array [] before entering loop
+    if buf.lstrip().startswith("]"):
+        return
+
+    # Peel one JSON object at a time
+    while True:
+        buf = buf.lstrip()
+        while not buf:
+            chunk = _read_chunk()
+            if not chunk:
+                break
+            buf = chunk.lstrip()
+
+        if not buf or buf[0] == "]":
+            break
+
+        if buf[0] == ",":
+            buf = buf[1:].lstrip()
+            while not buf:
+                chunk = _read_chunk()
+                if not chunk:
+                    break
+                buf = chunk.lstrip()
+
+        if not buf or buf[0] == "]":
+            break
+
+        while True:
+            try:
+                obj, end_pos = decoder.raw_decode(buf)
+                buf = buf[end_pos:]
+                break
+            except json.JSONDecodeError:
+                chunk = _read_chunk()
+                if not chunk:
+                    return
+                buf += chunk
+
+        yield obj
+
+
+def stream_json_array_page(
+    response,
+    start_idx: int,
+    end_idx: int,
+    chunk_size: Optional[int] = None,
+) -> tuple:
+    """Stream-parse an unbounded JSON array response, returning only the page slice.
+
+    Instana ``find_active`` endpoints return an unbounded JSON array with no
+    server-side pagination.  The naive approach — ``response.data`` then
+    ``json.loads`` — buffers the entire response body and builds a full Python
+    list before slicing, which is expensive for large tenants.
+
+    This function avoids that by streaming the response and yielding objects
+    one by one. Items before ``start_idx`` or after ``end_idx`` are not retained
+    in memory, keeping peak memory to ``O(chunk_size + page_size x avg_item_size)``.
+
+    Args:
+        response: A ``urllib3.HTTPResponse`` whose ``.read(n)`` returns
+            successive bytes chunks. Must not have been read yet
+            (i.e. ``response.data`` must not have been accessed).
+        start_idx: First 0-based index to include in the returned slice.
+        end_idx:   One-past-last index (exclusive upper bound).
+        chunk_size: Bytes per I/O call. 64 KiB balances syscall overhead
+            against memory pressure.
+
+    Returns:
+        ``(page_items, total_seen)`` where ``page_items`` is the list of
+        items at positions ``[start_idx, end_idx)`` and ``total_seen`` is
+        the count of all items the parser encountered in the array.
+
+        If the response body is empty or is a JSON ``null`` / ``{}`` rather
+        than an array, ``([], 0)`` is returned.
+    """
+    logger.info("stream_json_array_page called")
+    page_items: list = []
+    total_seen = 0
+
+    for obj in _iter_json_array(response, chunk_size):
+        if start_idx <= total_seen < end_idx:
+            page_items.append(obj)
+        total_seen += 1
+
+    return page_items, total_seen
+
+
+def stream_filter_events(
+    response,
+    filter_fn,
+    max_results: int,
+    chunk_size: Optional[int] = None,
+) -> tuple:
+    """Stream-parse an Instana events array response, applying a filter per object.
+
+    Unlike ``stream_json_array_page`` (which slices by index), this function
+    applies a caller-supplied predicate to each decoded object and collects only
+    matching items. Non-matching objects are decoded and immediately discarded,
+    so peak memory is ``O(chunk_size + max_results x avg_item_size)`` regardless
+    of how large the total response body is.
+
+    IMPORTANT: ``response.data`` must NOT have been accessed before calling this
+    function.  Accessing ``.data`` on a ``urllib3.HTTPResponse`` buffers the
+    entire body, exhausting the stream.
+
+    Args:
+        response: A ``urllib3.HTTPResponse`` whose ``.read(n)`` returns successive
+            byte chunks.  Must not have been read yet.
+        filter_fn: Callable that accepts a single decoded dict and returns ``True``
+            if the item should be included in the result.
+        max_results: Stop collecting after this many matching items.
+        chunk_size: Bytes per I/O read call (default 64 KiB).
+
+    Returns:
+        ``(matched_items, total_seen)`` where ``matched_items`` is the list of
+        dicts for which ``filter_fn`` returned ``True`` (length <= ``max_results``)
+        and ``total_seen`` is the total number of objects present in the array
+        (matched + unmatched), useful for ``total_events`` metadata.
+
+        Returns ``([], 0)`` for an empty body, a non-array JSON value, or any
+        response whose array cannot be located.
+    """
+    logger.info("stream_filter_events called")
+    matched: list = []
+    total_seen = 0
+
+    for obj in _iter_json_array(response, chunk_size):
+        if len(matched) < max_results and filter_fn(obj):
+            matched.append(obj)
+        total_seen += 1
+
+    return matched, total_seen
 
 
 def _extract_tag_name_from_dict(node, tag_names):
