@@ -39,6 +39,27 @@ Before configuring Bob Shell, you need to start the MCP server in Streamable HTT
 
 If your MCP server is running on a different port, replace `8080` in the URL accordingly (the default is `8080`).
 
+**Optional: Restrict visible tool categories**
+
+Add the `select-tools` header to limit which tool categories this client sees (see [Tool Filtering](../../README.md#tool-filtering-via-http-header-streamable-http-mode)):
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "httpURL": "http://localhost:8080/mcp/",
+      "headers": {
+        "instana-base-url": "YOUR_INSTANA_BASE_URL",
+        "instana-api-token": "YOUR_INSTANA_API_TOKEN",
+        "select-tools": "infra,events"
+      }
+    }
+  }
+}
+```
+
+Available categories: `app`, `infra`, `events`, `automation`, `website`, `mobile_app`, `custom_dashboards`, `slo`, `synthetic`, `releases`, `maintenance_windows`.
+
 **Remote Configuration:**
 
 Configure Bob Shell to connect to a remote Instana MCP server (e.g., deployed on IBM Code Engine):
