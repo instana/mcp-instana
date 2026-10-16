@@ -590,7 +590,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "settings", "slo", "releases", "maintenance", "synthetic"}
+        all_categories = {"app", "automation", "events", "infra", "maintenance", "mobile_app", "releases", "settings", "slo", "synthetic", "website"}
 
         # Handle --list-tools option
         if args.list_tools:
