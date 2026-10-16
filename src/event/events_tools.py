@@ -1050,7 +1050,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
             # Stream-parse the response one object at a time, applying post-API
             # filters per object and discarding non-matching items immediately.
-            # Peak memory is O(chunk_size + max_events × avg_item_size) rather
+            # Peak memory is O(chunk_size + max_events x avg_item_size) rather
             # than O(full_response_body).
             #
             # The work is CPU-bound synchronous I/O (urllib3 .read calls +

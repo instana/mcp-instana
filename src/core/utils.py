@@ -363,9 +363,9 @@ def parse_buffer_size(value: str) -> int:
 
     Accepted formats (case-insensitive):
         ``65536``        plain integer string
-        ``64k`` / ``64kb``   kibibytes  (× 1 024)
-        ``64m`` / ``64mb``   mebibytes  (× 1 048 576)
-        ``64g`` / ``64gb``   gibibytes  (× 1 073 741 824)
+        ``64k`` / ``64kb``   kibibytes  (x 1 024)
+        ``64m`` / ``64mb``   mebibytes  (x 1 048 576)
+        ``64g`` / ``64gb``   gibibytes  (x 1 073 741 824)
 
     Returns:
         The size as a plain ``int`` (bytes).
