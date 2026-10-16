@@ -70,7 +70,13 @@ if project_root not in sys.path:
 
 # Import the necessary modules
 try:
-    from src.core.utils import MCP_TOOLS, register_as_tool, _ssl_verify_from_env, parse_buffer_size, _resolve_stream_chunk_size
+    from src.core.utils import (
+        MCP_TOOLS,
+        _resolve_stream_chunk_size,
+        _ssl_verify_from_env,
+        parse_buffer_size,
+        register_as_tool,
+    )
 except ImportError:
     logger.error("Failed to import required modules", exc_info=True)
     sys.exit(1)

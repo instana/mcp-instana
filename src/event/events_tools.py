@@ -27,7 +27,14 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, stream_filter_events, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    stream_filter_events,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1146,7 +1153,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 + "\n".join(f"  - {e}" for e in errors)
             ),
         }
-    
+
     def _has_active_filters(self, f):
         """Return True if any post-API filter is active."""
         return any([

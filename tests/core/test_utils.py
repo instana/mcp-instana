@@ -2213,7 +2213,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
             self.assertEqual(_resolve_stream_chunk_size(), 128 * 1024)
 
     def test_env_var_invalid_string_falls_back_and_logs(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "invalid_size"}):
             with patch("src.core.utils.logger.warning") as mock_warn:
                 result = _resolve_stream_chunk_size()
@@ -2221,7 +2224,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
                 mock_warn.assert_called_once()
 
     def test_env_var_zero_falls_back_and_logs(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "0"}):
             with patch("src.core.utils.logger.warning") as mock_warn:
                 result = _resolve_stream_chunk_size()
@@ -2229,7 +2235,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
                 mock_warn.assert_called_once()
 
     def test_env_unset_uses_default(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(_resolve_stream_chunk_size(), DEFAULT_STREAM_READ_BUFFER_SIZE)
 

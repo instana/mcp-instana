@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, Optional, Union
 import anyio
 import requests
 import urllib3
-
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -545,7 +544,7 @@ def with_header_auth(api_class, allow_mock=True):
         return wrapper
 
     return decorator
-    
+
 class BaseInstanaClient:
     """Base client for Instana API with common functionality."""
 
