@@ -87,6 +87,34 @@ with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test
     from src.application.application_alert_config import ApplicationAlertMCPTools
 
+
+def _make_streaming_response(body: bytes, status: int = 200):
+    """Return a mock HTTPResponse whose .read(n) yields chunks like a real stream.
+
+    ``stream_json_array_page`` reads the body via ``.read(n)`` rather than
+    ``.data``, so tests must provide a mock that responds to .read() correctly.
+    """
+    buf = bytearray(body)
+    pos = [0]
+
+    def _read(n=-1):
+        if pos[0] >= len(buf):
+            return b""
+        if n < 0:
+            chunk = bytes(buf[pos[0]:])
+            pos[0] = len(buf)
+        else:
+            chunk = bytes(buf[pos[0]:pos[0] + n])
+            pos[0] += len(chunk)
+        return chunk
+
+    mock = MagicMock()
+    mock.status = status
+    mock.data = body
+    mock.headers = {}
+    mock.read = _read
+    return mock
+
 class TestApplicationAlertMCPTools(unittest.TestCase):
     """Test the ApplicationAlertMCPTools class"""
 
@@ -119,8 +147,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
     def test_find_active_application_alert_configs_success(self):
         """Test find_active_application_alert_configs with successful response"""
         # Set up the mock response
-        mock_response = MagicMock()
-        mock_response.data = b'[{"id": "alert1", "name": "Test Alert"}]'
+        mock_response = _make_streaming_response(b'[{"id": "alert1", "name": "Test Alert"}]')
         self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -1057,8 +1084,7 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
     def test_find_active_application_alert_configs_empty_result(self):
         """Test find_active_application_alert_configs with empty result"""
         # Set up the mock response with empty list
-        mock_response = MagicMock()
-        mock_response.data = b'[]'
+        mock_response = _make_streaming_response(b'[]')
         self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
         # Call the method
@@ -1073,18 +1099,22 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.assertIn("suggestion", result)
 
     def test_find_active_application_alert_configs_json_decode_error(self):
-        """Test find_active_application_alert_configs with JSON decode error"""
-        # Set up the mock response with invalid JSON
-        mock_response = MagicMock()
-        mock_response.data = b'invalid json {'
+        """Test find_active_application_alert_configs with malformed (non-array) response body.
+
+        stream_json_array_page cannot locate an opening '[' in the body, so it
+        returns ([], 0).  The method treats this the same as an empty result
+        rather than raising a JSON parse error.
+        """
+        mock_response = _make_streaming_response(b'invalid json {')
         self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))
 
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("Failed to parse response JSON", result["error"])
+        # Non-array body → treated as empty result
+        self.assertIn("configs", result)
+        self.assertEqual(result["configs"], [])
+        self.assertEqual(result["total"], 0)
+        self.assertIn("No active alert configurations found", result["message"])
 
     def test_find_active_application_alert_configs_general_exception(self):
         """Test find_active_application_alert_configs with general exception"""

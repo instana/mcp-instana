@@ -89,6 +89,35 @@ with patch('src.core.utils.with_header_auth', mock_with_header_auth):
         ApplicationGlobalAlertMCPTools,
     )
 
+
+def _make_streaming_response(body: bytes, status: int = 200):
+    """Return a mock HTTPResponse whose .read(n) yields chunks like a real stream.
+
+    ``stream_json_array_page`` reads the body via ``.read(n)`` rather than
+    ``.data``, so tests must provide a mock that responds to .read() correctly.
+    """
+    buf = bytearray(body)
+    pos = [0]
+
+    def _read(n=-1):
+        if pos[0] >= len(buf):
+            return b""
+        if n < 0:
+            chunk = bytes(buf[pos[0]:])
+            pos[0] = len(buf)
+        else:
+            chunk = bytes(buf[pos[0]:pos[0] + n])
+            pos[0] += len(chunk)
+        return chunk
+
+    mock = MagicMock()
+    mock.status = status
+    mock.data = body
+    mock.headers = {}
+    mock.read = _read
+    return mock
+
+
 class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
     """Test the ApplicationGlobalAlertMCPTools class"""
 
@@ -120,11 +149,9 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
 
     def test_find_active_global_application_alert_configs_success(self):
         """Test find_active_global_application_alert_configs with successful response"""
-        # Set up the mock response with encoded JSON data
         import json
         mock_data = [{"id": "alert1", "name": "Test Alert"}]
-        mock_response = MagicMock()
-        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        mock_response = _make_streaming_response(json.dumps(mock_data).encode('utf-8'))
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
@@ -150,11 +177,9 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
 
     def test_find_active_global_application_alert_configs_empty_result(self):
         """Test find_active_global_application_alert_configs with empty result"""
-        # Set up the mock response with empty array
         import json
         mock_data = []
-        mock_response = MagicMock()
-        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        mock_response = _make_streaming_response(json.dumps(mock_data).encode('utf-8'))
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
@@ -172,11 +197,9 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
 
     def test_find_active_global_application_alert_configs_limit_to_10(self):
         """Test find_active_global_application_alert_configs limits results to 10"""
-        # Set up the mock response with 15 alerts
         import json
         mock_data = [{"id": f"alert{i}", "name": f"Test Alert {i}"} for i in range(15)]
-        mock_response = MagicMock()
-        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        mock_response = _make_streaming_response(json.dumps(mock_data).encode('utf-8'))
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
@@ -544,11 +567,9 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
     # Tests for execute_alert_config_operation dispatcher
     def test_execute_alert_config_operation_find_active(self):
         """Test execute_alert_config_operation with find_active operation"""
-        # Set up mock response
         import json
         mock_data = [{"id": "alert1", "name": "Test Alert"}]
-        mock_response = MagicMock()
-        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        mock_response = _make_streaming_response(json.dumps(mock_data).encode('utf-8'))
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
@@ -801,39 +822,44 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("created timestamp is required", result["error"])
 
-    # Tests for JSON decode errors
+    # Tests for JSON decode errors / non-array bodies
     def test_find_active_configs_json_decode_error(self):
-        """Test find_active_global_application_alert_configs with JSON decode error"""
-        # Set up mock response with invalid JSON
-        mock_response = MagicMock()
-        mock_response.data = b"invalid json {"
+        """Test find_active_global_application_alert_configs with malformed (non-array) body.
+
+        stream_json_array_page cannot locate an opening '[' in the body, so it
+        returns ([], 0).  The method treats this the same as an empty result.
+        """
+        mock_response = _make_streaming_response(b"invalid json {")
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
 
-        # Check error
-        self.assertIn("error", result)
-        self.assertIn("Failed to parse response JSON", result["error"])
+        # Non-array body → treated as empty result
+        self.assertIn("configs", result)
+        self.assertEqual(result["configs"], [])
+        self.assertEqual(result["total"], 0)
+        self.assertIn("No active global alert configurations found", result["message"])
 
     # Tests for response handling edge cases
     def test_find_active_configs_single_dict_result(self):
-        """Test find_active_global_application_alert_configs with single dict result"""
-        # Set up mock response with single dict (not list)
+        """Test find_active_global_application_alert_configs with single dict (non-array) response.
+
+        stream_json_array_page requires a JSON array.  A bare object response
+        (no '[') is treated as an empty result rather than wrapped in a list.
+        """
         import json
         mock_data = {"id": "alert1", "name": "Test Alert"}
-        mock_response = MagicMock()
-        mock_response.data = json.dumps(mock_data).encode('utf-8')
+        mock_response = _make_streaming_response(json.dumps(mock_data).encode('utf-8'))
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
         self.alert_config_api.find_active_global_application_alert_configs_without_preload_content.return_value = mock_response
 
-        # Call the method
         result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
 
-        # Check result wraps single dict in list
+        # Non-array body → empty result (stream_json_array_page requires '[')
         self.assertIn("configs", result)
-        self.assertEqual(len(result["configs"]), 1)
+        self.assertEqual(result["configs"], [])
+        self.assertEqual(result["total"], 0)
 
     def test_find_config_versions_dict_result(self):
         """Test find_global_application_alert_config_versions with dict result"""

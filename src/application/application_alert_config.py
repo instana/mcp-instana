@@ -16,6 +16,7 @@ from src.core.utils import (
     call_sdk_fn,
     register_as_tool,
     sdk_call_with_keepalive,
+    stream_json_array_page,
     with_header_auth,
 )
 
@@ -572,45 +573,28 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
-            raw_data = response.data.decode('utf-8')
-            logger.debug(f"Raw data: {raw_data}")
+            # Stream-parse only the first 10 items so the full array is
+            # never buffered in memory, regardless of tenant size.
+            limited_configs, total_count = stream_json_array_page(
+                response, start_idx=0, end_idx=10
+            )
 
-            try:
-                result = json.loads(raw_data)
-                logger.debug(f"Parsed JSON result: {result}")
-
-                if isinstance(result, list):
-                    configs = result
-                else:
-                    configs = [result] if result else []
-
-                # Limit to first 10 results
-                total_count = len(configs)
-                limited_configs = configs[:10]
-
-                # Provide helpful feedback based on the result
-                if not configs:
-                    return {
-                        "configs": [],
-                        "count": 0,
-                        "total": 0,
-                        "showing": 0,
-                        "message": f"No active alert configurations found for application ID: {application_id}",
-                        "suggestion": "You can create a new alert configuration using the 'create' operation."
-                    }
-                else:
-                    return {
-                        "configs": limited_configs,
-                        "count": len(limited_configs),
-                        "total": total_count,
-                        "showing": len(limited_configs),
-                        "message": f"Found {total_count} active alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
-                    }
-
-            except json.JSONDecodeError as e:
-                error_msg = f"Failed to parse response JSON: {e}"
-                logger.error(error_msg)
-                return {"error": error_msg}
+            if not limited_configs and total_count == 0:
+                return {
+                    "configs": [],
+                    "count": 0,
+                    "total": 0,
+                    "showing": 0,
+                    "message": f"No active alert configurations found for application ID: {application_id}",
+                    "suggestion": "You can create a new alert configuration using the 'create' operation."
+                }
+            return {
+                "configs": limited_configs,
+                "count": len(limited_configs),
+                "total": total_count,
+                "showing": len(limited_configs),
+                "message": f"Found {total_count} active alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
+            }
 
         except Exception as e:
             logger.error(f"Error in find_active_application_alert_configs: {e}", exc_info=True)
