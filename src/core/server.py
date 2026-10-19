@@ -577,6 +577,9 @@ def get_prompt_categories():
             ("Application Settings", app_settings_prompts),
             ("Application Topology", app_topology_prompts),
         ],
+        "custom_dashboards": [
+            ("Custom Dashboard", custom_dashboard_prompts),
+        ],
         "events": [
             ("Events Tools", events_prompts),
         ],
@@ -593,20 +596,11 @@ def get_prompt_categories():
             ("Mobile App Catalog", mobile_app_catalog_prompts),
             ("Mobile App Configuration", mobile_app_configuration_prompts),
         ],
-        "custom_dashboards": [
-            ("Custom Dashboard", custom_dashboard_prompts),
-        ],
         "synthetic": [
             ("Synthetic Catalog", synthetic_catalog_prompts),
             ("Synthetic Metrics", synthetic_metrics_prompts),
             ("Synthetic Playback", synthetic_test_playback_prompts),
             ("Synthetic Settings", synthetic_settings_prompts),
-        ],
-        "mobile_app": [
-            ("Mobile App Analyze", mobile_app_analyze_prompts),
-            ("Mobile App Catalog", mobile_app_catalog_prompts),
-            ("Mobile App Configuration", mobile_app_configuration_prompts),
-            ("Mobile App Alerts", mobile_app_alert_prompts),
         ],
         "website": [
             ("Website Alerts", website_alert_prompts),
