@@ -100,7 +100,9 @@ from src.core.server import (
     create_app,
     create_clients,
     execute_tool,
+    get_client_categories,
     get_enabled_client_configs,
+    get_prompt_categories,
     lifespan,
     main,
 )
@@ -211,6 +213,51 @@ class TestMCPServer(unittest.TestCase):
         self.assertEqual(tools_registered, 0)
         # Verify that logger.error was called but don't actually log anything
         mock_logger.error.assert_called_with("Error creating app", exc_info=True)
+
+    def test_get_client_categories_alphabetical_order(self):
+        """Test that get_client_categories returns categories in alphabetical order."""
+        categories = get_client_categories()
+        category_keys = list(categories.keys())
+        self.assertEqual(category_keys, sorted(category_keys))
+        expected_keys = [
+            "app",
+            "automation",
+            "events",
+            "infra",
+            "maintenance",
+            "mobile_app",
+            "releases",
+            "settings",
+            "slo",
+            "synthetic",
+            "website",
+        ]
+        self.assertEqual(category_keys, expected_keys)
+
+    def test_get_prompt_categories_alphabetical_order(self):
+        """Test that get_prompt_categories returns categories and groups in alphabetical order."""
+        categories = get_prompt_categories()
+        category_keys = list(categories.keys())
+        self.assertEqual(category_keys, sorted(category_keys))
+        expected_keys = [
+            "app",
+            "events",
+            "infra",
+            "maintenance",
+            "mobile_app",
+            "settings",
+            "synthetic",
+            "website",
+        ]
+        self.assertEqual(category_keys, expected_keys)
+
+        for category, groups in categories.items():
+            group_names = [name for name, _ in groups]
+            self.assertEqual(
+                group_names,
+                sorted(group_names),
+                f"Prompt groups in category '{category}' are not in alphabetical order",
+            )
 
     @patch('src.core.server.get_client_categories')
     def test_get_enabled_client_configs_all(self, mock_get_categories):

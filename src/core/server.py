@@ -461,23 +461,26 @@ def get_client_categories():
         "app": [
             ('smart_router_client', ApplicationSmartRouterMCPTool),
         ],
-        "infra": [
-            ('smart_router_infrastructure_client', InfrastructureSmartRouterMCPTool),
-        ],
         "automation": [
             ('smart_router_automation_client', AutomationSmartRouterMCPTool),
         ],
-        "website": [
-            ('smart_router_website_client', WebsiteSmartRouterMCPTool),
-        ],
-        "mobile_app": [
-            ('smart_router_mobile_client', MobileAppSmartRouterMCPTool),
+        "custom_dashboards": [
+            ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
         ],
         "events": [
             ('smart_router_events_client', EventsSmartRouterMCPTool),
         ],
-        "custom_dashboards": [
-            ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
+        "infra": [
+            ('smart_router_infrastructure_client', InfrastructureSmartRouterMCPTool),
+        ],
+        "maintenance_windows": [
+            ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
+        ]
+        "mobile_app": [
+            ('smart_router_mobile_client', MobileAppSmartRouterMCPTool),
+        ],
+        "releases": [
+            ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
         ],
         "slo": [
             ('smart_router_slo_client', SLOSmartRouterMCPTool),
@@ -485,11 +488,8 @@ def get_client_categories():
         "synthetic": [
             ('smart_router_synthetic_client', SyntheticSmartRouterMCPTool),
         ],
-        "releases": [
-            ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
-        ],
-        "maintenance_windows": [
-            ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
+        "website": [
+            ('smart_router_website_client', WebsiteSmartRouterMCPTool),
         ]
     }
 
@@ -550,24 +550,24 @@ def get_prompt_categories():
     app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
     app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
     app_topology_prompts = ApplicationTopologyPrompts.get_prompts()
+    custom_dashboard_prompts = CustomDashboardPrompts.get_prompts()
     events_prompts = EventsPrompts.get_prompts()
     infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()
     infra_catalog_prompts = InfrastructureCatalogPrompts.get_prompts()
-    custom_dashboard_prompts = CustomDashboardPrompts.get_prompts()
-    website_analyze_prompts = WebsiteAnalyzePrompts.get_prompts()
     maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
-    website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
-    website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
-    website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
+    mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
     mobile_app_analyze_prompts = MobileAppAnalyzePrompts.get_prompts()
     mobile_app_catalog_prompts = MobileAppCatalogPrompts.get_prompts()
     mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
-    mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
-    website_alert_prompts = WebsiteAlertPrompts.get_prompts()
-    synthetic_catalog_prompts: list[Any]= SyntheticCatalogPrompts.get_prompts()
-    synthetic_metrics_prompts: list[Any]= SyntheticMetricsPrompts.get_prompts()
-    synthetic_settings_prompts: list[Any]= SyntheticSettingsPrompts.get_prompts()
+    synthetic_catalog_prompts: list[Any] = SyntheticCatalogPrompts.get_prompts()
+    synthetic_metrics_prompts: list[Any] = SyntheticMetricsPrompts.get_prompts()
+    synthetic_settings_prompts: list[Any] = SyntheticSettingsPrompts.get_prompts()
     synthetic_test_playback_prompts: list[Any] = SyntheticTestPlaybackResultsPrompts.get_prompts()
+    website_alert_prompts = WebsiteAlertPrompts.get_prompts()
+    website_analyze_prompts = WebsiteAnalyzePrompts.get_prompts()
+    website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
+    website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
+    website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
 
     return {
         "app": [
@@ -577,6 +577,9 @@ def get_prompt_categories():
             ("Application Settings", app_settings_prompts),
             ("Application Topology", app_topology_prompts),
         ],
+        "custom_dashboards": [
+            ("Custom Dashboard", custom_dashboard_prompts),
+        ],
         "events": [
             ("Events Tools", events_prompts),
         ],
@@ -584,30 +587,27 @@ def get_prompt_categories():
             ("Infrastructure Analyze", infra_analyze_prompts),
             ("Infrastructure Catalog", infra_catalog_prompts),
         ],
-        "website": [
-            ("Website Analyze", website_analyze_prompts),
-            ("Website Catalog", website_catalog_prompts),
-            ("Website Configuration", website_configuration_prompts),
-            ("Website Metrics", website_metrics_prompts),
-            ("Website Alerts", website_alert_prompts),
+        "maintenance_windows": [
+            ("Maintenance Window", maintenance_window_prompts),
         ],
-        "custom_dashboards": [
-            ("Custom Dashboard", custom_dashboard_prompts),
+        "mobile_app": [
+            ("Mobile App Alerts", mobile_app_alert_prompts),
+            ("Mobile App Analyze", mobile_app_analyze_prompts),
+            ("Mobile App Catalog", mobile_app_catalog_prompts),
+            ("Mobile App Configuration", mobile_app_configuration_prompts),
         ],
         "synthetic": [
             ("Synthetic Catalog", synthetic_catalog_prompts),
             ("Synthetic Metrics", synthetic_metrics_prompts),
-            ("Synthetic Settings", synthetic_settings_prompts),
             ("Synthetic Playback", synthetic_test_playback_prompts),
+            ("Synthetic Settings", synthetic_settings_prompts),
         ],
-        "mobile_app": [
-            ("Mobile App Analyze", mobile_app_analyze_prompts),
-            ("Mobile App Catalog", mobile_app_catalog_prompts),
-            ("Mobile App Configuration", mobile_app_configuration_prompts),
-            ("Mobile App Alerts", mobile_app_alert_prompts),
-        ],
-        "maintenance_windows": [
-            ("Maintenance Window", maintenance_window_prompts),
+        "website": [
+            ("Website Alerts", website_alert_prompts),
+            ("Website Analyze", website_analyze_prompts),
+            ("Website Catalog", website_catalog_prompts),
+            ("Website Configuration", website_configuration_prompts),
+            ("Website Metrics", website_metrics_prompts),
         ]
     }
 
@@ -792,7 +792,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "mobile_app", "custom_dashboards", "slo", "releases", "maintenance_windows", "synthetic"}
+        all_categories = {"app", "automation", "custom_dashboards", "events", "infra", "maintenance_windows", "mobile_app", "releases", "slo", "synthetic", "website"}
 
         # Handle --list-tools option
         if args.list_tools:
