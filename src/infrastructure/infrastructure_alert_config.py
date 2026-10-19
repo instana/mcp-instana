@@ -14,6 +14,7 @@ from src.core.utils import (
     call_sdk_fn,
     decode_response,
     sdk_call_with_keepalive,
+    stream_json_array_page,
     with_header_auth,
 )
 
@@ -318,37 +319,19 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
             if response.status != 200:
                 return self.handle_api_error_response(response, "find_active_infra_alert_configs", logger)
 
-            raw = decode_response(response)
-            result = json.loads(raw)
-            if isinstance(result, list):
-                configs = result
-            elif result:
-                configs = [result]
-            else:
-                configs = []
+            # Normalise and clamp pagination parameters before computing slice bounds.
+            page = max(1, page if page is not None else 1)
+            page_size = min(1000, max(1, page_size if page_size is not None else 50))
 
-            total = len(configs)
-
-            # Apply pagination
-            page = page if page is not None else 1
-            page_size = page_size if page_size is not None else 50
-
-            # Validate pagination parameters
-            if page < 1:
-                page = 1
-            if page_size < 1:
-                page_size = 50
-            if page_size > 1000:
-                page_size = 1000
-
-            # Calculate pagination boundaries
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
 
-            # Slice the results
-            paginated_configs = configs[start_idx:end_idx]
+            # Stream-parse only the requested page window from the raw HTTP
+            # response so the full array is never buffered in memory.
+            paginated_configs, total = stream_json_array_page(
+                response, start_idx, end_idx
+            )
 
-            # Calculate total pages
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
             return {
@@ -362,7 +345,7 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 "has_previous": page > 1,
                 "message": (
                     "No active Infra Smart Alert configurations found."
-                    if not configs
+                    if not paginated_configs and total == 0
                     else f"Found {total} active configuration(s). Showing page {page} of {total_pages} ({len(paginated_configs)} results)."
                 ),
             }

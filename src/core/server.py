@@ -1,11 +1,12 @@
 """
-Standalone MCP server for Instana
+Standalone MCP server for Instana resources.
 
 This module provides a dedicated MCP server that exposes Instana monitoring tools.
 Supports stdio and Streamable HTTP transports.
 """
 
 import argparse
+import functools
 import logging
 import os
 import select as _select
@@ -18,7 +19,6 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from dotenv import load_dotenv
-from fastmcp.prompts.base import Prompt
 
 from src.prompts import PROMPT_REGISTRY
 
@@ -70,12 +70,188 @@ if project_root not in sys.path:
 
 # Import the necessary modules
 try:
-    from src.core.utils import MCP_TOOLS, _ssl_verify_from_env, register_as_tool
+    from src.core.utils import (
+        MCP_TOOLS,
+        _resolve_stream_chunk_size,
+        _ssl_verify_from_env,
+        parse_buffer_size,
+        register_as_tool,
+    )
 except ImportError:
     logger.error("Failed to import required modules", exc_info=True)
     sys.exit(1)
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from fastmcp.prompts.base import Prompt
+from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
+
+# ---------------------------------------------------------------------------
+# Category → tool-name mapping
+# ---------------------------------------------------------------------------
+
+# Maps each --tools category name to the MCP tool function names it owns.
+# Used at runtime by InstanaToolsFilterMiddleware to honour the
+# ``select-tools`` request header in streamable-http mode.
+# frozenset values avoid repeated set() conversions at call time and are
+# safe to use directly in set arithmetic inside _get_visible_tool_names.
+_CATEGORY_TO_TOOLS: dict[str, frozenset[str]] = {
+    "app":               frozenset({"manage_applications"}),
+    "infra":             frozenset({"manage_infrastructure"}),
+    "automation":        frozenset({"manage_automation"}),
+    "website":           frozenset({"manage_websites"}),
+    "mobile_app":        frozenset({"manage_mobile_apps"}),
+    "events":            frozenset({"manage_events"}),
+    "custom_dashboards": frozenset({"manage_custom_dashboards"}),
+    "slo":               frozenset({"manage_slo"}),
+    "synthetic":         frozenset({"manage_synthetics"}),
+    "releases":          frozenset({"manage_releases"}),
+    "maintenance_windows": frozenset({"manage_maintenance_windows"}),
+}
+
+
+def _parse_category_header(raw: str, header_name: str) -> set[str]:
+    """Parse a comma-separated category header value, warn on unknowns.
+
+    Returns the set of valid, recognised category names.  Unknown names are
+    logged as warnings and excluded from the result.
+    """
+    categories = {c.strip() for c in raw.split(",") if c.strip()}
+    unknown = categories - set(_CATEGORY_TO_TOOLS)
+    if unknown:
+        logger.warning(
+            "%s header contains unknown categories: %s. Available: %s",
+            header_name,
+            ", ".join(sorted(unknown)),
+            ", ".join(sorted(_CATEGORY_TO_TOOLS)),
+        )
+        categories -= unknown
+    return categories
+
+
+class InstanaToolsFilterMiddleware(Middleware):
+    """Middleware that filters the tools/list response based on the
+    ``select-tools`` and ``omit-tools`` HTTP request headers
+    (streamable-http mode only).
+
+    Clients configure these headers in their ``mcp.json`` (or equivalent) to
+    control which Instana tool categories are visible to them, without
+    requiring a server restart or a separate server instance.
+
+    ``select-tools`` — *allowlist*: only the listed categories are shown::
+
+        "select-tools": "infra,events"
+
+    ``omit-tools`` — *denylist*: all categories *except* the listed
+    ones are shown::
+
+        "omit-tools": "maintenance_windows,slo"
+
+    Both headers can be combined: ``select-tools`` is applied first to build
+    the allowed set, then ``omit-tools`` removes from that set.
+
+    Values are comma-separated category names identical to those accepted by
+    the ``--tools`` / ``--omit-tools`` CLI flags.  Unknown category names are
+    logged as warnings and silently ignored.  When both headers are absent,
+    all registered tools are returned unchanged (normal behaviour).
+
+    Enforcement is applied at two levels:
+    - ``on_list_tools``: hides tool definitions from the tools/list response.
+    - ``on_call_tool``: blocks direct tool/call dispatches for hidden tools,
+      preventing clients that cached a tool name from bypassing the filter.
+    """
+
+    @staticmethod
+    @functools.lru_cache(maxsize=64)
+    def _get_visible_tool_names(raw_select: str, raw_omit: str) -> frozenset[str] | None:
+        """Compute the frozenset of allowed tool names from header values.
+
+        Results are cached by (raw_select, raw_omit) pair — both strings are
+        already stripped/lowercased before this call, so the cache key is stable.
+        frozenset is returned (rather than set) so the cached object is immutable
+        and safe to share across calls without risk of mutation.
+
+        Returns None when both headers are absent/empty (no filtering needed).
+        Returns a frozenset (possibly empty) when at least one header is present.
+        """
+        if not raw_select and not raw_omit:
+            return None
+
+        # Start from the full registered set and carve it down.
+        # Union all frozenset values directly — no intermediate set() needed.
+        visible: set[str] = set().union(*_CATEGORY_TO_TOOLS.values())
+
+        # 1. Apply select-tools allowlist.
+        # Always intersect — even when select_cats is empty (all categories were
+        # unknown/typo'd). An empty allowed set → zero tools (safe-fail).
+        if raw_select:
+            select_cats = _parse_category_header(raw_select, "select-tools")
+            allowed: frozenset[str] = frozenset().union(
+                *((_CATEGORY_TO_TOOLS[cat]) for cat in select_cats)
+            ) if select_cats else frozenset()
+            visible &= allowed
+
+        # 2. Apply omit-tools denylist.
+        # frozenset values are directly usable in set arithmetic — no set() wrapping.
+        if raw_omit:
+            omit_cats = _parse_category_header(raw_omit, "omit-tools")
+            for cat in omit_cats:
+                visible -= _CATEGORY_TO_TOOLS[cat]
+
+        return frozenset(visible)
+
+    async def on_list_tools(self, context: MiddlewareContext, call_next):  # type: ignore[override]
+        tools = await call_next(context)
+
+        # Only applies in streamable-http mode where HTTP headers are present.
+        try:
+            from fastmcp.server.dependencies import get_http_headers
+            headers = get_http_headers()
+        except (ImportError, AttributeError, RuntimeError):
+            return tools
+
+        headers_lower = {k.lower().replace("_", "-"): v for k, v in headers.items()}
+        raw_select = headers_lower.get("select-tools", "").strip().lower()
+        raw_omit   = headers_lower.get("omit-tools", "").strip().lower()
+
+        visible_tool_names = self._get_visible_tool_names(raw_select, raw_omit)
+        if visible_tool_names is None:
+            return tools
+
+        filtered = [t for t in tools if t.name in visible_tool_names]
+        logger.debug(
+            "select-tools=%r omit-tools=%r → showing %d/%d tools: %s",
+            raw_select or "(none)",
+            raw_omit   or "(none)",
+            len(filtered),
+            len(tools),
+            ", ".join(t.name for t in filtered),
+        )
+        return filtered
+
+    async def on_call_tool(self, context: MiddlewareContext, call_next):  # type: ignore[override]
+        # Only applies in streamable-http mode where HTTP headers are present.
+        try:
+            from fastmcp.server.dependencies import get_http_headers
+            headers = get_http_headers()
+        except (ImportError, AttributeError, RuntimeError):
+            return await call_next(context)
+
+        headers_lower = {k.lower().replace("_", "-"): v for k, v in headers.items()}
+        raw_select = headers_lower.get("select-tools", "").strip().lower()
+        raw_omit   = headers_lower.get("omit-tools", "").strip().lower()
+
+        visible_tool_names = self._get_visible_tool_names(raw_select, raw_omit)
+        if visible_tool_names is not None:
+            tool_name = context.message.name
+            if tool_name not in visible_tool_names:
+                logger.warning(
+                    "Blocked tools/call for %r — not in visible set (select-tools=%r omit-tools=%r)",
+                    tool_name, raw_select or "(none)", raw_omit or "(none)",
+                )
+                raise ToolError(f"Tool '{tool_name}' is not available.")
+
+        return await call_next(context)
 
 
 @dataclass
@@ -152,6 +328,11 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
     """Create and configure the MCP server with the given credentials."""
     try:
         server = FastMCP(name="Instana MCP Server")
+
+        # Register the per-request tool-category filter middleware so clients
+        # can pass ``select-tools: infra,events`` in their mcp.json headers
+        # (streamable-http mode) to restrict which tools are visible to them.
+        server.add_middleware(InstanaToolsFilterMiddleware())
 
         # Only create and register enabled clients/tools
         clients_state = create_clients(token, base_url, enabled_categories)
@@ -283,23 +464,23 @@ def get_client_categories():
         "automation": [
             ('smart_router_automation_client', AutomationSmartRouterMCPTool),
         ],
+        "custom_dashboards": [
+            ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
+        ],
         "events": [
             ('smart_router_events_client', EventsSmartRouterMCPTool),
         ],
         "infra": [
             ('smart_router_infrastructure_client', InfrastructureSmartRouterMCPTool),
         ],
-        "maintenance": [
+        "maintenance_windows": [
             ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
-        ],
+        ]
         "mobile_app": [
             ('smart_router_mobile_client', MobileAppSmartRouterMCPTool),
         ],
         "releases": [
             ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
-        ],
-        "settings": [
-            ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
         ],
         "slo": [
             ('smart_router_slo_client', SLOSmartRouterMCPTool),
@@ -309,7 +490,7 @@ def get_client_categories():
         ],
         "website": [
             ('smart_router_website_client', WebsiteSmartRouterMCPTool),
-        ],
+        ]
     }
 
 def get_prompt_categories():
@@ -403,7 +584,7 @@ def get_prompt_categories():
             ("Infrastructure Analyze", infra_analyze_prompts),
             ("Infrastructure Catalog", infra_catalog_prompts),
         ],
-        "maintenance": [
+        "maintenance_windows": [
             ("Maintenance Window", maintenance_window_prompts),
         ],
         "mobile_app": [
@@ -412,7 +593,7 @@ def get_prompt_categories():
             ("Mobile App Catalog", mobile_app_catalog_prompts),
             ("Mobile App Configuration", mobile_app_configuration_prompts),
         ],
-        "settings": [
+        "custom_dashboards": [
             ("Custom Dashboard", custom_dashboard_prompts),
         ],
         "synthetic": [
@@ -421,13 +602,19 @@ def get_prompt_categories():
             ("Synthetic Playback", synthetic_test_playback_prompts),
             ("Synthetic Settings", synthetic_settings_prompts),
         ],
+        "mobile_app": [
+            ("Mobile App Analyze", mobile_app_analyze_prompts),
+            ("Mobile App Catalog", mobile_app_catalog_prompts),
+            ("Mobile App Configuration", mobile_app_configuration_prompts),
+            ("Mobile App Alerts", mobile_app_alert_prompts),
+        ],
         "website": [
             ("Website Alerts", website_alert_prompts),
             ("Website Analyze", website_analyze_prompts),
             ("Website Catalog", website_catalog_prompts),
             ("Website Configuration", website_configuration_prompts),
             ("Website Metrics", website_metrics_prompts),
-        ],
+        ]
     }
 
 def get_enabled_client_configs(enabled_categories: str):
@@ -524,7 +711,13 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, custom_dashboards, slo, releases, maintenance_windows, synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+        )
+        parser.add_argument(
+            "--omit-tools",
+            type=str,
+            metavar='<categories>',
+            help="Comma-separated list of tool categories to disable. Applied after --tools, so you can combine both: --tools app,infra --omit-tools slo removes slo from that selection. Same category names as --tools."
         )
         parser.add_argument(
             "--list-tools",
@@ -536,6 +729,12 @@ def main():
             type=int,
             default=int(os.getenv("PORT", "8080")),
             help="Port to listen on (default: 8080, can be overridden with PORT env var)"
+        )
+        parser.add_argument(
+            "--host",
+            type=str,
+            default=os.getenv("HOST", "0.0.0.0"),
+            help="Host to bind on (default: 0.0.0.0, can be overridden with HOST env var)"
         )
         parser.add_argument(
             "--api-token",
@@ -555,6 +754,15 @@ def main():
             default=True,
             metavar="BOOL",
             help="Enable or disable SSL certificate verification (default: true). Pass false/0/no to disable."
+        )
+        parser.add_argument(
+            "--stream-read-buffer-size",
+            type=parse_buffer_size,
+            default=_resolve_stream_chunk_size(),
+            metavar="SIZE",
+            help="Bytes per I/O read call used by streaming parsers (default: 65536 / 64k). "
+                 "Accepts plain bytes or a suffix: 64k, 64kb, 64m, 64mb, 64g, 64gb. "
+                 "Can also be set via STREAM_READ_BUFFER_SIZE env var."
         )
         # Check for help arguments before parsing
         if len(sys.argv) > 1 and any(arg in ['-h', '--help'] for arg in sys.argv[1:]):
@@ -590,7 +798,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "automation", "events", "infra", "maintenance", "mobile_app", "releases", "settings", "slo", "synthetic", "website"}
+        all_categories = {"app", "automation", "custom_dashboards", "events", "infra", "maintenance_windows", "mobile_app", "releases", "slo", "synthetic", "website"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -620,8 +828,20 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, mobile_app, website, settings, slo, releases, maintenance, synthetic")
+            logger.error(f"Error: Unknown category/categories: {', '.join(sorted(invalid))}. Available categories: {', '.join(sorted(all_categories))}")
             sys.exit(2)
+
+        # Remove categories specified via --omit-tools
+        if args.omit_tools:
+            omit_specified = {cat.strip() for cat in args.omit_tools.split(",")}
+            omit_invalid = omit_specified - all_categories
+            if omit_invalid:
+                logger.error(f"Error: Unknown category/categories in --omit-tools: {', '.join(sorted(omit_invalid))}. Available categories: {', '.join(sorted(all_categories))}")
+                sys.exit(2)
+            enabled -= omit_specified
+            if not enabled:
+                logger.error("Error: --omit-tools removed all enabled categories. At least one category must remain.")
+                sys.exit(2)
 
         # Print enabled tools for user information
         enabled_tool_classes = []
@@ -649,9 +869,12 @@ def main():
         INSTANA_API_TOKEN = args.api_token if args.api_token else os.getenv("INSTANA_API_TOKEN", "")
         INSTANA_BASE_URL = args.base_url if args.base_url else os.getenv("INSTANA_BASE_URL", "")
 
-        # --verify-ssl flag overrides INSTANA_SSL_VERIFY env var
-        if args.verify_ssl:
-            os.environ["INSTANA_SSL_VERIFY"] = "true"
+        # --verify-ssl / --no-verify-ssl flag overrides INSTANA_SSL_VERIFY env var
+        if args.verify_ssl is not None:
+            os.environ["INSTANA_SSL_VERIFY"] = "true" if args.verify_ssl else "false"
+
+        # --stream-read-buffer-size overrides STREAM_READ_BUFFER_SIZE env var for streaming parsers
+        os.environ["STREAM_READ_BUFFER_SIZE"] = str(args.stream_read_buffer_size)
 
         if args.transport == "stdio" or args.transport is None:
             if not validate_credentials(INSTANA_API_TOKEN, INSTANA_BASE_URL):
@@ -683,7 +906,7 @@ def main():
             try:
                 app.run(
                     transport="streamable-http",
-                    host="0.0.0.0",
+                    host=args.host,
                     port=port,
                     stateless_http=True,
                     # Use JSON responses instead of SSE streaming.

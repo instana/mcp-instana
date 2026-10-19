@@ -297,7 +297,9 @@ uv run src/core/server.py [OPTIONS]
 - `--tools <categories>`: Comma-separated list of tool categories to enable (e.g., infra,app,events,website). Enabling a category will also enable its related prompts. For example: `--tools infra` enables the infra tools and all infra-related prompts.
 - `--list-tools`: List all available tool categories and exit
 - `--port <port>`: MCP server port (default: 8080, can be overridden with PORT env var)
-- `--verify-ssl` [BOOL]`: Enable or disable SSL certificate verification for outgoing Instana API calls (default: `true`). Pass `false`/`0`/`no` to disable. Equivalent to setting `INSTANA_SSL_VERIFY=false`.
+- `--admin-port <port>`: Admin server port for health checks (default: 8601, can be overridden with ADMIN_PORT env var)
+- `--verify-ssl [BOOL]`: Enable or disable SSL certificate verification for outgoing Instana API calls (default: `true`). Pass `false`/`0`/`no` to disable. Equivalent to setting `INSTANA_SSL_VERIFY=false`.
+- `--stream-read-buffer-size <SIZE>`: Bytes per I/O read call used by streaming parsers (default: `65536` / `64k`). Accepts a plain byte count or a human-friendly suffix: `64k`, `64kb`, `64m`, `64mb`, `64g`, `64gb`. Can also be set via the `STREAM_READ_BUFFER_SIZE` environment variable.
 - `--help`: Show help message and exit
 
 ### Starting in Streamable HTTP Mode
@@ -752,8 +754,8 @@ uv run src/core/server.py --tools app,infra --transport streamable-http
 # Enable events and website tools
 uv run src/core/server.py --tools events,website --transport streamable-http
 
-# Enable settings (custom dashboards) and app tools
-uv run src/core/server.py --tools settings,app --transport streamable-http
+# Enable custom_dashboards and application tools
+uv run src/core/server.py --tools custom_dashboards,app --transport streamable-http
 
 # Enable releases and events tools
 uv run src/core/server.py --tools releases,events --transport streamable-http
@@ -776,9 +778,146 @@ uv run src/core/server.py --tools mobile_app --transport streamable-http
 # Enable all tools (default behavior)
 uv run src/core/server.py --transport streamable-http
 
+# Disable specific categories (all others remain enabled)
+uv run src/core/server.py --transport streamable-http --omit-tools maintenance_windows,slo
+
+# Combine --tools and --omit-tools
+uv run src/core/server.py --transport streamable-http --tools app,infra,events --omit-tools events
+
+
 # List all available tool categories and their tools
 uv run src/core/server.py --list-tools
 ```
+
+### Tool Filtering in Stdio Mode
+
+In stdio mode the MCP client spawns the server as a child process, so flags are passed directly through the `args` array in `mcp.json`.
+
+**Using `--tools` (allowlist) — show only the listed categories:**
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": ["--transport", "stdio", "--tools", "infra,events"],
+      "env": {
+        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
+        "INSTANA_API_TOKEN": "your_instana_api_token"
+      }
+    }
+  }
+}
+```
+
+**Using `--omit-tools` (denylist) — show everything except the listed categories:**
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": ["--transport", "stdio", "--omit-tools", "maintenance_windows,slo"],
+      "env": {
+        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
+        "INSTANA_API_TOKEN": "your_instana_api_token"
+      }
+    }
+  }
+}
+```
+
+**Combining both — select a subset, then remove from it:**
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "command": "mcp-instana",
+      "args": ["--transport", "stdio", "--tools", "app,infra,events", "--omit-tools", "events"],
+      "env": {
+        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
+        "INSTANA_API_TOKEN": "your_instana_api_token"
+      }
+    }
+  }
+}
+```
+
+### Tool Filtering via HTTP Header (Streamable HTTP Mode)
+
+When the server is running in **streamable HTTP mode**, each MCP client can control which tool categories it sees without restarting the server or running a separate instance. Two complementary headers are supported:
+
+| Header | Behaviour |
+|---|---|
+| `select-tools` | **Allowlist** — show only the listed categories |
+| `omit-tools` | **Denylist** — show everything *except* the listed categories |
+
+Both headers accept a comma-separated list of category names identical to those used by the `--tools` / `--omit-tools` CLI flags. They can be combined: `select-tools` is applied first to build the visible set, then `omit-tools` removes from it.
+
+#### Using `select-tools` (allowlist)
+
+Show only the specified categories:
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "httpURL": "http://localhost:8080/mcp/",
+      "headers": {
+        "instana-base-url": "https://your-instana-instance.example.com",
+        "instana-api-token": "YOUR_API_TOKEN",
+        "select-tools": "infra,events"
+      }
+    }
+  }
+}
+```
+
+#### Using `omit-tools` (denylist)
+
+Show everything except the specified categories — useful when you want most tools but need to hide one or two:
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "httpURL": "http://localhost:8080/mcp/",
+      "headers": {
+        "instana-base-url": "https://your-instana-instance.example.com",
+        "instana-api-token": "YOUR_API_TOKEN",
+        "omit-tools": "maintenance_windows,slo"
+      }
+    }
+  }
+}
+```
+
+#### Combining both headers
+
+Select a subset first, then remove from it:
+
+```json
+{
+  "mcpServers": {
+    "Instana MCP Server": {
+      "httpURL": "http://localhost:8080/mcp/",
+      "headers": {
+        "instana-base-url": "https://your-instana-instance.example.com",
+        "instana-api-token": "YOUR_API_TOKEN",
+        "select-tools": "app,infra,events,website",
+        "omit-tools": "website"
+      }
+    }
+  }
+}
+```
+
+The server filters the `tools/list` response for that client connection on every request — all other clients connecting to the same server process are unaffected.
+
+- Unknown category names are logged as warnings and silently ignored.
+- If neither header is present, all registered tools are returned (default behaviour).
+- These headers have no effect in **stdio mode** — use the `--tools` / `--omit-tools` CLI flags instead.
 
 ### Benefits of Tool Filtering
 
