@@ -13,6 +13,7 @@ import logging
 import os
 import ssl
 import sys
+from contextlib import suppress
 from email.message import Message
 from typing import Any, Callable, Dict, Optional, Union
 
@@ -715,16 +716,12 @@ def _make_chunk_reader(response, chunk_size: int, charset: str):
             raw_data = getattr(response, "data", None)
             if isinstance(raw_data, (bytes, bytearray)):
                 raw = bytes(raw_data)
-                try:
+                with suppress(Exception):
                     response.data = b""
-                except Exception:
-                    pass
             elif isinstance(raw_data, str):
                 raw = raw_data.encode(charset)
-                try:
+                with suppress(Exception):
                     response.data = b""
-                except Exception:
-                    pass
             else:
                 raw = b""
 
