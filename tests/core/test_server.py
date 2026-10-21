@@ -222,12 +222,12 @@ class TestMCPServer(unittest.TestCase):
         expected_keys = [
             "app",
             "automation",
+            "custom_dashboards",
             "events",
             "infra",
-            "maintenance",
+            "maintenance_windows",
             "mobile_app",
             "releases",
-            "settings",
             "slo",
             "synthetic",
             "website",
@@ -241,11 +241,12 @@ class TestMCPServer(unittest.TestCase):
         self.assertEqual(category_keys, sorted(category_keys))
         expected_keys = [
             "app",
+            "custom_dashboards",
             "events",
             "infra",
-            "maintenance",
+            "maintenance_windows",
             "mobile_app",
-            "settings",
+            "slo",
             "synthetic",
             "website",
         ]
