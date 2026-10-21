@@ -475,7 +475,7 @@ def get_client_categories():
         ],
         "maintenance_windows": [
             ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
-        ]
+        ],
         "mobile_app": [
             ('smart_router_mobile_client', MobileAppSmartRouterMCPTool),
         ],
@@ -527,6 +527,7 @@ def get_prompt_categories():
             MobileAppConfigurationPrompts,
         )
         from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
+        from src.prompts.slo.slo_prompts import SLOPrompts
         from src.prompts.synthetic.synthetic_catalog import SyntheticCatalogPrompts
         from src.prompts.synthetic.synthetic_metrics import SyntheticMetricsPrompts
         from src.prompts.synthetic.synthetic_settings import SyntheticSettingsPrompts
@@ -558,6 +559,7 @@ def get_prompt_categories():
     mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
     mobile_app_analyze_prompts = MobileAppAnalyzePrompts.get_prompts()
     mobile_app_catalog_prompts = MobileAppCatalogPrompts.get_prompts()
+    slo_prompts = SLOPrompts.get_prompts()
     mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
     synthetic_catalog_prompts: list[Any] = SyntheticCatalogPrompts.get_prompts()
     synthetic_metrics_prompts: list[Any] = SyntheticMetricsPrompts.get_prompts()
@@ -595,6 +597,9 @@ def get_prompt_categories():
             ("Mobile App Analyze", mobile_app_analyze_prompts),
             ("Mobile App Catalog", mobile_app_catalog_prompts),
             ("Mobile App Configuration", mobile_app_configuration_prompts),
+        ],
+        "slo": [
+            ("SLO", slo_prompts),
         ],
         "synthetic": [
             ("Synthetic Catalog", synthetic_catalog_prompts),
