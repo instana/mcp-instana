@@ -25,6 +25,7 @@ _MOCKED_KEYS = [
     "fastmcp",
     "instana_client",
     "instana_client.api",
+    "instana_client.api.synthetic_alert_configuration_api",
     "instana_client.api.synthetic_catalog_api",
     "instana_client.api.synthetic_metrics_api",
     "instana_client.api.synthetic_settings_api",
@@ -38,6 +39,7 @@ _MOCKED_KEYS = [
     "instana_client.models.get_test_result_list",
     "instana_client.models.get_test_result_base",
     "instana_client.models.get_test_summary_result",
+    "instana_client.models.synthetic_alert_config",
     "src.core",
     "src.core.utils",
 ]

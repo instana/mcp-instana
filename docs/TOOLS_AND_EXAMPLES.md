@@ -88,6 +88,7 @@
     - [Test Configuration](#test-configuration)
     - [Test Results and Health](#test-results-and-health)
     - [Datacenter and Location Health](#datacenter-and-location-health)
+    - [Synthetic Smart Alert Configuration](#synthetic-smart-alert-configuration)
 - [11. Maintenance Windows](#11-maintenance-windows)
   - [Capabilities](#capabilities-10)
     - [Resource Types:](#resource-types-10)
@@ -1243,7 +1244,7 @@ Get session replay action beacons for mobile app ID "i1IsNS7FQAegEljBTkNBMQ" and
 
 ### Capabilities
 
-Monitor synthetic tests and locations including test configuration, playback results, metrics, and location health with advanced filtering and grouping.
+Monitor synthetic tests and locations including test configuration, playback results, metrics, location health, and Smart Alert configurations with advanced filtering and grouping.
 
 #### Resource Types:
 
@@ -1281,6 +1282,20 @@ Monitor synthetic tests and locations including test configuration, playback res
 | `get_test_summary_list` | Get per-test success rates with per-location breakdown |
 | `get_synthetic_result_metadata` | Get available detail data types for a specific test result |
 | `get_synthetic_result_detail_data` | Get detail data file contents such as logs, HAR, or screenshots |
+
+**alert**: Full CRUD management for Synthetic Smart Alert configurations (create, read, update, delete, enable, disable, restore)
+
+| Operation | Description |
+|---|---|
+| `find_active` | List active alert configurations (paginated), optionally filtered by synthetic test ID or alert IDs |
+| `find` | Get alert configuration by ID, optionally as valid at a given timestamp |
+| `find_versions` | Get all historical versions of an alert configuration |
+| `create` | Create a new alert configuration (requires name, description, syntheticTestIds, alertChannelIds, customPayloadFields, rule {alertType, metricName}, timeThreshold, and a tagFilterExpression key, which may be null) |
+| `update` | Update an existing alert configuration (requires the full payload) |
+| `delete` | Delete an alert configuration |
+| `enable` | Enable an alert configuration |
+| `disable` | Disable an alert configuration |
+| `restore` | Restore an alert configuration to a historical version using its `created` timestamp |
 
 ### Example Prompts
 
@@ -1332,6 +1347,36 @@ List all datacenters and for each one show the datacenterFlag from custom proper
 
 ```
 Are any datacenters currently showing failures across all synthetic test types simultaneously — indicating a full location outage?
+```
+
+#### Synthetic Smart Alert Configuration
+
+```
+List all active Synthetic Smart Alert configurations
+```
+
+```
+Show the active Synthetic Smart Alert configurations for synthetic test id CVkDqtbdHMR4pqms7K5N
+```
+
+```
+Get details for Synthetic Smart Alert configuration with ID "alert-123"
+```
+
+```
+Show all historical versions of Synthetic Smart Alert "alert-123"
+```
+
+```
+Create a Synthetic Smart Alert for synthetic test CVkDqtbdHMR4pqms7K5N that triggers a critical alert when the test fails in at least 2 locations
+```
+
+```
+Disable the Synthetic Smart Alert with ID "alert-123"
+```
+
+```
+Restore Synthetic Smart Alert "alert-123" to the version created at 1710658800000
 ```
 
 ---
