@@ -1,3 +1,6 @@
+
+> ⬆️ **FastMCP Upgraded to 4.1.0**: Starting with this release 1.0.4, the server is built on **FastMCP 4.1.0** (previously 3.4.7). If you install from source or manage your own environment, re-sync your dependencies (for example, `uv sync`) to pick up the new version.
+
 > 🔒 **SSL Enabled by Default**: Starting with this release 1.0.3, SSL certificate verification is **enabled by default** for all outgoing Instana API calls. You can customize this behaviour (disable, supply a custom CA bundle, etc.) via CLI flag, environment variable, or `config.yaml`. See [SSL Certificate Verification](#ssl-certificate-verification) for full details.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
