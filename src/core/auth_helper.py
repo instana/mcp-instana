@@ -279,7 +279,7 @@ def _get_mcp_version() -> str:
     try:
         return importlib.metadata.version("mcp-instana")
     except Exception:
-        return "0.12.100"
+        return "1.0.4"
 
 
 def _apply_ssl_config(configuration):

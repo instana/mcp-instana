@@ -445,7 +445,7 @@ try:
     __version__ = version("mcp-instana")
 except Exception:
     # Fallback version if package metadata is not available
-    __version__ = "0.12.100"
+    __version__ = "1.0.4"
 
 # Registry to store all tools
 MCP_TOOLS = {}

@@ -866,8 +866,8 @@ class TestVersionImport(unittest.TestCase):
         # Re-import to trigger the version logic
         importlib.reload(src.core.utils)
 
-        # Check that the fallback version was used (updated to 0.12.100)
-        self.assertEqual(src.core.utils.__version__, "0.12.100")
+        # Check that the fallback version was used (updated to 1.0.4)
+        self.assertEqual(src.core.utils.__version__, "1.0.4")
 
     def test_version_used_in_headers(self):
         """Test that __version__ is used in User-Agent headers"""
