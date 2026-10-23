@@ -31,6 +31,29 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _normalize_metric_group_by(payload: Dict[str, Any]) -> None:
+    """Ensure ``metricGroupBy`` is a list in every rule object inside *payload*.
+
+    The Instana SDK model requires ``metricGroupBy`` to be a list, but callers
+    and LLM agents commonly omit it (treating it as an internal field).
+    Default it to ``[]`` in both the top-level ``rule`` dict and in every
+    entry of the ``rules`` list so that ``InfraAlertConfig.from_dict`` never
+    hits a pydantic validation error for this field.
+    """
+    rule = payload.get("rule")
+    if isinstance(rule, dict) and rule.get("metricGroupBy") is None:
+        rule["metricGroupBy"] = []
+
+    rules = payload.get("rules")
+    if isinstance(rules, list):
+        for entry in rules:
+            if not isinstance(entry, dict):
+                continue
+            inner = entry.get("rule")
+            if isinstance(inner, dict) and inner.get("metricGroupBy") is None:
+                inner["metricGroupBy"] = []
+
+
 class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
     """CRUD tools for Instana Infrastructure Smart Alert configurations."""
 
@@ -436,6 +459,11 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
             if "alertChannelIds" not in payload:
                 payload["alertChannelIds"] = []
 
+            # Ensure metricGroupBy is always a list in the top-level rule and
+            # in each entry of the rules list.  The SDK model requires a list
+            # but users (and LLMs) routinely omit this internal field.
+            _normalize_metric_group_by(payload)
+
             # Use from_dict() so discriminated-union fields (threshold, rules) are
             # correctly instantiated as their concrete subclasses.
             try:
@@ -479,6 +507,10 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 payload["customPayloadFields"] = []
             if "alertChannelIds" not in payload:
                 payload["alertChannelIds"] = []
+
+            # Ensure metricGroupBy is always a list in the top-level rule and
+            # in each entry of the rules list.
+            _normalize_metric_group_by(payload)
 
             try:
                 config_object = InfraAlertConfig.from_dict(payload)

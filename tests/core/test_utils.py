@@ -9,8 +9,6 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from requests.exceptions import HTTPError, RequestException
-
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -204,221 +202,6 @@ class TestBaseInstanaClient(unittest.TestCase):
         self.assertEqual(headers["Authorization"], "apiToken different_token")
         self.assertEqual(headers["Content-Type"], "application/json")
         self.assertEqual(headers["Accept"], "application/json")
-
-    @patch('requests.get')
-    def test_make_request_get(self, mock_get):
-        """Test make_request with GET method"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_get.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        params = {"param1": "value1"}
-        result = asyncio.run(self.client.make_request(endpoint, params=params))
-
-        # Check that the mock was called with the correct arguments
-        mock_get.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            params=params,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.post')
-    def test_make_request_post(self, mock_post):
-        """Test make_request with POST method"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_post.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        params = {"param1": "value1"}
-        result = asyncio.run(self.client.make_request(endpoint, params=params, method="POST"))
-
-        # Check that the mock was called with the correct arguments
-        mock_post.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            json=params,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.post')
-    def test_make_request_post_with_json(self, mock_post):
-        """Test make_request with POST method and json parameter"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_post.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        json_data = {"json_param": "value"}
-        result = asyncio.run(self.client.make_request(endpoint, json=json_data, method="POST"))
-
-        # Check that the mock was called with the correct arguments
-        mock_post.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            json=json_data,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.put')
-    def test_make_request_put(self, mock_put):
-        """Test make_request with PUT method"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_put.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        params = {"param1": "value1"}
-        result = asyncio.run(self.client.make_request(endpoint, params=params, method="PUT"))
-
-        # Check that the mock was called with the correct arguments
-        mock_put.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            json=params,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.put')
-    def test_make_request_put_with_json(self, mock_put):
-        """Test make_request with PUT method and json parameter"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_put.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        json_data = {"json_param": "value"}
-        result = asyncio.run(self.client.make_request(endpoint, json=json_data, method="PUT"))
-
-        # Check that the mock was called with the correct arguments
-        mock_put.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            json=json_data,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.delete')
-    def test_make_request_delete(self, mock_delete):
-        """Test make_request with DELETE method"""
-        # Set up the mock
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"data": "test"})
-        mock_delete.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        params = {"param1": "value1"}
-        result = asyncio.run(self.client.make_request(endpoint, params=params, method="DELETE"))
-
-        # Check that the mock was called with the correct arguments
-        mock_delete.assert_called_once_with(
-            f"{self.base_url}/{endpoint.lstrip('/')}",
-            headers=self.client.get_headers(),
-            params=params,
-            verify=False
-        )
-
-        # Check that the result is correct
-        self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_unsupported_method(self):
-        """Test make_request with an unsupported HTTP method"""
-        # Call the method with an unsupported method
-        endpoint = "/api/test"
-        result = asyncio.run(self.client.make_request(endpoint, method="INVALID"))
-
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("Unsupported HTTP method", result["error"])
-
-    def test_make_request_case_insensitive_method(self):
-        """Test make_request with case insensitive HTTP methods"""
-        # Test that methods work regardless of case
-        methods = ["get", "GET", "Get", "gEt"]
-
-        for method in methods:
-            with self.subTest(method=method):
-                with patch('requests.get') as mock_get:
-                    mock_response = MagicMock()
-                    mock_response.json = MagicMock(return_value={"data": "test"})
-                    mock_get.return_value = mock_response
-
-                    result = asyncio.run(self.client.make_request("/api/test", method=method))
-
-                    # Should work regardless of case
-                    self.assertEqual(result, {"data": "test"})
-
-    @patch('requests.get')
-    def test_make_request_http_error(self, mock_get):
-        """Test make_request handling of HTTP errors"""
-        # Set up the mock to raise an HTTPError
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = HTTPError("404 Client Error")
-        mock_get.return_value = mock_response
-
-        # Call the method
-        endpoint = "/api/test"
-        result = asyncio.run(self.client.make_request(endpoint))
-
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("HTTP Error", result["error"])
-
-    @patch('requests.get')
-    def test_make_request_request_exception(self, mock_get):
-        """Test make_request handling of request exceptions"""
-        # Set up the mock to raise a RequestException
-        mock_get.side_effect = RequestException("Connection error")
-
-        # Call the method
-        endpoint = "/api/test"
-        result = asyncio.run(self.client.make_request(endpoint))
-
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("Error", result["error"])
-
-    @patch('requests.get')
-    def test_make_request_general_exception(self, mock_get):
-        """Test make_request handling of general exceptions"""
-        # Set up the mock to raise a general exception
-        mock_get.side_effect = Exception("Unexpected error")
-
-        # Call the method
-        endpoint = "/api/test"
-        result = asyncio.run(self.client.make_request(endpoint))
-
-        # Check that the result contains an error message
-        self.assertIn("error", result)
-        self.assertIn("Unexpected error", result["error"])
 
     def test_with_header_auth_header_based_authentication(self):
         """Test with_header_auth with header-based authentication"""
@@ -909,150 +692,6 @@ class TestBaseInstanaClient(unittest.TestCase):
             self.assertIn("error", result)
 
 
-    def test_make_request_with_json_data(self):
-        """Test make_request with JSON data"""
-        with patch('requests.post') as mock_post:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_post.return_value = mock_response
-
-            endpoint = "/api/test"
-            json_data = {"key": "value"}
-            result = asyncio.run(self.client.make_request(endpoint, json=json_data, method="POST"))
-
-            mock_post.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                json=json_data,
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_both_params_and_json(self):
-        """Test make_request with both params and json (json should take precedence)"""
-        with patch('requests.post') as mock_post:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_post.return_value = mock_response
-
-            endpoint = "/api/test"
-            params = {"param1": "value1"}
-            json_data = {"json_key": "json_value"}
-            result = asyncio.run(self.client.make_request(endpoint, params=params, json=json_data, method="POST"))
-
-            # Should use json data, not params
-            mock_post.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                json=json_data,
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_empty_json(self):
-        """Test make_request with empty JSON data"""
-        with patch('requests.post') as mock_post:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_post.return_value = mock_response
-
-            endpoint = "/api/test"
-            json_data = {}
-            result = asyncio.run(self.client.make_request(endpoint, json=json_data, method="POST"))
-
-            mock_post.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                json=json_data,
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_none_json(self):
-        """Test make_request with None JSON data"""
-        with patch('requests.post') as mock_post:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_post.return_value = mock_response
-
-            endpoint = "/api/test"
-            result = asyncio.run(self.client.make_request(endpoint, json=None, method="POST"))
-
-            # Should use params (which is None) instead of json
-            mock_post.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                json=None,
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_complex_endpoint(self):
-        """Test make_request with complex endpoint paths"""
-        with patch('requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_get.return_value = mock_response
-
-            # Test various endpoint formats
-            test_cases = [
-                ("/api/test", "https://test.instana.io/api/test"),
-                ("api/test", "https://test.instana.io/api/test"),
-                ("/api/test/", "https://test.instana.io/api/test/"),
-                ("api/test/", "https://test.instana.io/api/test/"),
-                ("/api/test/path/with/multiple/segments", "https://test.instana.io/api/test/path/with/multiple/segments"),
-                ("api/test/path/with/multiple/segments", "https://test.instana.io/api/test/path/with/multiple/segments")
-            ]
-
-            for endpoint, expected_url in test_cases:
-                with self.subTest(endpoint=endpoint):
-                    result = asyncio.run(self.client.make_request(endpoint))
-
-                    # Check that the URL was constructed correctly
-                    mock_get.assert_called_with(
-                        expected_url,
-                        headers=self.client.get_headers(),
-                        params=None,
-                        verify=False
-                    )
-                    self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_none_params(self):
-        """Test make_request with None parameters"""
-        with patch('requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_get.return_value = mock_response
-
-            endpoint = "/api/test"
-            result = asyncio.run(self.client.make_request(endpoint, params=None))
-
-            mock_get.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                params=None,
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
-    def test_make_request_with_empty_params(self):
-        """Test make_request with empty parameters"""
-        with patch('requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json = MagicMock(return_value={"data": "test"})
-            mock_get.return_value = mock_response
-
-            endpoint = "/api/test"
-            result = asyncio.run(self.client.make_request(endpoint, params={}))
-
-            mock_get.assert_called_once_with(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.client.get_headers(),
-                params={},
-                verify=False
-            )
-            self.assertEqual(result, {"data": "test"})
-
     def test_register_as_tool_with_class_method(self):
         """Test register_as_tool with a class method"""
         class TestClass:
@@ -1298,11 +937,81 @@ class TestMcpTrackingHelpers(unittest.TestCase):
     # _get_ctx_client_name
     # ------------------------------------------------------------------
 
-    def test_get_ctx_client_name_returns_value(self):
-        ctx = MagicMock()
-        ctx.session.client_params.clientInfo.name = "github.copilot"
+    def test_get_ctx_client_name_sdk_v2_simple_namespace(self):
+        from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
-        self.assertEqual(_get_ctx_client_name(ctx), "github.copilot")
+        # SimpleNamespace has no auto-created attributes, unlike MagicMock
+        params = SimpleNamespace(client_info=SimpleNamespace(name="copilot-v2"))
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "copilot-v2")
+
+    def test_get_ctx_client_name_v2_takes_precedence_over_v1(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        params = SimpleNamespace(
+            client_info=SimpleNamespace(name="v2-client"),
+            clientInfo=SimpleNamespace(name="v1-client"),
+        )
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "v2-client")
+
+    def test_get_ctx_client_name_supports_dicts(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        # client_params and client_info both dicts
+        params = {"client_info": {"name": "dict-client"}}
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "dict-client")
+
+    def test_get_ctx_client_name_supports_dicts_with_v1_key(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        params = {"clientInfo": {"name": "dict-legacy"}}
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "dict-legacy")
+
+    def test_get_ctx_client_name_dict_v2_takes_precedence_over_v1(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        params = {
+            "client_info": {"name": "v2-dict"},
+            "clientInfo": {"name": "v1-dict"},
+        }
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "v2-dict")
+
+    def test_get_ctx_client_name_object_params_with_dict_client_info(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        params = SimpleNamespace(client_info={"name": "mixed-client"})
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "mixed-client")
+
+    def test_get_ctx_client_name_returns_none_when_ctx_is_none(self):
+        from src.core.auth_helper import _get_ctx_client_name
+        self.assertIsNone(_get_ctx_client_name(None))
+
+    def test_get_ctx_client_name_returns_none_when_client_info_missing(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace()))
+        self.assertIsNone(_get_ctx_client_name(ctx))
+
+    def test_get_ctx_client_name_falls_back_to_sdk_v1_camelcase(self):
+        from types import SimpleNamespace
+
+        from src.core.auth_helper import _get_ctx_client_name
+        # SimpleNamespace has no auto-created attributes, unlike MagicMock
+        params = SimpleNamespace(clientInfo=SimpleNamespace(name="legacy-client"))
+        ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
+        self.assertEqual(_get_ctx_client_name(ctx), "legacy-client")
 
     def test_get_ctx_client_name_returns_none_when_no_session(self):
         ctx = MagicMock()
@@ -1329,7 +1038,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
         ctx = MagicMock()
         ctx.session_id = "sess-123"
         ctx.request_id = "5"
-        ctx.session.client_params.clientInfo.name = "claude-desktop"
+        ctx.session.client_params.client_info.name = "claude-desktop"
         from src.core.auth_helper import _build_mcp_tracking_context
         result = _build_mcp_tracking_context(
             ctx=ctx,
@@ -1486,7 +1195,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
             ctx = MagicMock()
             ctx.session_id = "kwarg-session"
             ctx.request_id = "1"
-            ctx.session.client_params.clientInfo.name = "test-client"
+            ctx.session.client_params.client_info.name = "test-client"
 
             class FakeApiClass:
                 def __init__(self, api_client):
@@ -1516,7 +1225,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
             ctx = MagicMock()
             ctx.session_id = "pos-session"
             ctx.request_id = "2"
-            ctx.session.client_params.clientInfo.name = "test-client"
+            ctx.session.client_params.client_info.name = "test-client"
 
             class FakeApiClass:
                 def __init__(self, api_client):

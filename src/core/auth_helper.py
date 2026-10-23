@@ -183,12 +183,39 @@ def _get_ctx_request_id(ctx) -> Optional[str]:
 
 
 def _get_ctx_client_name(ctx) -> Optional[str]:
-    """Return the LLM client name from the MCP initialise handshake, or ``None``."""
+    """Return the LLM client name from the MCP initialise handshake, or ``None``.
+    MCP SDK v1 used camelCase (``clientInfo``); SDK v2 uses snake_case
+    (``client_info``).  Try snake_case first (v2), fall back to camelCase (v1).
+    Supports both Pydantic models / objects and raw dicts.
+    """
+    if ctx is None:
+        return None
     try:
-        session = ctx.session
-        client_params = getattr(session, "client_params", None) if session else None
-        client_info = getattr(client_params, "clientInfo", None) if client_params else None
-        name = getattr(client_info, "name", None)
+        session = getattr(ctx, "session", None)
+        if not session:
+            return None
+
+        client_params = getattr(session, "client_params", None)
+        if not client_params:
+            return None
+
+        # Resolve client_info from dict key or object attribute
+        if isinstance(client_params, dict):
+            client_info = client_params.get("client_info") or client_params.get("clientInfo")
+        else:
+            client_info = (
+                getattr(client_params, "client_info", None)
+                or getattr(client_params, "clientInfo", None)
+            )
+
+        if not client_info:
+            return None
+
+        # Extract name from dict key or object attribute
+        if isinstance(client_info, dict):
+            name = client_info.get("name")
+        else:
+            name = getattr(client_info, "name", None)
         return str(name) if name else None
     except Exception:
         return None
@@ -204,7 +231,7 @@ def _build_mcp_tracking_context(
     Sources (all opportunistic — missing values are silently omitted):
       ctx.session_id                         → X-MCP-Session-ID      (stable per conversation)
       ctx.request_id                         → X-MCP-Request-ID      (unique per tool call)
-      ctx.session.client_params.clientInfo   → X-MCP-Client          (LLM product name from MCP handshake)
+      ctx.session.client_params.client_info  → X-MCP-Client          (LLM product name from MCP handshake)
       tool_name                              → X-MCP-Tool            (e.g. "manage_applications")
       resource_type                          → X-MCP-Resource-Type   (e.g. "metrics")
 

@@ -155,6 +155,176 @@ class TestInfrastructureSmartRouterMCPTool(unittest.TestCase):
         self.assertEqual(result["resource_type"], "analyze")
         self.assertEqual(result["operation"], "get_entities")
 
+    def test_analyze_warns_when_entities_match_but_metrics_empty(self):
+        """Matched entities with empty metrics must carry a warning, not look like 'no data'"""
+        async def mock_get_entities(*args, **kwargs):
+            return {"items": [{"label": "allay-backend", "metrics": {}}]}
+
+        self.mock_analyze.get_entities = mock_get_entities
+
+        payload = {
+            "type": "oTelLLM",
+            "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}],
+            "timeFrame": {"windowSize": 3600000},
+            "tagFilterExpression": {
+                "type": "TAG_FILTER", "entity": "NOT_APPLICABLE",
+                "name": "label", "operator": "EQUALS", "value": "allay-backend"
+            }
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze", operation="get_entities", params={"payload": payload}
+        ))
+
+        self.assertIn("warning", result)
+        self.assertIn("does NOT mean", result["warning"])
+        self.assertIn("metric.tag.service_name", result["warning"])
+
+    def test_analyze_no_warning_when_metrics_present(self):
+        """No warning when at least one entity returned metric values"""
+        async def mock_get_entities(*args, **kwargs):
+            return {"items": [{"label": "a", "metrics": {"m": [[1, 2.0]]}}]}
+
+        self.mock_analyze.get_entities = mock_get_entities
+
+        payload = {
+            "type": "host",
+            "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}],
+            "timeFrame": {"windowSize": 3600000}
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze", operation="get_entities", params={"payload": payload}
+        ))
+
+        self.assertNotIn("warning", result)
+
+    def test_analyze_no_warning_when_no_entities(self):
+        """No warning when nothing matched at all"""
+        async def mock_get_entities(*args, **kwargs):
+            return {"items": []}
+
+        self.mock_analyze.get_entities = mock_get_entities
+
+        payload = {
+            "type": "host",
+            "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}],
+            "timeFrame": {"windowSize": 3600000}
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze", operation="get_entities", params={"payload": payload}
+        ))
+
+        self.assertNotIn("warning", result)
+
+    def test_analyze_warns_when_metrics_contain_empty_lists(self):
+        """When metrics dict contains empty lists, warning must be generated."""
+        async def mock_get_entities(*args, **kwargs):
+            return {"items": [{"label": "service-a", "metrics": {"metrics.gauges.llm.usage.total_tokens": []}}]}
+
+        self.mock_analyze.get_entities = mock_get_entities
+
+        payload = {
+            "type": "oTelLLM",
+            "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}],
+            "timeFrame": {"windowSize": 3600000},
+            "tagFilterExpression": {
+                "type": "TAG_FILTER", "entity": "NOT_APPLICABLE",
+                "name": "metric.tag.service_name", "operator": "EQUALS", "value": "service-a"
+            }
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze", operation="get_entities", params={"payload": payload}
+        ))
+
+        self.assertIn("warning", result)
+        self.assertIn("1 entity matched but no metric values were returned", result["warning"])
+
+    def test_analyze_warns_with_nested_tag_filter_expression_containing_label(self):
+        """Deeply nested tagFilterExpression containing 'label' should include the label hint."""
+        async def mock_get_entities(*args, **kwargs):
+            return {
+                "items": [
+                    {"label": "service-1", "metrics": {}},
+                    {"label": "service-2", "metrics": {}}
+                ]
+            }
+
+        self.mock_analyze.get_entities = mock_get_entities
+
+        payload = {
+            "type": "oTelLLM",
+            "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}],
+            "timeFrame": {"windowSize": 3600000},
+            "tagFilterExpression": {
+                "type": "EXPRESSION",
+                "logicalOperator": "AND",
+                "elements": [
+                    {
+                        "type": "EXPRESSION",
+                        "logicalOperator": "OR",
+                        "elements": [
+                            {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "label", "operator": "EQUALS", "value": "service-1"},
+                            {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "label", "operator": "EQUALS", "value": "service-2"}
+                        ]
+                    }
+                ]
+            }
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze", operation="get_entities", params={"payload": payload}
+        ))
+
+        self.assertIn("warning", result)
+        self.assertIn("2 entities matched but no metric values were returned", result["warning"])
+        self.assertIn("metric.tag.service_name", result["warning"])
+
+    def test_empty_metrics_warning_and_collect_tags_non_dict_or_string_payload(self):
+        """Non-dict or invalid payloads and expressions should be safely handled without error."""
+        from src.router.infrastructure_smart_router_tool import (
+            InfrastructureSmartRouterMCPTool,
+        )
+
+        # String or non-dict payloads
+        self.assertIsNone(InfrastructureSmartRouterMCPTool._empty_metrics_warning("not a dict", {"items": []}))
+        self.assertIsNone(InfrastructureSmartRouterMCPTool._empty_metrics_warning(None, {"items": []}))
+        self.assertIsNone(InfrastructureSmartRouterMCPTool._empty_metrics_warning({}, {"items": []}))
+        self.assertIsNone(InfrastructureSmartRouterMCPTool._empty_metrics_warning({"metrics": ["cpu"]}, "not a dict"))
+        self.assertIsNone(InfrastructureSmartRouterMCPTool._empty_metrics_warning({"metrics": ["cpu"]}, {"items": "not a list"}))
+
+        # Tag name collector with non-dict expressions
+        self.assertEqual(InfrastructureSmartRouterMCPTool._collect_filter_tag_names("string_expr"), [])
+        self.assertEqual(InfrastructureSmartRouterMCPTool._collect_filter_tag_names(None), [])
+        self.assertEqual(InfrastructureSmartRouterMCPTool._collect_filter_tag_names(123), [])
+        self.assertEqual(InfrastructureSmartRouterMCPTool._collect_filter_tag_names([]), [])
+        self.assertEqual(InfrastructureSmartRouterMCPTool._collect_filter_tag_names({"name": 123}), ["123"])
+
+    def test_analyze_warns_for_grouped_results_with_empty_metrics(self):
+        """Grouped entity results with empty metrics should also trigger the warning."""
+        async def mock_get_groups(*args, **kwargs):
+            return {"groups": [{"label": "group-1", "metrics": {}}]}
+
+        self.mock_analyze.get_aggregated_entity_groups = mock_get_groups
+
+        payload = {
+            "type": "oTelLLM",
+            "groupBy": ["metric.tag.service_name"],
+            "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}],
+            "timeFrame": {"windowSize": 3600000}
+        }
+
+        result = asyncio.run(self.router.manage_infrastructure(
+            resource_type="analyze",
+            operation="get_entity_groups",
+            params={"payload": payload}
+        ))
+
+        self.assertIn("warning", result)
+        self.assertIn("1 entity matched but no metric values were returned", result["warning"])
+
     def test_analyze_get_entity_groups_success(self):
         """Test successful get_entity_groups routing"""
         async def mock_get_groups(*args, **kwargs):
