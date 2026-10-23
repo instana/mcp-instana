@@ -1276,7 +1276,7 @@ wheels = [
 
 [[package]]
 name = "instana-client"
-version = "1.1.3"
+version = "1.1.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -1284,9 +1284,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8d/fc/56e44fe3fb31ef2645c7da05f269aa6ed7dbec14d8e46f3d2a9efff0a651/instana_client-1.1.3.tar.gz", hash = "sha256:b988fd23c39e662ff177fcda430f3fcb2ff781e8ee6f73cb3695dfcacc8502e6", size = 660561, upload-time = "2026-09-23T13:19:29.993Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/4e/e481bcacaeb78ec4d87b72d79630decc3cf55bebc48383da61ed1660b7e2/instana_client-1.1.4.tar.gz", hash = "sha256:a5afd10cebc4a037ac9bbd25de4cbb3b90efb9ea04202c05ce50a2d80ddfc4b5", size = 694165, upload-time = "2026-10-23T11:17:52.779Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8c/0a/df81ae65522f56bfe275cc70c6d9f06cd03298ec25cac8f8e9fa4977587d/instana_client-1.1.3-py3-none-any.whl", hash = "sha256:9599f30b4eef723862f5711078afa1b748cbbdfa79448d3011f95c690213515c", size = 1361327, upload-time = "2026-09-23T13:19:28.367Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/81/a39972d9eb6850a24efc51ca41feea65768caef26f70caef1051adb5f61e/instana_client-1.1.4-py3-none-any.whl", hash = "sha256:ab6c582800be233ea3d364e54c0ca2d7d54348370a550ecbaf8a89116d45578b", size = 1401788, upload-time = "2026-10-23T11:17:50.895Z" },
 ]
 
 [[package]]
@@ -1591,7 +1591,7 @@ dev = [
 requires-dist = [
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.10.1" },
     { name = "fastmcp", specifier = "==4.1.0" },
-    { name = "instana-client", specifier = "==1.1.3" },
+    { name = "instana-client", specifier = "==1.1.4" },
     { name = "lazy-imports" },
     { name = "mcp" },
     { name = "pydantic", specifier = "==2.13.4" },
