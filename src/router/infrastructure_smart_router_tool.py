@@ -15,7 +15,7 @@ in get_plugin_schema will result in HTTP 400 errors with no diagnostic informati
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -88,6 +88,13 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         title="Manage Instana Infrastructure Resources",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana infrastructure resource manager for comprehensive infrastructure monitoring.
+
+Also the home for aggregated LLM/GenAI entity metrics (token usage, cost, throughput,
+GenAI app listings). Percentile latency (P95/P99) and trace/span data → manage_applications.
+Use plugin="oTelLLM" for catalog/resources and type="oTelLLM" in analyze payloads.
+Agent names vary. A filter on the `label` tag can match the entity but return NO metric
+values (empty `metrics`); that is not zero usage. Match by `label` in the results of an
+unfiltered query, or filter by a metric tag such as `metric.tag.service_name` (oTelLLM).
 
 Resource Types:
     - "analyze": Query infrastructure entity data with grouping or filtering
@@ -242,9 +249,19 @@ ALERT_CONFIG (resource_type="alert_config"):
             OPTIONAL fields:
               severity (int): 5 (Warning) or 10 (Critical)
               evaluationType (string): "PER_ENTITY" or "CUSTOM"
-              rule (dict): Single alert rule with metric and threshold
-              rules (list): Multiple rules (up to 5), each with thresholds per severity
-              threshold (dict): Threshold definition (for single-rule configs)
+              rule (dict): Single alert rule — shape:
+                  alertType (string): "genericRule"
+                  metricName (string): Metric name from get_metrics (e.g. "cpu.used")
+                  entityType (string): Plugin ID from get_plugins (e.g. "host")
+                  aggregation (string): "MEAN", "MAX", "MIN", or "SUM"
+                  crossSeriesAggregation (string): Same values as aggregation
+                  NOTE: metricGroupBy is auto-defaulted to [] — you may omit it
+              rules (list): Multiple rules (up to 5) — each entry shape:
+                  thresholdOperator (string): e.g. ">="
+                  rule (dict): Same shape as the top-level rule dict above
+                  thresholds (dict): e.g. {"WARNING": {"type": "staticThreshold", "value": 0.8}}
+                  NOTE: rule.metricGroupBy is auto-defaulted to [] in every entry
+              threshold (dict): Threshold for single-rule configs — e.g. {"type": "staticThreshold", "operator": ">=", "value": 0.8}
               triggering (bool): Whether to also trigger an Incident
               alertChannelIds (list): Alert channel IDs (defaults to [])
               customPayloadFields (list): Extra notification fields (defaults to [])
@@ -286,7 +303,7 @@ Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"plugin": "host"}
     resource_type="analyze", operation="get_entities", params={"payload": {"type": "host", "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}}}
     resource_type="analyze", operation="get_entities", params={"payload": {"type": "jvmRuntimePlatform", "metrics": [{"metric": "memory.used", "granularity": 3600000, "aggregation": "MAX"}, {"metric": "threads.blocked", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"to": 1743923995000, "windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "EQUALS", "value": "server1"}, "pagination": {"retrievalSize": 200}}}
-    resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "oTelLLM", "groupBy": ["otel.attribute.service.name"], "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "otel.attribute.service.name", "operator": "EQUALS", "value": "dispatch-agent"}, "pagination": {"retrievalSize": 20}}}
+    resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "host", "groupBy": ["host.name"], "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "CONTAINS", "value": "prod"}, "pagination": {"retrievalSize": 20}}}
     resource_type="resources", operation="get_snapshot", params={"snapshot_id": "abc123xyz"}
     resource_type="resources", operation="get_snapshots", params={"plugin": "host", "size": 50}
     resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": 1617994800000, "to_time": 1618081200000, "detailed": true}
@@ -295,13 +312,17 @@ Examples:
     resource_type="alert_config", operation="find_active", params={"page": 2, "page_size": 25}
     resource_type="alert_config", operation="find", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="find_versions", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
-    resource_type="alert_config", operation="create", params={"payload": {"name": "High CPU Alert", "description": "CPU exceeded threshold", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}, "severity": 10}}
+    resource_type="alert_config", operation="create", params={"payload": {"name": "High CPU Alert", "description": "CPU exceeded threshold", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}, "severity": 10, "rule": {"alertType": "genericRule", "metricName": "cpu.used", "entityType": "host", "aggregation": "MEAN", "crossSeriesAggregation": "MEAN"}, "threshold": {"type": "staticThreshold", "operator": ">=", "value": 0.9}}}
     resource_type="alert_config", operation="update", params={"id": "H5PW_lINTV6yGN8ad5jG49", "payload": {"name": "Updated Alert", "description": "Updated", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}}}
     resource_type="alert_config", operation="delete", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="enable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="disable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="restore", params={"id": "H5PW_lINTV6yGN8ad5jG49", "created": 1710658800000}
-"""
+
+    # GENAI / LLM examples —
+    # "For recommendation-agent, shipping-agent, and payment-agent — total tokens and max response duration in last 24h"
+    resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "oTelLLM", "groupBy": ["metric.tag.service_name"], "metrics": [{"metric": "metrics.gauges.llm.usage.total_tokens", "granularity": 3600000, "aggregation": "SUM"}, {"metric": "metrics.gauges.llm.response.duration", "granularity": 3600000, "aggregation": "MAX"}], "timeFrame": {"windowSize": 86400000}, "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "OR", "elements": [{"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "metric.tag.service_name", "operator": "EQUALS", "value": "payment-agent"}, {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "metric.tag.service_name", "operator": "EQUALS", "value": "recommendation-agent"}, {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "metric.tag.service_name", "operator": "EQUALS", "value": "shipping-agent"}]}, "pagination": {"retrievalSize": 20}}}
+    """
     )
     async def manage_infrastructure(
         self,
@@ -447,11 +468,76 @@ Examples:
             )
 
         # Return structured response
-        return {
+        response: Dict[str, Any] = {
             "resource_type": "analyze",
             "operation": actual_operation,
             "results": result
         }
+        warning = self._empty_metrics_warning(payload, result)
+        if warning:
+            response["warning"] = warning
+        return response
+
+    @staticmethod
+    def _collect_filter_tag_names(expr: Any) -> List[str]:
+        """Return all tag names used in a tagFilterExpression (recursive)."""
+        if not isinstance(expr, dict):
+            return []
+        names: List[str] = []
+        if expr.get("name"):
+            names.append(str(expr["name"]))
+        elements = expr.get("elements")
+        if isinstance(elements, list):
+            for element in elements:
+                names.extend(InfrastructureSmartRouterMCPTool._collect_filter_tag_names(element))
+        return names
+
+    @staticmethod
+    def _empty_metrics_warning(payload: Any, result: Any) -> Optional[str]:
+        """Warn when entities matched but no metric values were returned.
+
+        Instana returns success with empty metric dictionaries or series in this case
+        (for example when the filter uses the ``label`` tag), which is indistinguishable
+        from "no data".
+        """
+        if not isinstance(payload, dict) or not payload.get("metrics") or not isinstance(result, dict):
+            return None
+
+        # Handle both flat entity lists ('items') and grouped entity lists ('groups'/'items')
+        items = result.get("items") or result.get("groups")
+        if not isinstance(items, list) or not items:
+            return None
+
+        # Helper to determine if an entity item actually contains non-empty metric data points
+        def _has_metric_values(item: Any) -> bool:
+            if not isinstance(item, dict):
+                return False
+            metrics = item.get("metrics")
+            if not isinstance(metrics, dict) or not metrics:
+                return False
+            # Check if any metric key contains non-empty data point lists/values
+            return any(bool(datapoints) for datapoints in metrics.values() if datapoints is not None)
+
+        if any(_has_metric_values(i) for i in items):
+            return None
+
+        tag_names = InfrastructureSmartRouterMCPTool._collect_filter_tag_names(
+            payload.get("tagFilterExpression")
+        )
+        hint = (
+            "Retry the same query with an empty tagFilterExpression "
+            '({"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}) '
+            "and pick the entity by its label in the results"
+        )
+        if "label" in tag_names:
+            hint += ", or filter by a metric tag such as 'metric.tag.service_name' instead of 'label'"
+
+        count = len(items)
+        entity_str = "1 entity" if count == 1 else f"{count} entities"
+        return (
+            f"{entity_str} matched but no metric values were returned. "
+            f"This does NOT mean the value is zero or that there is no data. {hint}."
+        )
 
     async def _handle_catalog(
         self,

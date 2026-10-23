@@ -56,16 +56,28 @@ class ApplicationSmartRouterMCPTool(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana application resource manager for metrics, alerts, configurations, and catalog.
 
+SCOPE: HTTP/gRPC/DB call traces, trace and span details, application service
+metrics, alert configs, and application perspectives.
+
+LLM/GenAI agents: route by what's asked, not by the agent's name.
+- Trace-level data (latency, errors, spans, prompt/output content, "most recently
+  failed" calls) → analyze here. Prompt/output content is in span attributes.
+  Not manage_events.
+- Entity metrics (token usage, cost, throughput, "list GenAI apps") →
+  manage_infrastructure (oTelLLM).
+- Both (e.g. ".run.workflow traces with P95 latency and tokens"): get traces
+  here, then token metrics from manage_infrastructure, joined on agent/service name.
+
 Resource Types:
     - "metrics": Query application metrics, services, and endpoints
     - "alert_config": Manage application-specific alert configurations
     - "global_alert_config": Manage global application alert configurations
     - "settings": Manage application configurations
     - "catalog": Access application tag and metric catalog information
-    - "resources": Query application resources, services, endpoints
-    - "analyze": Analyze application traces and calls
+    - "resources": Query application resources, services, endpoints (HTTP/gRPC services only — NOT LLM agents)
+    - "analyze": Analyze application traces and calls — individual traces, span details, trace groups
 
-CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER:
+CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER BEFORE METRICS/ANALYZE QUERIES:
     1. FIRST: Call get_metric_catalog to get valid metrics
        - resource_type="catalog", operation="get_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and data sources
@@ -134,21 +146,19 @@ SETTINGS (resource_type="settings"):
     Minimal: params={"resource_subtype": "application", "payload": {"label": "My App"}}
 
 RESOURCES (resource_type="resources"):
+    ❌ NOT FOR LLM/GenAI agents — use manage_infrastructure with plugin="oTelLLM" for those.
+       This covers HTTP/gRPC/database application services and endpoints only.
     operations: get_applications, get_services, get_application_services, get_application_endpoints
     params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope, include_snapshot_ids}
-
-    get_applications - Get application perspectives
+    get_applications - Get application perspectives (not LLM/GenAI entities)
         params: {name_filter, application_boundary_scope}
         Returns: Paginated list of applications with their configurations and metadata
-
-    get_services - Get all services for application monitoring
+    get_services - Get all services for application monitoring (HTTP/gRPC services only — NOT AI agents or GenAI apps)
         params: {name_filter, include_snapshot_ids}
         Returns: Paginated list of services across all applications
-
     get_application_services - Get services for a specific application perspective
         params: {application_id, service_id, name_filter, application_boundary_scope, include_snapshot_ids}
         Returns: Paginated services filtered by application context
-
     get_application_endpoints - Get endpoints for an application service
         params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope}
         Returns: Paginated endpoints with type and technology metadata
@@ -163,6 +173,10 @@ CATALOG (resource_type="catalog"):
         Valid data_source: "CALLS", "TRACES"
 
 ANALYZE (resource_type="analyze"):
+    Use for individual distributed traces, span-level details, and trace group
+    aggregations (P95 latency, error rate, call counts by endpoint or service).
+    NOT for aggregated oTelLLM entity metrics (token counts, cost) — use
+    manage_infrastructure for those.
     operations: get_all_traces, get_trace_details, get_trace_groups
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
@@ -235,7 +249,6 @@ Examples:
     resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App", "scope": "INCLUDE_ALL_DOWNSTREAM", "boundaryScope": "ALL"}}
     resource_type="settings", operation="update", params={"resource_subtype": "application", "id": "config-123", "payload": {"label": "Updated App"}}
     resource_type="settings", operation="delete", params={"resource_subtype": "application", "id": "config-123"}
-    resource_type="settings", operation="order", params={"resource_subtype": "application", "request_body": ["config-1", "config-2", "config-3"]}
 
     # RESOURCES operations
     resource_type="resources", operation="get_applications", params={"name_filter": "My App"}
