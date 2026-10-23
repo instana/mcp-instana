@@ -4,6 +4,7 @@
 - **Enhancement:** Tool selection is now configurable via `mcp.json`, allowing specific tools to be enabled or omitted.
 - **Enhancement:** Improved performance of the `get_events` operation and the `find_active` operation for infrastructure and global application Smart Alerts.
 - **Enhancement:** Enhanced the SLO prompts.
+- **New**: Introducing smart alerts for synthetics.
 
 ### 1.0.3
 - **IMPORTANT**: SSL certificate verification is **enabled by default** and configurable
