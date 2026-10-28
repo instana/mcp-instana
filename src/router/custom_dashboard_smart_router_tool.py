@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import resolve_nav_page
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,10 @@ Parameters (params dict):
 - page: Page number, 1-indexed (for get_all)
 - with_total_hits: Include total count (for get_all)
 
+Pagination: get_all with page_size and with_total_hits=true returns pagination.next_operation /
+previous_operation (e.g. "page_3"). To change page, call operation=<that value> (or "next"/"previous"/
+"go_to_page") with the same params plus page (current page; for go_to_page, the target page).
+
 Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
 
 CustomDashboard Model:
@@ -82,6 +87,14 @@ Examples:
             # Initialize params if not provided
             if params is None:
                 params = {}
+
+            # Pagination navigation (shared, stateless - src/core/pagination.py):
+            # page_N / next / previous / go_to_page re-run get_all on that page.
+            _nav_page = resolve_nav_page(operation, params)
+            if _nav_page is not None:
+                params = {**params, "page": _nav_page, "with_total_hits": True}
+                params.setdefault("page_size", 10)
+                operation = "get_all"
 
             # Validate operation
             valid_operations = [

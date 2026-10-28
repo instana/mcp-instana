@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
 
+from src.core.pagination import build_pagination
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -234,6 +235,10 @@ class SyntheticAlertMCPTools(BaseInstanaClient):
                 "total_pages": total_pages,
                 "has_next": effective_page < total_pages,
                 "has_previous": effective_page > 1,
+                "pagination": build_pagination(
+                    effective_page, effective_page_size, total_count,
+                    list_id="synthetic_alert_configs",
+                ),
                 "message": (
                     "No active synthetic smart alert configurations found."
                     if not configs

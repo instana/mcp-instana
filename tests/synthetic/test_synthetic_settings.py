@@ -225,6 +225,45 @@ class TestSyntheticSettingsMCPTools(unittest.TestCase):
         )
         self.assertEqual(result["count"], 1)
 
+    def test_get_synthetic_tests_client_side_paging(self):
+        """page/page_size fetch the full list, slice it, and return the shared envelope."""
+        tests = [{"id": f"t{i}", "label": f"Test {i}"} for i in range(25)]
+        self.settings_api.get_synthetic_tests_without_preload_content = Mock(
+            return_value=_ok_response(tests)
+        )
+
+        result = asyncio.run(self.client.get_synthetic_tests(
+            page=2, page_size=10, offset=5, limit=5,
+        ))
+
+        # offset/limit are NOT forwarded: the whole list is needed to slice and count.
+        self.settings_api.get_synthetic_tests_without_preload_content.assert_called_once_with(
+            application_id=None, location_id=None, credential_name=None,
+            sort=None, offset=None, limit=None, filter=None,
+        )
+        self.assertEqual([t["id"] for t in result["items"]], [f"t{i}" for i in range(10, 20)])
+        self.assertEqual(result["count"], 10)
+        self.assertEqual(result["total"], 25)
+        pagination = result["pagination"]
+        self.assertEqual(pagination["total_pages"], 3)
+        self.assertEqual(pagination["next_operation"], "page_3")
+        self.assertEqual(pagination["previous_operation"], "page_1")
+        self.assertEqual(pagination["list_id"], "synthetic_tests")
+
+    def test_get_synthetic_tests_without_page_params_is_unchanged(self):
+        """No page/page_size keeps the original behaviour: no envelope, offset/limit forwarded."""
+        self.settings_api.get_synthetic_tests_without_preload_content = Mock(
+            return_value=_ok_response(SAMPLE_TESTS)
+        )
+
+        result = asyncio.run(self.client.get_synthetic_tests(offset=1, limit=2))
+
+        self.assertNotIn("pagination", result)
+        self.assertEqual(
+            self.settings_api.get_synthetic_tests_without_preload_content.call_args.kwargs["limit"], 2
+        )
+
+
     def test_get_synthetic_tests_filter_auto_wrapped(self):
         """Filter without braces should be auto-wrapped to {filter} syntax."""
         self.settings_api.get_synthetic_tests_without_preload_content = Mock(

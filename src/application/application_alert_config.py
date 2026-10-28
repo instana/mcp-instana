@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import build_pagination
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -235,11 +236,14 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
         ctx,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Route a validated alert_config operation to the appropriate handler."""
         _r = {"resource_type": resource_type, "tool_name": tool_name}
+        _pg = {"page": page, "page_size": page_size} if page or page_size else {}
         dispatch = {
-            "find_active": lambda: self._find_active_configs(application_id, alert_ids, ctx, **_r),
+            "find_active": lambda: self._find_active_configs(application_id, alert_ids, ctx, **_r, **_pg),
             "find_versions": lambda: self._find_config_versions(id, ctx, **_r),
             "find": lambda: self._find_config(id, valid_on, ctx, **_r),
             "create": lambda: self._create_config(payload, ctx, **_r),
@@ -267,6 +271,8 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
         ctx=None,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Execute Application Alert Config CRUD operations.
@@ -281,6 +287,8 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             created: Unix timestamp for restore
             payload: Configuration payload
             ctx: MCP context
+            page: 1-based page of find_active results (optional, default 1)
+            page_size: find_active page size (optional, default 10)
 
         Returns:
             Operation result dictionary
@@ -300,6 +308,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             return await self._dispatch_alert_config(
                 operation, application_id, id, alert_ids, valid_on, created, payload, ctx,
                 resource_type=resource_type, tool_name=tool_name,
+                page=page, page_size=page_size,
             )
 
         except Exception as e:
@@ -317,11 +326,15 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
         api_client=None,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Find active application alert configs."""
         if not application_id:
             return {"error": "application_id is required for find_active operation"}
 
+        # Only forward paging when requested, so callers that do not page see no change.
+        paging = {k: v for k, v in (("page", page), ("page_size", page_size)) if v is not None}
         return await self.find_active_application_alert_configs(
             application_id=application_id,
             alert_ids=alert_ids,
@@ -329,6 +342,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             api_client=api_client,
             resource_type=resource_type,
             tool_name=tool_name,
+            **paging,
         )
 
     @with_header_auth(ApplicationAlertConfigurationApi)
@@ -536,7 +550,9 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                                             alert_ids: Optional[List[str]] = None,
                                             ctx=None, api_client=None,
                                             resource_type: Optional[str] = None,
-                                            tool_name: Optional[str] = None) -> Dict[str, Any]:
+                                            tool_name: Optional[str] = None,
+                                            page: Optional[int] = None,
+                                            page_size: Optional[int] = None) -> Dict[str, Any]:
         """
         Get All Smart Alert Configuration.
 
@@ -549,9 +565,12 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
             application_id: The ID of a specific application.
             alert_ids: A list of Smart Alert Configuration IDs. This allows fetching of a specific set of Configurations. This query can be repeated to use multiple IDs.
             ctx: The MCP context (optional)
+            page: 1-based page number (optional, default 1)
+            page_size: Items per page (optional, default 10, max 100)
 
         Returns:
-            Dictionary containing the Smart Alert Configuration or error information
+            Dictionary containing the Smart Alert Configuration or error information,
+            with a standard ``pagination`` envelope (``next_operation`` / ``previous_operation``).
         """
         try:
             logger.debug(f"find_active_application_alert_configs called with application_id={application_id}, alert_ids={alert_ids}")
@@ -573,10 +592,16 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
-            # Stream-parse only the first 10 items so the full array is
+            # Stream-parse only the requested page so the full array is
             # never buffered in memory, regardless of tenant size.
+            safe_size = max(1, min(100, int(page_size))) if page_size else 10
+            safe_page = max(1, int(page)) if page else 1
+            start_idx = (safe_page - 1) * safe_size
             limited_configs, total_count = stream_json_array_page(
-                response, start_idx=0, end_idx=10
+                response, start_idx=start_idx, end_idx=start_idx + safe_size
+            )
+            pagination = build_pagination(
+                safe_page, safe_size, total_count, list_id="application_alert_configs"
             )
 
             if not limited_configs and total_count == 0:
@@ -585,6 +610,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                     "count": 0,
                     "total": 0,
                     "showing": 0,
+                    "pagination": pagination,
                     "message": f"No active alert configurations found for application ID: {application_id}",
                     "suggestion": "You can create a new alert configuration using the 'create' operation."
                 }
@@ -593,7 +619,15 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
                 "count": len(limited_configs),
                 "total": total_count,
                 "showing": len(limited_configs),
-                "message": f"Found {total_count} active alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
+                "pagination": pagination,
+                "message": (
+                    f"Found {total_count} active alert configuration(s) for application ID: {application_id}. "
+                    + (
+                        f"Showing first {len(limited_configs)}."
+                        if safe_page == 1
+                        else f"Showing page {safe_page} of {pagination['total_pages']} ({len(limited_configs)} item(s))."
+                    )
+                ),
             }
 
         except Exception as e:

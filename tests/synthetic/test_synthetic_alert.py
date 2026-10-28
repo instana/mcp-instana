@@ -202,6 +202,24 @@ class TestFindActiveSyntheticAlertConfigs(unittest.TestCase):
         self.assertFalse(result['has_next'])
         self.assertTrue(result['has_previous'])
 
+    def test_returns_standard_pagination_envelope(self):
+        configs = [{'id': f'a{i}'} for i in range(25)]
+        self.client.alert_api.find_active_synthetic_alert_configs_without_preload_content.return_value = \
+            _mock_response(200, configs)
+
+        result = asyncio.run(self.client.find_active_synthetic_alert_configs(page=2, page_size=10))
+
+        pagination = result['pagination']
+        self.assertEqual(pagination['page'], 2)
+        self.assertEqual(pagination['total_items'], 25)
+        self.assertEqual(pagination['next_operation'], 'page_3')
+        self.assertEqual(pagination['previous_operation'], 'page_1')
+        self.assertEqual(pagination['list_id'], 'synthetic_alert_configs')
+        # Legacy keys are unchanged.
+        self.assertTrue(result['has_next'])
+        self.assertEqual(result['total_pages'], 3)
+
+
     def test_api_error_returns_error_dict(self):
         self.client.alert_api.find_active_synthetic_alert_configs_without_preload_content.return_value = \
             _mock_response(500, {'message': 'Internal error'})

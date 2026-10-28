@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import resolve_nav_page
 from src.core.timestamp_utils import convert_datetime_param, convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
 
@@ -61,6 +62,9 @@ Operations: get_all_releases, get_release, create_release, update_release, delet
 
 GET_ALL_RELEASES - List releases in time range with pagination and filtering
     params: from_time, to_time, name_filter, page_number, page_size
+    Paged responses include pagination.next_operation / previous_operation (e.g. "page_3").
+    To change page, call operation=<that value> (or "next"/"previous"/"go_to_page") with the
+    same params plus page_number (current page; for go_to_page, the target page).
     Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
     name_filter: Filter releases by name (case-insensitive substring match)
     page_number: Page number (1-based, use with page_size)
@@ -126,6 +130,14 @@ Examples:
             # Initialize params if not provided
             if params is None:
                 params = {}
+
+            # Pagination navigation (shared, stateless - src/core/pagination.py):
+            # page_N / next / previous / go_to_page re-run get_all_releases on that page.
+            _nav_page = resolve_nav_page(operation, params)
+            if _nav_page is not None:
+                params = {**params, "page_number": _nav_page}
+                params.setdefault("page_size", 50)
+                operation = OPERATION_GET_ALL_RELEASES
 
             # Validate operation
             if operation not in RELEASES_VALID_OPERATIONS:

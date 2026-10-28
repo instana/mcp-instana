@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import build_pagination
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -393,6 +394,13 @@ class CustomDashboardMCPTools(BaseInstanaClient):
                 result_dict["page"] = effective_page
             if page_size is not None:
                 result_dict["page_size"] = page_size
+
+            # Standard pagination envelope (needs the total, i.e. withTotalHits=true)
+            if page_size and isinstance(result_dict.get("total_hits"), int):
+                result_dict["pagination"] = build_pagination(
+                    effective_page or 1, page_size, result_dict["total_hits"],
+                    list_id="custom_dashboards",
+                )
 
             try:
                 logger.debug(f"Result from get_custom_dashboards: {json.dumps(result_dict, indent=2)}")

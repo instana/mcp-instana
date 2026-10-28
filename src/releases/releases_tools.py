@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from instana_client.api.releases_api import ReleasesApi
 from instana_client.models.release import Release
 
+from src.core.pagination import build_pagination
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -138,6 +139,9 @@ class ReleasesMCPTools(BaseInstanaClient):
                     "page_number": page_number,
                     "page_size": page_size,
                     "total_pages": total_pages,
+                    "pagination": build_pagination(
+                        page_number, page_size, total_count, list_id="releases"
+                    ),
                     "releases": paginated_releases,
                     "has_next_page": page_number < total_pages,
                     "has_previous_page": page_number > 1

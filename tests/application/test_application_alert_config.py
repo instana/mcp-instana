@@ -163,6 +163,38 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.assertIn("configs", result)
         self.assertEqual(len(result["configs"]), 1)
 
+    def test_find_active_application_alert_configs_pagination(self):
+        """page/page_size select a slice of the streamed array and return the shared envelope."""
+        body = ('[' + ','.join(f'{{"id": "a{i}"}}' for i in range(25)) + ']').encode()
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = \
+            _make_streaming_response(body)
+
+        result = asyncio.run(self.client.find_active_application_alert_configs(
+            application_id="app1", page=2, page_size=10,
+        ))
+
+        self.assertEqual([c["id"] for c in result["configs"]], [f"a{i}" for i in range(10, 20)])
+        self.assertEqual(result["total"], 25)
+        pagination = result["pagination"]
+        self.assertEqual(pagination["page"], 2)
+        self.assertEqual(pagination["total_pages"], 3)
+        self.assertEqual(pagination["next_operation"], "page_3")
+        self.assertEqual(pagination["previous_operation"], "page_1")
+        self.assertEqual(pagination["list_id"], "application_alert_configs")
+
+    def test_find_active_application_alert_configs_defaults_to_first_ten(self):
+        """Without page params the first 10 items are returned, as before, plus the envelope."""
+        body = ('[' + ','.join(f'{{"id": "a{i}"}}' for i in range(15)) + ']').encode()
+        self.alert_config_api.find_all_active_application_alert_configs_without_preload_content.return_value = \
+            _make_streaming_response(body)
+
+        result = asyncio.run(self.client.find_active_application_alert_configs(application_id="app1"))
+
+        self.assertEqual(len(result["configs"]), 10)
+        self.assertEqual(result["pagination"]["next_operation"], "page_2")
+        self.assertIsNone(result["pagination"]["previous_operation"])
+
+
     def test_find_active_application_alert_configs_missing_application_id(self):
         """Test find_active_application_alert_configs with missing application_id"""
         # Call the method without application_id

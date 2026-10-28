@@ -592,6 +592,27 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertIn("pagination_hint", result)
         self.assertIn("Consider using pagination", result["pagination_hint"])
 
+    def test_get_all_releases_returns_standard_pagination_envelope(self):
+        """Paged responses carry the shared pagination envelope with navigation operations."""
+        mock_response = MagicMock()
+        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 11)]
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
+        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_all_releases(page_number=2, page_size=3))
+
+        pagination = result["pagination"]
+        self.assertEqual(pagination["page"], 2)
+        self.assertEqual(pagination["total_items"], 10)
+        self.assertEqual(pagination["total_pages"], 4)
+        self.assertEqual(pagination["next_operation"], "page_3")
+        self.assertEqual(pagination["previous_operation"], "page_1")
+        self.assertEqual(pagination["list_id"], "releases")
+        # Legacy keys are unchanged.
+        self.assertTrue(result["has_next_page"])
+        self.assertEqual(result["total_pages"], 4)
+
+
 
 if __name__ == '__main__':
     unittest.main()
