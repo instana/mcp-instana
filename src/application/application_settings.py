@@ -14,6 +14,7 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional, Union
 
+from src.core.ui_links import add_application_link
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -243,6 +244,10 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                     # If it's a single object, wrap it in a list
                     result_dict = [json_data] if json_data else []
                 logger.debug("Successfully retrieved application configs data")
+                # Add Instana UI url/link to each application
+                for app in result_dict:
+                    if isinstance(app, dict):
+                        add_application_link(self.base_url, app)
                 return result_dict
             except (json.JSONDecodeError, AttributeError) as json_err:
                 error_message = f"Failed to parse JSON response: {json_err}"
@@ -726,7 +731,11 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_application_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
-            return json.loads(response.data.decode('utf-8'))
+            result = json.loads(response.data.decode('utf-8'))
+            # Add Instana UI url/link to the application
+            if isinstance(result, dict):
+                add_application_link(self.base_url, result)
+            return result
         except Exception as e:
             logger.error(f"Error in _get_application_config: {e}", exc_info=True)
             return {"error": f"Failed to get application config: {e!s}"}

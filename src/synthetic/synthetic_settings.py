@@ -17,6 +17,7 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
+from src.core.ui_links import add_synthetic_test_link
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -117,7 +118,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                     "test_id": test_id,
                 }
 
-            return json.loads(decode_response(response))
+            test = json.loads(decode_response(response))
+            if isinstance(test, dict):
+                add_synthetic_test_link(self.base_url, test)
+            return test
 
         except Exception as e:
             logger.error("[get_synthetic_test] Error: %s", e, exc_info=True)
@@ -188,6 +192,9 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 return self.handle_api_error_response(response, "list synthetic tests", logger)
 
             items = json.loads(decode_response(response))
+            for test in items:
+                if isinstance(test, dict):
+                    add_synthetic_test_link(self.base_url, test)
 
             logger.debug("[get_synthetic_tests] Returning %d tests", len(items))
             return {

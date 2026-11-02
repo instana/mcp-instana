@@ -925,7 +925,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertIn("error", result)
 
     def test_get_application_config_no_to_dict(self):
-        """Test _get_application_config returns parsed JSON from raw response"""
+        """Test _get_application_config returns parsed JSON from raw response plus url/link"""
         data = {"id": "app1", "label": "App"}
         mock_response = MagicMock()
         mock_response.data = json.dumps(data).encode('utf-8')
@@ -933,7 +933,20 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
-        self.assertEqual(result, data)
+        expected_url = "https://test.instana.io/#/application;appId=app1/summary;latencyTab=overTime"
+        self.assertEqual(result, {**data, "url": expected_url, "link": f"[App]({expected_url})"})
+
+    def test_get_all_applications_configs_adds_url_and_link(self):
+        """Test _get_all_applications_configs adds an Instana UI url/link to each application"""
+        mock_result = MagicMock()
+        mock_result.data.decode.return_value = '[{"id": "app1", "label": "My [App]"}]'
+        mock_settings_api.get_application_configs_without_preload_content.return_value = mock_result
+
+        result = asyncio.run(self.client._get_all_applications_configs())
+
+        expected_url = "https://test.instana.io/#/application;appId=app1/summary;latencyTab=overTime"
+        self.assertEqual(result[0]["url"], expected_url)
+        self.assertEqual(result[0]["link"], f"[My \\[App\\]]({expected_url})")
 
     def test_add_application_config_validation_error(self):
         """Test _add_application_config without label returns elicitation"""

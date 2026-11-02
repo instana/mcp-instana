@@ -23,6 +23,7 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
+from src.core.ui_links import add_service_link
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -316,6 +317,12 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))
             self._sanitize_items_technologies(result_dict)
+
+            # Add Instana UI url/link to each service
+            if isinstance(result_dict, dict):
+                for svc in result_dict.get('items') or []:
+                    if isinstance(svc, dict):
+                        add_service_link(self.base_url, application_id, svc)
 
             logger.debug(f"Result from get_application_services: {result_dict}")
             return result_dict

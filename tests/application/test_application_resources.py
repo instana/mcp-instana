@@ -479,6 +479,24 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertEqual(result["items"][0]["technologies"], ["python"])
         self.assertEqual(result["items"][1]["technologies"], [])
 
+    def test_get_application_services_adds_url_and_link(self):
+        """Test get_application_services adds an Instana UI url/link to each service"""
+        payload = {"items": [{"id": "svc-1", "label": "checkout [v2] (prod)"}]}
+        response = MagicMock()
+        response.data = json.dumps(payload).encode('utf-8')
+        self.resources_api.get_application_services_without_preload_content.return_value = response
+
+        result = asyncio.run(self.client.get_application_services(application_id="app-1"))
+
+        svc = result["items"][0]
+        self.assertEqual(
+            svc["url"],
+            "https://test.instana.io/#/service;appId=app-1;serviceId=svc-1;"
+            "boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+        )
+        self.assertTrue(svc["link"].startswith("[checkout \\[v2\\] (prod)]("))
+        self.assertNotIn("(prod)", svc["link"].split("](", 1)[1])
+
     def test_get_application_services_error_handling(self):
         """Test get_application_services returns a meaningful error message on exception"""
         self.resources_api.get_application_services_without_preload_content.side_effect = Exception("Application services failure")
