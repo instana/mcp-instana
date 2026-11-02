@@ -62,13 +62,15 @@ Operations: get_all_releases, get_release, create_release, update_release, delet
 
 GET_ALL_RELEASES - List releases in time range with pagination and filtering
     params: from_time, to_time, name_filter, page_number, page_size
-    Paged responses include pagination.next_operation / previous_operation (e.g. "page_3").
-    To change page, call operation=<that value> (or "next"/"previous"/"go_to_page") with the
-    same params plus page_number (current page; for go_to_page, the target page).
+    Paged responses return page 1 (50 items) by default with a pagination envelope
+    ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
+    To change page, call operation=<next_operation or previous_operation> (e.g. "page_2", "next",
+    "previous", "go_to_page") with the same params plus page_number (current page; for go_to_page,
+    the target page).
     Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
     name_filter: Filter releases by name (case-insensitive substring match)
-    page_number: Page number (1-based, use with page_size)
-    page_size: Results per page (default: 50)
+    page_number: Page number (1-based, optional, default: 1)
+    page_size: Results per page (optional, default: 50)
 
 GET_RELEASE - Get release by ID
     params: release_id (required)
@@ -138,6 +140,10 @@ Examples:
                 params = {**params, "page_number": _nav_page}
                 params.setdefault("page_size", 50)
                 operation = OPERATION_GET_ALL_RELEASES
+
+            if operation == OPERATION_GET_ALL_RELEASES:
+                params.setdefault("page_number", 1)
+                params.setdefault("page_size", 50)
 
             # Validate operation
             if operation not in RELEASES_VALID_OPERATIONS:

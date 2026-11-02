@@ -347,16 +347,16 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             #     send both pageSize AND page together for pagination to take effect.
             #   - withTotalHits=true changes the response shape from a flat list to
             #     {"totalHits": N, "items": [...]} — both shapes are handled below.
-            effective_page = page
-            if page_size is not None and page is None:
-                effective_page = 1  # page is required for pageSize to have effect
+            effective_page = page if page is not None else 1
+            effective_page_size = page_size if page_size is not None else 10
+            effective_with_total_hits = with_total_hits if with_total_hits is not None else True
 
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_custom_dashboards_without_preload_content,
                     query=query,
-                    page_size=page_size,
+                    page_size=effective_page_size,
                     page=effective_page,
-                    with_total_hits=with_total_hits,
+                    with_total_hits=effective_with_total_hits,
                 ),
                 ctx=ctx, operation_name="get_custom_dashboards",
                 resource_type=resource_type, tool_name=tool_name,
@@ -392,13 +392,13 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             # Echo back the pagination params that were actually sent
             if effective_page is not None:
                 result_dict["page"] = effective_page
-            if page_size is not None:
-                result_dict["page_size"] = page_size
+            if effective_page_size is not None:
+                result_dict["page_size"] = effective_page_size
 
             # Standard pagination envelope (needs the total, i.e. withTotalHits=true)
-            if page_size and isinstance(result_dict.get("total_hits"), int):
+            if effective_page_size and isinstance(result_dict.get("total_hits"), int):
                 result_dict["pagination"] = build_pagination(
-                    effective_page or 1, page_size, result_dict["total_hits"],
+                    effective_page or 1, effective_page_size, result_dict["total_hits"],
                     list_id="custom_dashboards",
                 )
 

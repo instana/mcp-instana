@@ -22,7 +22,18 @@ The standard envelope::
 ``list_id`` names the list the envelope belongs to (e.g. ``"alert_channels"``) so the
 agent can tell which list "next" continues.
 
-Nothing here keeps state, so it is safe with multiple server replicas.
+Stateless Pagination & Ordering Notes:
+-------------------------------------
+* The server maintains no in-memory session or cache across requests, ensuring high
+  availability across multiple server replicas and restarts.
+* Each page request (e.g. ``"page_2"`` or ``"next"``) fetches fresh data from the
+  upstream Instana API and slices the requested page offset.
+* For APIs where the upstream service returns unsorted or non-deterministic ordering,
+  pass a ``sort_key`` (or use :func:`stable_sort_key`) to :func:`paginate` to guarantee
+  stable, consistent page slices between consecutive page calls.
+* Note that concurrent upstream additions or deletions between page requests may shift
+  item offsets; when strict consistency is required, filter by specific identifiers,
+  tags, or fixed time windows.
 """
 
 import logging
@@ -160,6 +171,25 @@ def build_pagination(
     return add_navigation(envelope)
 
 
+def stable_sort_key(item: Any) -> Any:
+    """
+    Extract a stable sort key from an item (dict or object) so that repeated fetches
+    produce consistent, deterministic page slices without skipping or repeating items.
+    """
+    if isinstance(item, dict):
+        for key in ("id", "name", "label", "key", "title"):
+            val = item.get(key)
+            if val is not None:
+                return str(val)
+        return str(item)
+    for attr in ("id", "name", "label", "key", "title"):
+        if hasattr(item, attr):
+            val = getattr(item, attr)
+            if val is not None:
+                return str(val)
+    return str(item)
+
+
 def paginate(
     records: List[Any],
     page: Union[int, str, None] = 1,
@@ -174,9 +204,12 @@ def paginate(
 
     * ``page`` / ``page_size`` may be int or str; invalid values fall back to 1 / 10.
       ``page_size`` is clamped to ``1..max_page_size``.
-    * ``sort_key`` (optional callable) sorts *before* slicing. Pass one when the data
-      source does not guarantee a stable order, because the server re-fetches the whole
+    * ``sort_key`` (optional callable) sorts *before* slicing. Pass one (or :func:`stable_sort_key`)
+      when the data source does not guarantee a stable order, because the server re-fetches the whole
       list on every page and an unstable order can skip or repeat items between pages.
+    * Note on stateless pagination: The server re-fetches the list on each page request
+      without keeping server-side session state. Sorting ensures stable ordering, though
+      concurrent upstream creations or deletions between page requests may shift items.
     * A page beyond the last one returns an empty list (the envelope still reports the
       requested page) rather than silently showing a different page.
     * ``list_id`` names the list so the agent knows which list "next" continues.

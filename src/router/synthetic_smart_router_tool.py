@@ -156,8 +156,9 @@ SETTINGS (resource_type="settings"):
 
     get_synthetic_tests - List synthetic tests, optionally filtered and paginated.
         params: {application_id, location_id, credential_name, sort, offset, limit, filter_param, page, page_size} — all optional.
-        With page/page_size the response carries pagination.next_operation / previous_operation
-        (e.g. "page_3"). To change page, call resource_type="settings" with operation=<that value>
+        Defaults to page 1 with page_size 10. The response carries pagination metadata
+        ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
+        To change page, call resource_type="settings" with operation=<next_operation or previous_operation>
         (or "next"/"previous"/"go_to_page") and the same filters plus page (current page; for
         go_to_page, the target page). The same applies to resource_type="alert" find_active.
 
@@ -530,6 +531,11 @@ Examples:
 
             elif operation == "get_synthetic_tests":
                 logger.debug("[_handle_settings] Routing to get_synthetic_tests | params=%s", params)
+                page = params.get("page")
+                page_size = params.get("page_size")
+                if page is None and page_size is None and params.get("offset") is None and params.get("limit") is None:
+                    page = 1
+                    page_size = 10
                 result = await self.synthetic_settings_client.get_synthetic_tests(
                     application_id=params.get("application_id"),
                     location_id=params.get("location_id"),
@@ -538,8 +544,8 @@ Examples:
                     offset=params.get("offset"),
                     limit=params.get("limit"),
                     filter_param=params.get("filter"),
-                    page=params.get("page"),
-                    page_size=params.get("page_size"),
+                    page=page,
+                    page_size=page_size,
                     ctx=ctx,
                     resource_type="settings", tool_name="manage_synthetics",
                 )

@@ -244,26 +244,37 @@ class TestPageNWorksOnEveryRouter(unittest.TestCase):
         for rt in seen:
             self.assertEqual(seen[rt], [("find_active", 7, None), ("find_active", 3, 5)])
 
-    def test_application_settings_get_all_paginates_only_when_asked(self):
+    def test_application_settings_get_all_paginates_by_default(self):
         router = self._tool(ApplicationSmartRouterMCPTool)
-        items = [{"id": str(i)} for i in range(25)]
+        items = [{"id": f"{i:02d}"} for i in range(25)]
         with patch.object(router.app_settings_client, "execute_settings_operation", new=AsyncMock(return_value=items)):
             plain = _run(router.manage_applications(
                 "settings", "get_all", {"resource_subtype": "application"}))
-            self.assertEqual(len(plain["results"]), 25)
-            self.assertNotIn("pagination", plain)
+            self.assertEqual(len(plain["results"]), 10)
+            self.assertIn("pagination", plain)
+            self.assertEqual(plain["pagination"]["page"], 1)
+            self.assertEqual(plain["pagination"]["page_size"], 10)
+            self.assertEqual(plain["pagination"]["total_items"], 25)
+            self.assertEqual(plain["pagination"]["next_operation"], "page_2")
+            self.assertEqual(plain["pagination"]["list_id"], "application_settings")
 
             page1 = _run(router.manage_applications(
-                "settings", "get_all", {"resource_subtype": "application", "page_size": 10}))
-            self.assertEqual(len(page1["results"]), 10)
+                "settings", "get_all", {"resource_subtype": "application", "page_size": 5}))
+            self.assertEqual(len(page1["results"]), 5)
             self.assertEqual(page1["pagination"]["next_operation"], "page_2")
-            self.assertEqual(page1["pagination"]["list_id"], "application_settings")
 
             # Follow next_operation; the agent need not repeat resource_subtype / page_size.
             page3 = _run(router.manage_applications("settings", "page_3", {}))
-            self.assertEqual([r["id"] for r in page3["results"]], [str(i) for i in range(20, 25)])
+            self.assertEqual([r["id"] for r in page3["results"]], [f"{i:02d}" for i in range(20, 25)])
             self.assertIsNone(page3["pagination"]["next_operation"])
             self.assertEqual(page3["pagination"]["previous_operation"], "page_2")
+
+    def test_paginate_stable_sorting(self):
+        """paginate with stable_sort_key sorts records to prevent skipping/duplicating items."""
+        from src.core.pagination import stable_sort_key
+        unsorted_items = [{"id": "b"}, {"id": "c"}, {"id": "a"}]
+        page, meta = paginate(unsorted_items, page=1, page_size=2, sort_key=stable_sort_key)
+        self.assertEqual([item["id"] for item in page], ["a", "b"])
 
 
 if __name__ == "__main__":

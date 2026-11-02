@@ -572,8 +572,8 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertIn("Failed to delete release", result["error"])
         self.assertEqual(result["release_id"], "rel-123")
 
-    def test_get_all_releases_pagination_hint(self):
-        """Test that pagination hint is provided for large result sets"""
+    def test_get_all_releases_defaults_to_first_page(self):
+        """Test that pagination defaults to page 1 and page_size 50 for large result sets"""
         # Mock response with many releases
         mock_response = MagicMock()
         releases_data = [
@@ -583,14 +583,16 @@ class TestReleasesMCPTools(unittest.TestCase):
         mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
-        # Call without pagination
+        # Call without pagination params
         result = asyncio.run(self.client.get_all_releases())
 
-        # Verify pagination hint is present
+        # Verify first page of 50 releases is returned with pagination envelope
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 100)
-        self.assertIn("pagination_hint", result)
-        self.assertIn("Consider using pagination", result["pagination_hint"])
+        self.assertEqual(len(result["releases"]), 50)
+        self.assertEqual(result["page_number"], 1)
+        self.assertEqual(result["page_size"], 50)
+        self.assertEqual(result["pagination"]["next_operation"], "page_2")
 
     def test_get_all_releases_returns_standard_pagination_envelope(self):
         """Paged responses carry the shared pagination envelope with navigation operations."""

@@ -106,62 +106,49 @@ class ReleasesMCPTools(BaseInstanaClient):
 
             total_count = len(all_releases)
 
-            # Apply pagination if specified
-            if page_number is not None and page_size is not None:
-                # Validate pagination parameters
-                if page_number < 1:
-                    return {
-                        "success": False,
-                        "error": "page_number must be >= 1"
-                    }
-                if page_size < 1:
-                    return {
-                        "success": False,
-                        "error": "page_size must be >= 1"
-                    }
+            # Paginate by default (default page_number=1, page_size=50)
+            effective_page = page_number if page_number is not None else 1
+            effective_page_size = page_size if page_size is not None else 50
 
-                # Calculate pagination
-                start_idx = (page_number - 1) * page_size
-                end_idx = start_idx + page_size
-                total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
-
-                # Get the page slice
-                paginated_releases = all_releases[start_idx:end_idx]
-
-                logger.info(
-                    f"Retrieved page {page_number}/{total_pages} "
-                    f"({len(paginated_releases)} releases)"
-                )
-
+            # Validate pagination parameters
+            if effective_page < 1:
                 return {
-                    "success": True,
-                    "count": total_count,
-                    "page_number": page_number,
-                    "page_size": page_size,
-                    "total_pages": total_pages,
-                    "pagination": build_pagination(
-                        page_number, page_size, total_count, list_id="releases"
-                    ),
-                    "releases": paginated_releases,
-                    "has_next_page": page_number < total_pages,
-                    "has_previous_page": page_number > 1
+                    "success": False,
+                    "error": "page_number must be >= 1"
                 }
-            else:
-                # No pagination - return all results
-                # Set default page_size for consistency
-                default_page_size = page_size or 50
-
-                logger.info(f"Retrieved {total_count} releases (no pagination)")
-
+            if effective_page_size < 1:
                 return {
-                    "success": True,
-                    "count": total_count,
-                    "releases": all_releases,
-                    "pagination_hint": (
-                        f"Consider using pagination for large result sets. "
-                        f"Use page_number=1 and page_size={default_page_size} to get started."
-                    ) if total_count > default_page_size else None
+                    "success": False,
+                    "error": "page_size must be >= 1"
                 }
+
+            start_idx = (effective_page - 1) * effective_page_size
+            end_idx = start_idx + effective_page_size
+            total_pages = max(1, (total_count + effective_page_size - 1) // effective_page_size)  # Ceiling division
+
+            # Get the page slice
+            paginated_releases = all_releases[start_idx:end_idx] if start_idx < len(all_releases) else []
+
+            logger.info(
+                f"Retrieved page {effective_page}/{total_pages} "
+                f"({len(paginated_releases)} releases)"
+            )
+
+            pagination = build_pagination(
+                effective_page, effective_page_size, total_count, list_id="releases"
+            )
+
+            return {
+                "success": True,
+                "count": total_count,
+                "page_number": effective_page,
+                "page_size": effective_page_size,
+                "total_pages": total_pages,
+                "pagination": pagination,
+                "releases": paginated_releases,
+                "has_next_page": effective_page < total_pages,
+                "has_previous_page": effective_page > 1
+            }
 
         except Exception as e:
             logger.error(f"Error getting all releases: {e}", exc_info=True)

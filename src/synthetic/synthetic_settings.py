@@ -175,7 +175,7 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 application_id, location_id, credential_name, sort, offset, limit, filter_param,
             )
 
-            client_side_paging = page is not None or page_size is not None
+            client_side_paging = page is not None or page_size is not None or (offset is None and limit is None)
             response = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.get_synthetic_tests_without_preload_content,
@@ -199,8 +199,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
             items = json.loads(decode_response(response))
 
             if client_side_paging:
+                effective_page = page if page is not None else 1
+                effective_page_size = page_size if page_size is not None else 10
                 page_items, pagination = paginate(
-                    items, page, page_size, max_page_size=100, list_id="synthetic_tests"
+                    items, effective_page, effective_page_size, max_page_size=100, list_id="synthetic_tests"
                 )
                 logger.debug("[get_synthetic_tests] Returning page %s (%d of %d tests)",
                              pagination["page"], len(page_items), len(items))

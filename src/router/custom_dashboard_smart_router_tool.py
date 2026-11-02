@@ -45,12 +45,13 @@ Parameters (params dict):
 - dashboard_id: Dashboard ID (for get, update, delete only)
 - custom_dashboard: Dashboard config (for create, update) - see model below
 - query: Search filter (for get_all)
-- page_size: Items per page (for get_all)
-- page: Page number, 1-indexed (for get_all)
-- with_total_hits: Include total count (for get_all)
+- page_size: Items per page (for get_all, optional, default 10)
+- page: Page number, 1-indexed (for get_all, optional, default 1)
+- with_total_hits: Include total count (for get_all, optional, default True)
 
-Pagination: get_all with page_size and with_total_hits=true returns pagination.next_operation /
-previous_operation (e.g. "page_3"). To change page, call operation=<that value> (or "next"/"previous"/
+Pagination: get_all returns page 1 (10 items) by default along with pagination metadata
+({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
+To change page, call operation=<next_operation or previous_operation> (e.g. "page_2", "next", "previous",
 "go_to_page") with the same params plus page (current page; for go_to_page, the target page).
 
 Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
@@ -95,6 +96,11 @@ Examples:
                 params = {**params, "page": _nav_page, "with_total_hits": True}
                 params.setdefault("page_size", 10)
                 operation = "get_all"
+
+            if operation == "get_all":
+                params.setdefault("page", 1)
+                params.setdefault("page_size", 10)
+                params.setdefault("with_total_hits", True)
 
             # Validate operation
             valid_operations = [

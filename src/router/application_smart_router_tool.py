@@ -138,15 +138,16 @@ GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
     params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
 
 PAGINATION (alert_config / global_alert_config find_active, settings get_all):
-    Paged responses include pagination.next_operation / previous_operation (e.g. "page_3", null when
-    there is no such page). To change page, call the same resource_type with operation=<that value>
+    Paged responses return page 1 (10 items) by default with a pagination envelope
+    ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
+    To change page, call the same resource_type with operation=<next_operation or previous_operation>
     (or "next"/"previous"/"go_to_page") and the same params plus page (current page; for go_to_page,
     the target page). Do not track page numbers yourself.
 
 SETTINGS (resource_type="settings"):
     operations: get_all, get, create, update, delete
     params: {resource_subtype, id, application_name, service_name, service_id, payload, request_body, page, page_size}
-    get_all returns every item unless page/page_size is given (then it is paginated, see PAGINATION).
+    get_all defaults to page 1 with page_size 10 (see PAGINATION).
     resource_subtypes: "application"
 
     Creating application (resource_subtype="application", operation="create"):
@@ -696,15 +697,14 @@ Examples:
             "results": result
         }
 
-        # Opt-in paging of get_all: only when the caller passes page / page_size.
-        if (
-            operation == "get_all"
-            and isinstance(result, list)
-            and (params.get("page") is not None or params.get("page_size") is not None)
-        ):
+        # get_all is paginated by default (page=1, page_size=10)
+        if operation == "get_all" and isinstance(result, list):
             page_items, pagination = paginate(
-                result, params.get("page"), params.get("page_size"),
-                max_page_size=100, list_id=f"{resource_subtype}_settings",
+                result,
+                params.get("page", 1),
+                params.get("page_size", 10),
+                max_page_size=100,
+                list_id=f"{resource_subtype}_settings",
             )
             response["results"] = page_items
             response["pagination"] = pagination
