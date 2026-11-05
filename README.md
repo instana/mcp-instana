@@ -147,7 +147,7 @@ sequenceDiagram
 
 ## Prerequisites
 
-- `python` - version 3.10 or higher
+- `python` - version 3.11 or higher
 - `pip` - version 21.3 or higher (only required for pypi based installation)
 - `uv` - version 0.11.6 or higher (only required for development installation)
 
