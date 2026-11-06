@@ -370,6 +370,27 @@ class TestEventsSmartRouterMCPTool(unittest.TestCase):
         self.assertEqual(result["operation"], "get_events")
 
 
+    def test_get_kubernetes_info_events_forwards_entity_label(self):
+        """entity_label in params is forwarded to get_kubernetes_info_events."""
+        captured = {}
+
+        async def mock_get_k8s_events(*args, **kwargs):
+            captured["kwargs"] = kwargs
+            return {"events": [], "events_count": 0, "events_analyzed": 0, "events_filtered_out": 0}
+
+        self.mock_events.get_kubernetes_info_events = mock_get_k8s_events
+
+        asyncio.run(self.router.manage_events(
+            operation="get_kubernetes_info_events",
+            params={
+                "time_range": "last 24 hours",
+                "entity_label": "payment-service",
+                "max_events": 50,
+            }
+        ))
+
+        self.assertEqual(captured["kwargs"].get("entity_label"), "payment-service")
+
 if __name__ == '__main__':
     unittest.main()
 

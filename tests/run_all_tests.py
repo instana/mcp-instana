@@ -364,6 +364,10 @@ def run_all_tests(test_path: Optional[str] = None, verbose: bool = False) -> boo
             'tests.prompts.synthetic.test_synthetic_metrics_prompts',
             'tests.prompts.synthetic.test_synthetic_settings_prompts',
             'tests.prompts.synthetic.test_synthetic_test_playback_results_prompts',
+            'tests.skills.test_change_timeline_skill',
+            'tests.skills.test_skills_tool',
+            'tests.skills.test_normalize_changes',
+            'tests.skills.test_validate_skills',
         ]
 
         all_tests = unittest.TestSuite()

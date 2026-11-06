@@ -229,6 +229,7 @@ class TestMCPServer(unittest.TestCase):
             "maintenance_windows",
             "mobile_app",
             "releases",
+            "skills",
             "slo",
             "synthetic",
             "website",
@@ -1725,6 +1726,7 @@ class TestInstanaToolsFilterMiddleware(unittest.TestCase):
         expected = {
             "alert_channels", "app", "infra", "automation", "website", "mobile_app",
             "events", "custom_dashboards", "slo", "synthetic", "releases", "maintenance_windows",
+            "skills",
         }
         self.assertEqual(set(_CATEGORY_TO_TOOLS.keys()), expected)
 

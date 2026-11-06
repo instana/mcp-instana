@@ -220,7 +220,8 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         if operation == OPERATION_GET_KUBERNETES_INFO_EVENTS:
             return await self.events_client.get_kubernetes_info_events(
                 from_time=from_time, to_time=to_time,
-                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS], ctx=ctx, **_routing,
+                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS],
+                entity_label=filters[PARAM_ENTITY_LABEL], ctx=ctx, **_routing,
             )
         if operation == OPERATION_GET_AGENT_MONITORING_EVENTS:
             return await self.events_client.get_agent_monitoring_events(
@@ -260,15 +261,21 @@ Parameters (params dict):
 - For "get_event" and "get_events_by_ids", pass flat params:
     - event_id: Event ID (required for get_event)
     - event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
-- For "get_kubernetes_info_events" and "get_agent_monitoring_events", pass flat params:
+- For "get_kubernetes_info_events", pass flat params:
     - from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
         If timezone not specified in datetime string, defaults to UTC
     - to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
         If timezone not specified in datetime string, defaults to UTC
     - time_range: Natural language time range (e.g., "last 10 minutes", "last 2 days"). DEFAULT when omitted: "last 10 minutes"
-    - query: Optional query string for agent monitoring events
+    - entity_label: Filter events by entity label — case-insensitive substring match against the event's entityLabel field (optional).
+        Use a service name, namespace/pod, or host label to scope results to specific entities.
+        Applied post-call; unmatched events are excluded from analysis and counted in events_filtered_out.
     - max_events: Maximum number of events to process for analysis (optional, default 50)
-        NOTE: This is a post-processing limit, not an API parameter
+        NOTE: This is a post-processing limit applied after entity_label filtering, not an API parameter
+- For "get_agent_monitoring_events", pass flat params:
+    - from_time, to_time, time_range, max_events: same as for "get_kubernetes_info_events"
+        (max_events is a post-processing limit, not an API parameter)
+    - query: Optional query string for agent monitoring events
 - For "get_events", pass a nested filters object:
     - filters: Dictionary containing event filters.
         - from_time: Start timestamp - milliseconds OR datetime string
@@ -314,6 +321,7 @@ Returns:
 Examples:
     operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
     operation="get_kubernetes_info_events", params={"time_range": "last 2 hours", "max_events": 50}
+    operation="get_kubernetes_info_events", params={"time_range": "last 2 hours", "entity_label": "payment-service", "max_events": 50}
     operation="get_agent_monitoring_events", params={"query": "Monitoring issue", "from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
     operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"]}}  # no time_range → defaults to last 10 minutes
     operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "entity_label": "payment-service-v2", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}

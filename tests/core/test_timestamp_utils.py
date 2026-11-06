@@ -9,6 +9,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from src.core.timestamp_utils import (
+    MS_PER_DAY,
+    MS_PER_HOUR,
+    MS_PER_MINUTE,
+    MS_PER_MONTH,
+    MS_PER_WEEK,
     TIMEZONE_ALIASES,
     convert_datetime_param,
     convert_datetime_param_with_required_timezone,
@@ -444,6 +449,109 @@ class TestTimezoneAliases(unittest.TestCase):
                 ZoneInfo(iana_name)
             except Exception:
                 self.fail(f"Invalid IANA timezone name for alias {alias}: {iana_name}")
+
+
+class TestConvertTimeRangeToWindowSize(unittest.TestCase):
+    """Test convert_time_range_to_window_size"""
+
+    def test_units(self):
+        self.assertEqual(convert_time_range_to_window_size("last 5 minutes"), 5 * MS_PER_MINUTE)
+        self.assertEqual(convert_time_range_to_window_size("last 24 hours"), 24 * MS_PER_HOUR)
+        self.assertEqual(convert_time_range_to_window_size("last 3 days"), 3 * MS_PER_DAY)
+        self.assertEqual(convert_time_range_to_window_size("last 2 weeks"), 2 * MS_PER_WEEK)
+        self.assertEqual(convert_time_range_to_window_size("last 1 month"), MS_PER_MONTH)
+
+    def test_singular_and_natural_phrases(self):
+        self.assertEqual(convert_time_range_to_window_size("last minute"), 1 * MS_PER_MINUTE)
+        self.assertEqual(convert_time_range_to_window_size("past minute"), 1 * MS_PER_MINUTE)
+        self.assertEqual(convert_time_range_to_window_size("last hour"), 1 * MS_PER_HOUR)
+        self.assertEqual(convert_time_range_to_window_size("past hour"), 1 * MS_PER_HOUR)
+        self.assertEqual(convert_time_range_to_window_size("last day"), 1 * MS_PER_DAY)
+        self.assertEqual(convert_time_range_to_window_size("past day"), 1 * MS_PER_DAY)
+        self.assertEqual(convert_time_range_to_window_size("yesterday"), 1 * MS_PER_DAY)
+        self.assertEqual(convert_time_range_to_window_size("last week"), 1 * MS_PER_WEEK)
+        self.assertEqual(convert_time_range_to_window_size("past week"), 1 * MS_PER_WEEK)
+        self.assertEqual(convert_time_range_to_window_size("last month"), 1 * MS_PER_MONTH)
+        self.assertEqual(convert_time_range_to_window_size("past month"), 1 * MS_PER_MONTH)
+
+    def test_case_and_whitespace_insensitive(self):
+        self.assertEqual(convert_time_range_to_window_size("  LAST 2 Hours "), 2 * MS_PER_HOUR)
+
+    def test_few_hours_defaults_to_ten_minutes(self):
+        self.assertEqual(convert_time_range_to_window_size("last few hours"), 10 * MS_PER_MINUTE)
+
+    def test_unparseable_and_empty_default_to_ten_minutes(self):
+        self.assertEqual(convert_time_range_to_window_size("last century"), 10 * MS_PER_MINUTE)
+        self.assertEqual(convert_time_range_to_window_size("some random text"), 10 * MS_PER_MINUTE)
+        self.assertEqual(convert_time_range_to_window_size(""), 10 * MS_PER_MINUTE)
+
+
+class TestBuildTimeParams(unittest.TestCase):
+    """Test build_time_params, including mixed time_range + one explicit timestamp"""
+
+    NOW = 1_700_000_000_000
+
+    def test_default_ten_minute_window(self):
+        r = build_time_params(now_ms=self.NOW)
+        self.assertEqual(r["api_params"], {"var_from": self.NOW - 10 * MS_PER_MINUTE, "to": self.NOW})
+        self.assertEqual(r["from_time"], self.NOW - 10 * MS_PER_MINUTE)
+        self.assertEqual(r["to_time"], self.NOW)
+
+    def test_time_range_only_uses_window_size(self):
+        r = build_time_params(time_range="last 2 days", now_ms=self.NOW)
+        self.assertEqual(r["api_params"], {"window_size": 2 * MS_PER_DAY})
+        self.assertEqual(r["from_time"], self.NOW - 2 * MS_PER_DAY)
+        self.assertEqual(r["to_time"], self.NOW)
+
+    def test_both_explicit_ignore_time_range(self):
+        r = build_time_params(time_range="last 5 hours", from_time=1000, to_time=2000, now_ms=self.NOW)
+        self.assertEqual(r["api_params"], {"var_from": 1000, "to": 2000})
+        self.assertEqual((r["from_time"], r["to_time"]), (1000, 2000))
+
+    def test_only_to_time_defaults_to_ten_minute_window(self):
+        r = build_time_params(to_time=500_000, now_ms=self.NOW)
+        self.assertEqual((r["from_time"], r["to_time"]), (500_000 - 10 * MS_PER_MINUTE, 500_000))
+        self.assertEqual(r["api_params"], {"var_from": r["from_time"], "to": 500_000})
+
+    def test_only_from_time_ends_now(self):
+        r = build_time_params(from_time=self.NOW - MS_PER_HOUR, now_ms=self.NOW)
+        self.assertEqual((r["from_time"], r["to_time"]), (self.NOW - MS_PER_HOUR, self.NOW))
+
+    def test_mixed_time_range_and_to_time(self):
+        """time_range sizes the window that ends at the explicit to_time."""
+        to_time = self.NOW - MS_PER_DAY
+        r = build_time_params(time_range="last 3 hours", to_time=to_time, now_ms=self.NOW)
+        self.assertEqual(r["to_time"], to_time)
+        self.assertEqual(r["from_time"], to_time - 3 * MS_PER_HOUR)
+        self.assertEqual(r["api_params"], {"var_from": r["from_time"], "to": to_time})
+        self.assertNotIn("window_size", r["api_params"])
+
+    def test_mixed_time_range_and_from_time(self):
+        """time_range sizes the window that starts at the explicit from_time."""
+        from_time = self.NOW - MS_PER_DAY
+        r = build_time_params(time_range="last 3 hours", from_time=from_time, now_ms=self.NOW)
+        self.assertEqual(r["from_time"], from_time)
+        self.assertEqual(r["to_time"], from_time + 3 * MS_PER_HOUR)
+        self.assertNotIn("window_size", r["api_params"])
+
+    def test_mixed_time_range_and_from_time_capped_at_now(self):
+        from_time = self.NOW - MS_PER_HOUR
+        r = build_time_params(time_range="last 3 hours", from_time=from_time, now_ms=self.NOW)
+        self.assertEqual(r["to_time"], self.NOW)
+
+    def test_mixed_from_time_in_future_never_before_from(self):
+        from_time = self.NOW + MS_PER_HOUR
+        r = build_time_params(time_range="last 3 hours", from_time=from_time, now_ms=self.NOW)
+        self.assertGreaterEqual(r["to_time"], r["from_time"])
+
+    def test_zero_timestamp_is_treated_as_provided(self):
+        r = build_time_params(from_time=0, to_time=0, now_ms=self.NOW)
+        self.assertEqual((r["from_time"], r["to_time"]), (0, 0))
+
+    def test_now_defaults_to_system_clock(self):
+        r = build_time_params(time_range="last 1 hours")
+        self.assertGreater(r["to_time"], r["from_time"])
+        self.assertEqual(r["to_time"] - r["from_time"], MS_PER_HOUR)
 
 
 if __name__ == '__main__':

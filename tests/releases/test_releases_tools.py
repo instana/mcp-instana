@@ -402,6 +402,20 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("Failed to get releases", result["error"])
 
+    def test_get_all_releases_api_error_response(self):
+        """Test that API returning error dictionary results in success=False."""
+        mock_response = MagicMock()
+        mock_response.status = 400
+        mock_response.data = json.dumps({"errors": ["Invalid time window"]}).encode('utf-8')
+        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_all_releases())
+
+        self.assertFalse(result["success"])
+        self.assertIn("Instana Releases API error", result["error"])
+        self.assertIn("Invalid time window", result["error"])
+        self.assertEqual(result["releases"], [])
+
     def test_get_release_success(self):
         """Test getting a specific release successfully"""
         # Mock response

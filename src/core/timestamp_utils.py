@@ -6,7 +6,10 @@ This standalone utility helps convert human-readable datetime strings into preci
 Unix epoch timestamps (milliseconds) for use with Instana APIs.
 """
 
+from __future__ import annotations
+
 import logging
+import re
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Dict, List
@@ -599,3 +602,140 @@ def convert_datetime_param_with_required_timezone(
         "converted": True,
         "timezone": timezone.strip()
     }
+
+
+# ---------------------------------------------------------------------------
+# Time-range helpers (lifted from src/event/events_tools.py so that
+# change_intelligence and other modules can share them without importing
+# the full events module).
+# ---------------------------------------------------------------------------
+
+# Time conversion constants (milliseconds)
+MS_PER_MINUTE: int = 60 * 1000
+MS_PER_HOUR:   int = 60 * MS_PER_MINUTE
+MS_PER_DAY:    int = 24 * MS_PER_HOUR
+MS_PER_WEEK:   int = 7  * MS_PER_DAY
+MS_PER_MONTH:  int = 30 * MS_PER_DAY
+
+_DEFAULT_TIME_WINDOW_MINUTES = 10
+
+
+def convert_time_range_to_window_size(time_range: str) -> int:
+    """Convert a natural-language time range to a window size in milliseconds.
+
+    Supported phrases (case-insensitive):
+    - "last N minutes", "last minute", "past minute"
+    - "last N hours", "last hour", "past hour"
+    - "last N days", "last day", "past day", "yesterday"
+    - "last N weeks", "last week", "past week"
+    - "last N months", "last month", "past month"
+
+    Falls back to 10 minutes when the string cannot be parsed.
+
+    Args:
+        time_range: Natural-language string, e.g. "last 24 hours".
+
+    Returns:
+        Window size in milliseconds (always > 0).
+    """
+    if not time_range:
+        return _DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+
+    t = time_range.lower().strip()
+
+    if "minute" in t:
+        m = re.search(r'(\d+)\s?minute', t)  # NOSONAR
+        if m:
+            return int(m.group(1)) * MS_PER_MINUTE
+        if "last minute" in t or "past minute" in t:
+            return 1 * MS_PER_MINUTE
+
+    elif "hour" in t:
+        m = re.search(r'(\d+)\s?hour', t)  # NOSONAR
+        if m:
+            return int(m.group(1)) * MS_PER_HOUR
+        if "last hour" in t or "past hour" in t:
+            return 1 * MS_PER_HOUR
+        if t in ("last few hours", "last hours", "few hours"):
+            return _DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+
+    elif "day" in t:
+        m = re.search(r'(\d+)\s?day', t)  # NOSONAR
+        if m:
+            return int(m.group(1)) * MS_PER_DAY
+        if "last day" in t or "past day" in t or "yesterday" in t:
+            return 1 * MS_PER_DAY
+
+    elif "week" in t:
+        m = re.search(r'(\d+)\s?week', t)  # NOSONAR
+        if m:
+            return int(m.group(1)) * MS_PER_WEEK
+        if "last week" in t or "past week" in t:
+            return 1 * MS_PER_WEEK
+
+    elif "month" in t:
+        m = re.search(r'(\d+)\s?month', t)  # NOSONAR
+        if m:
+            return int(m.group(1)) * MS_PER_MONTH
+        if "last month" in t or "past month" in t:
+            return 1 * MS_PER_MONTH
+
+    return _DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+
+
+def build_time_params(
+    time_range: str | None = None,
+    from_time: int | None = None,
+    to_time: int | None = None,
+    now_ms: int | None = None,
+) -> Dict[str, Any]:
+    """Build ``api_params`` and display timestamps from flexible time inputs.
+
+    Priority:
+    1. Both ``from_time`` and ``to_time`` → used as-is (``time_range`` ignored).
+    2. Exactly one of ``from_time`` / ``to_time`` (mixed input):
+       the missing bound is derived from the window of ``time_range``
+       (default 10 minutes when ``time_range`` is absent). With only
+       ``to_time`` the window ends there; with only ``from_time`` the window
+       starts there and is capped at ``now_ms`` (and at least ``from_time``).
+       Without ``time_range`` and only ``from_time``, the end is ``now_ms``.
+    3. ``window_size`` derived from ``time_range``.
+    4. Default 10-minute window ending now.
+
+    Args:
+        now_ms: Optional "current time" in epoch ms (injectable for tests /
+            callers that own their own clock). Defaults to the system clock.
+
+    Returns a dict with keys:
+    - ``api_params``: dict ready for the Instana Events API
+      (either ``{"window_size": N}`` or ``{"var_from": X, "to": Y}``)
+    - ``from_time``: epoch-ms start (for display)
+    - ``to_time``:   epoch-ms end   (for display)
+    """
+    api_params: Dict[str, Any] = {}
+    if now_ms is None:
+        now_ms = int(datetime.now().timestamp() * 1000)
+    default_window = _DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
+
+    if from_time is not None or to_time is not None:
+        window = convert_time_range_to_window_size(time_range) if time_range else default_window
+        if to_time is not None:
+            resolved_to = to_time
+            resolved_from = from_time if from_time is not None else to_time - window
+        else:
+            resolved_from = from_time
+            resolved_to = max(from_time, min(from_time + window, now_ms)) if time_range else now_ms
+        api_params["var_from"] = resolved_from
+        api_params["to"]       = resolved_to
+        return {"api_params": api_params, "from_time": resolved_from, "to_time": resolved_to}
+
+    if time_range:
+        window_size = convert_time_range_to_window_size(time_range)
+        api_params["window_size"] = window_size
+        return {"api_params": api_params, "from_time": now_ms - window_size, "to_time": now_ms}
+
+    # Default: 10-minute window ending now
+    default_from = now_ms - default_window
+    api_params["var_from"] = default_from
+    api_params["to"]       = now_ms
+    return {"api_params": api_params, "from_time": default_from, "to_time": now_ms}

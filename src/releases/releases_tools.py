@@ -95,7 +95,27 @@ class ReleasesMCPTools(BaseInstanaClient):
 
             # Read and parse the response
             response_data = response.data
-            all_releases = json.loads(response_data) if response_data else []
+            parsed = json.loads(response_data) if response_data else []
+            if isinstance(parsed, dict) and ("errors" in parsed or "error" in parsed):
+                err_msg = parsed.get("errors") or parsed.get("error")
+                logger.warning(
+                    "get_all_releases error response (status=%s): %r",
+                    getattr(response, "status", None),
+                    err_msg,
+                )
+                return {
+                    "success": False,
+                    "error": f"Instana Releases API error: {err_msg}",
+                    "releases": []
+                }
+
+            all_releases = parsed if isinstance(parsed, list) else []
+            if not isinstance(parsed, list) and parsed:
+                logger.warning(
+                    "get_all_releases: unexpected non-list response (status=%s): %.200r",
+                    getattr(response, "status", None),
+                    parsed,
+                )
 
             # Apply name filtering if specified
             if name_filter:

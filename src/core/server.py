@@ -98,16 +98,17 @@ from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 _CATEGORY_TO_TOOLS: dict[str, frozenset[str]] = {
     "alert_channels":    frozenset({"manage_alert_channels"}),
     "app":               frozenset({"manage_applications"}),
-    "infra":             frozenset({"manage_infrastructure"}),
     "automation":        frozenset({"manage_automation"}),
-    "website":           frozenset({"manage_websites"}),
-    "mobile_app":        frozenset({"manage_mobile_apps"}),
-    "events":            frozenset({"manage_events"}),
     "custom_dashboards": frozenset({"manage_custom_dashboards"}),
+    "events":            frozenset({"manage_events"}),
+    "infra":             frozenset({"manage_infrastructure"}),
+    "maintenance_windows": frozenset({"manage_maintenance_windows"}),
+    "mobile_app":        frozenset({"manage_mobile_apps"}),
+    "releases":          frozenset({"manage_releases"}),
+    "skills":            frozenset({"load_instana_skills"}),
     "slo":               frozenset({"manage_slo"}),
     "synthetic":         frozenset({"manage_synthetics"}),
-    "releases":          frozenset({"manage_releases"}),
-    "maintenance_windows": frozenset({"manage_maintenance_windows"}),
+    "website":           frozenset({"manage_websites"}),
 }
 
 
@@ -270,6 +271,7 @@ class MCPState:
     smart_router_synthetic_client: Any = None
     smart_router_releases_client: Any = None
     smart_router_maintenance_window_client: Any = None
+    smart_router_skills_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     smart_router_infrastructure_client: Any = None
@@ -457,6 +459,7 @@ def get_client_categories():
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.synthetic_smart_router_tool import SyntheticSmartRouterMCPTool
+        from src.skills.skills_tool import SkillsMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
@@ -489,6 +492,9 @@ def get_client_categories():
         ],
         "releases": [
             ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
+        ],
+        "skills": [
+            ('smart_router_skills_client', SkillsMCPTool),
         ],
         "slo": [
             ('smart_router_slo_client', SLOSmartRouterMCPTool),

@@ -1458,14 +1458,18 @@ class TestAgentMonitoringEventsE2E:
         assert to_time > from_time
         assert to_time - from_time == 3 * 24 * 60 * 60 * 1000  # 3 days
 
-        # Test with "last week" - "last week" contains "week" but no number, so no match
-        # falls through to default 10 minutes
+        # Test with "last week" - singular phrase parses to 1 week
         from_time, to_time = client._process_time_range(time_range="last week")
         assert isinstance(from_time, int)
         assert isinstance(to_time, int)
         assert to_time > from_time
-        # "last week" has no digit before "week", so _convert_time_range_to_window_size
-        # falls through to default 10 minutes
+        assert to_time - from_time == 7 * 24 * 60 * 60 * 1000  # 1 week
+
+        # Test with unparseable string falls through to default 10 minutes
+        from_time, to_time = client._process_time_range(time_range="last century")
+        assert isinstance(from_time, int)
+        assert isinstance(to_time, int)
+        assert to_time > from_time
         assert to_time - from_time == 10 * 60 * 1000  # default 10 minutes
 
         # Test with "last 2 weeks"
@@ -1475,15 +1479,12 @@ class TestAgentMonitoringEventsE2E:
         assert to_time > from_time
         assert to_time - from_time == 2 * 7 * 24 * 60 * 60 * 1000  # 2 weeks
 
-        # Test with "last month" - "last month" has no digit, so no regex match
-        # falls through to default 10 minutes
+        # Test with "last month" - singular phrase parses to 1 month (30 days)
         from_time, to_time = client._process_time_range(time_range="last month")
         assert isinstance(from_time, int)
         assert isinstance(to_time, int)
         assert to_time > from_time
-        # "last month" has no digit before "month", so _convert_time_range_to_window_size
-        # falls through to default 10 minutes
-        assert to_time - from_time == 10 * 60 * 1000  # default 10 minutes
+        assert to_time - from_time == 30 * 24 * 60 * 60 * 1000  # 30 days
 
         # Test with "last 2 months"
         from_time, to_time = client._process_time_range(time_range="last 2 months")
