@@ -194,6 +194,21 @@ class TestApplicationAlertMCPTools(unittest.TestCase):
         self.assertEqual(result["pagination"]["next_operation"], "page_2")
         self.assertIsNone(result["pagination"]["previous_operation"])
 
+    def test_find_active_application_alert_configs_tolerates_string_and_bad_page_args(self):
+        """String numbers are coerced; garbage falls back to the defaults instead of erroring."""
+        body = ('[' + ','.join(f'{{"id": "a{i}"}}' for i in range(25)) + ']').encode()
+        api = self.alert_config_api.find_all_active_application_alert_configs_without_preload_content
+
+        api.return_value = _make_streaming_response(body)
+        result = asyncio.run(self.client.find_active_application_alert_configs(
+            application_id="app1", page="2", page_size="10"))
+        self.assertEqual((result["pagination"]["page"], len(result["configs"])), (2, 10))
+
+        api.return_value = _make_streaming_response(body)
+        result = asyncio.run(self.client.find_active_application_alert_configs(
+            application_id="app1", page="abc", page_size="abc"))
+        self.assertNotIn("error", result)
+        self.assertEqual((result["pagination"]["page"], result["pagination"]["page_size"]), (1, 10))
 
     def test_find_active_application_alert_configs_missing_application_id(self):
         """Test find_active_application_alert_configs with missing application_id"""

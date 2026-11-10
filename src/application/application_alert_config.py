@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import build_pagination
+from src.core.pagination import build_pagination, normalize_page_args
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -241,7 +241,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """Route a validated alert_config operation to the appropriate handler."""
         _r = {"resource_type": resource_type, "tool_name": tool_name}
-        _pg = {"page": page, "page_size": page_size} if page or page_size else {}
+        _pg = {k: v for k, v in (("page", page), ("page_size", page_size)) if v is not None}
         dispatch = {
             "find_active": lambda: self._find_active_configs(application_id, alert_ids, ctx, **_r, **_pg),
             "find_versions": lambda: self._find_config_versions(id, ctx, **_r),
@@ -594,8 +594,7 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
 
             # Stream-parse only the requested page so the full array is
             # never buffered in memory, regardless of tenant size.
-            safe_size = max(1, min(100, int(page_size))) if page_size else 10
-            safe_page = max(1, int(page)) if page else 1
+            safe_page, safe_size = normalize_page_args(page, page_size, default_size=10, max_size=100)
             start_idx = (safe_page - 1) * safe_size
             limited_configs, total_count = stream_json_array_page(
                 response, start_idx=start_idx, end_idx=start_idx + safe_size

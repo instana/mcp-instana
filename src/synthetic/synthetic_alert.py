@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
 
-from src.core.pagination import build_pagination
+from src.core.pagination import coerce_int, paginate
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -33,6 +33,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 _NO_ERROR_DETAILS = "No error details available (empty response body)"
+DEFAULT_PAGE_SIZE = 50
 
 
 def _invalid_payload_error(issues: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -215,17 +216,22 @@ class SyntheticAlertMCPTools(BaseInstanaClient):
             configs = result if isinstance(result, list) else ([result] if result else [])
             total_count = len(configs)
 
-            effective_page = page if page is not None and page >= 1 else 1
-            effective_page_size = page_size if page_size is not None and page_size >= 1 else 50
-            if effective_page_size > 1000:
-                effective_page_size = 1000
-            total_pages = (total_count + effective_page_size - 1) // effective_page_size if total_count > 0 else 0
-            if total_pages > 0 and effective_page > total_pages:
-                effective_page = total_pages
-            start_idx = (effective_page - 1) * effective_page_size
-            end_idx = start_idx + effective_page_size
-            paged_configs = configs[start_idx:end_idx]
+            # Invalid page/page_size fall back to the defaults (1 / 50)
+            effective_page = coerce_int(page, 1)
+            effective_page_size = coerce_int(page_size, DEFAULT_PAGE_SIZE)
+            if effective_page < 1:
+                effective_page = 1
+            if effective_page_size < 1:
+                effective_page_size = DEFAULT_PAGE_SIZE
+            paged_configs, pagination = paginate(
+                configs, effective_page, effective_page_size,
+                max_page_size=1000, list_id="synthetic_alert_configs",
+            )
+            effective_page = pagination["page"]
+            effective_page_size = pagination["page_size"]
+            total_pages = pagination["total_pages"]
 
+            # Legacy keys are kept (same values as the pagination envelope).
             return {
                 "configs": paged_configs,
                 "count": len(paged_configs),
@@ -233,12 +239,9 @@ class SyntheticAlertMCPTools(BaseInstanaClient):
                 "page": effective_page,
                 "page_size": effective_page_size,
                 "total_pages": total_pages,
-                "has_next": effective_page < total_pages,
-                "has_previous": effective_page > 1,
-                "pagination": build_pagination(
-                    effective_page, effective_page_size, total_count,
-                    list_id="synthetic_alert_configs",
-                ),
+                "has_next": pagination["has_more"],
+                "has_previous": pagination["has_previous"],
+                "pagination": pagination,
                 "message": (
                     "No active synthetic smart alert configurations found."
                     if not configs

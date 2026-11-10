@@ -10,6 +10,10 @@ same building blocks so they all behave and look the same:
   returned just one page.
 * :func:`resolve_nav_page` turns a navigation request (``next`` / ``previous`` /
   ``go_to_page`` / ``page_N``) into the destination page number.
+* :func:`apply_navigation` is what the smart routers call: it rewrites a navigation
+  operation into the tool's list operation (or returns an elicitation error).
+* :func:`normalize_page_args` / :func:`page_kwargs` / :func:`coerce_int` are the shared
+  argument helpers, so no tool hand-rolls clamping or string coercion.
 * :func:`add_navigation` stamps ``next_operation`` / ``previous_operation`` onto a
   ``pagination`` object so the agent can simply copy the operation string from the last
   response instead of tracking and re-sending a page number.
@@ -26,7 +30,7 @@ Stateless Pagination & Ordering Notes:
 -------------------------------------
 * The server maintains no in-memory session or cache across requests, ensuring high
   availability across multiple server replicas and restarts.
-* Each page request (e.g. ``"page_2"`` or ``"next"``) fetches fresh data from the
+* Each page request (e.g. ``"page_2"``) fetches fresh data from the
   upstream Instana API and slices the requested page offset.
 * For APIs where the upstream service returns unsorted or non-deterministic ordering,
   pass a ``sort_key`` (or use :func:`stable_sort_key`) to :func:`paginate` to guarantee
@@ -44,8 +48,15 @@ logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 10
 
+# Upper bound for a requested page number (guards against absurd "page_9999999999999").
+MAX_PAGE_NUMBER = 1_000_000
+
 # "page_10", "PAGE_3": the destination page is embedded in the operation string.
 _PAGE_N_RE = re.compile(r"^page_(\d+)$", re.IGNORECASE)
+
+
+class NavigationError(ValueError):
+    """A navigation request that cannot be resolved to a destination page."""
 
 
 def operation_for_page(page: int) -> str:
@@ -53,15 +64,47 @@ def operation_for_page(page: int) -> str:
     return f"page_{max(1, int(page))}"
 
 
-def _first_int(*candidates: Any) -> Optional[int]:
-    """Return the first candidate that is a usable (non-empty) value, as an int >= 1."""
-    for value in candidates:
+def coerce_int(value: Any, default: int) -> int:
+    """Parse an int from an int/str (LLMs send both); fall back to *default*."""
+    if value is None or str(value).strip() == "":
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def normalize_page_args(
+    page: Any,
+    page_size: Any,
+    default_size: int = PAGE_SIZE,
+    max_size: int = 100,
+) -> Tuple[int, int]:
+    """
+    Return a safe ``(page, page_size)`` pair: ints, ``page >= 1`` and
+    ``1 <= page_size <= max_size``. Missing or unparsable values use ``1`` /
+    *default_size*.
+    """
+    return (
+        max(1, coerce_int(page, 1)),
+        max(1, min(max_size, coerce_int(page_size, default_size))),
+    )
+
+
+def page_kwargs(params: Dict[str, Any]) -> Dict[str, Any]:
+    """``page`` / ``page_size`` entries of *params* that were actually supplied."""
+    return {k: params[k] for k in ("page", "page_size") if params.get(k) is not None}
+
+
+def _current_page(params: Dict[str, Any], page_number: Any = None) -> Optional[int]:
+    """The caller-supplied current page (``page_number`` / ``page``), or ``None``."""
+    for value in (params.get("page_number"), page_number, params.get("page")):
         if value is None or str(value).strip() == "":
             continue
         try:
-            return max(1, int(value))
+            return int(value)
         except (ValueError, TypeError):
-            return 1
+            raise NavigationError(f"page must be a whole number, got {value!r}") from None
     return None
 
 
@@ -73,45 +116,88 @@ def resolve_nav_page(
 ) -> Optional[int]:
     """
     Return the destination page for a navigation request, or ``None`` when *operation*
-    is not a navigation operation.
+    is not a navigation operation. Raises :class:`NavigationError` for a navigation
+    request that cannot be resolved.
 
-    * ``page_N``     -> N (the number is inside the operation string)
-    * ``go_to_page`` -> target_page, else page_number / page
-    * ``next``       -> current page + 1   (current = page_number / page)
-    * ``previous``   -> current page - 1   (minimum 1)
+    * ``page_N``     -> N (self-contained; this is the form ``next_operation`` emits)
+    * ``go_to_page`` -> target_page (required)
+    * ``next``       -> current page + 1   (alias; current = page_number / page, required)
+    * ``previous``   -> current page - 1   (alias; current page must be > 1)
 
-    A missing current page is treated as page 1 (and logged), which is exactly why a
-    ``next`` call that lacks ``page_number`` keeps returning page 2.
+    Operations are matched case-insensitively. Nothing is guessed: a missing or invalid
+    page number is an error, never a silent default to page 1.
     """
-    op = (operation or "").strip()
+    op = (operation or "").strip().lower()
 
     match = _PAGE_N_RE.match(op)
     if match:
-        return max(1, int(match.group(1)))
-
-    if op == "go_to_page":
-        page = _first_int(
-            params.get("target_page"), target_page,
-            params.get("page_number"), page_number,
-            params.get("page"),
-        )
-        if page is None:
-            logger.warning("[pagination] go_to_page without a page number - defaulting to 1")
-            return 1
-        return page
-
-    if op in ("next", "previous"):
-        current = _first_int(params.get("page_number"), page_number, params.get("page"))
+        destination = int(match.group(1))
+    elif op == "go_to_page":
+        raw = params.get("target_page") if params.get("target_page") is not None else target_page
+        if raw is None or str(raw).strip() == "":
+            raise NavigationError("go_to_page requires target_page (a whole number >= 1)")
+        try:
+            destination = int(raw)
+        except (ValueError, TypeError):
+            raise NavigationError(f"target_page must be a whole number, got {raw!r}") from None
+    elif op in ("next", "previous"):
+        current = _current_page(params, page_number)
         if current is None:
-            logger.warning(
-                "[pagination] '%s' without page_number - defaulting to page 1. "
-                "Use pagination.%s_operation from the last response instead.",
-                op, op,
+            raise NavigationError(
+                f"'{op}' needs the current page (page / page_number). "
+                f"Use pagination.{op}_operation (e.g. 'page_N') from the last response instead."
             )
-            current = 1
-        return current + 1 if op == "next" else max(1, current - 1)
+        if current < 1:
+            raise NavigationError(f"current page must be >= 1, got {current}")
+        if op == "previous" and current == 1:
+            raise NavigationError("already on the first page; there is no previous page")
+        destination = current + 1 if op == "next" else current - 1
+    else:
+        return None
 
-    return None
+    if destination < 1:
+        raise NavigationError(f"page must be >= 1, got {destination}")
+    if destination > MAX_PAGE_NUMBER:
+        raise NavigationError(f"page must be <= {MAX_PAGE_NUMBER}, got {destination}")
+    return destination
+
+
+def navigation_error(operation: Optional[str], issue: str) -> Dict[str, Any]:
+    """Elicitation-style error returned by routers when navigation cannot be resolved."""
+    return {
+        "elicitation_needed": True,
+        "reason": "invalid_pagination",
+        "api_error": [
+            {
+                "field": "operation",
+                "issue": issue,
+                "expected": "pagination.next_operation / previous_operation from the last response (e.g. 'page_2')",
+            }
+        ],
+        "message": f"Cannot navigate with operation '{operation}': {issue}",
+    }
+
+
+def apply_navigation(
+    operation: Optional[str],
+    params: Dict[str, Any],
+    target_operation: str,
+    page_key: str = "page",
+) -> Tuple[Optional[str], Dict[str, Any], Optional[Dict[str, Any]]]:
+    """
+    Router helper. Returns ``(operation, params, error)``.
+
+    For a navigation operation the result is ``(target_operation, params + {page_key: N},
+    None)``; for any other operation the inputs are returned unchanged; when navigation
+    cannot be resolved, *error* is a ready-to-return elicitation response.
+    """
+    try:
+        destination = resolve_nav_page(operation, params)
+    except NavigationError as exc:
+        return operation, params, navigation_error(operation, str(exc))
+    if destination is None:
+        return operation, params, None
+    return target_operation, {**params, page_key: destination}, None
 
 
 def add_navigation(pagination: Dict[str, Any]) -> Dict[str, Any]:
@@ -134,16 +220,6 @@ def add_navigation(pagination: Dict[str, Any]) -> Dict[str, Any]:
     return pagination
 
 
-def _to_int(value: Any, default: int) -> int:
-    """Parse an int from an int/str (LLMs send both); fall back to *default*."""
-    if value is None or str(value).strip() == "":
-        return default
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return default
-
-
 def build_pagination(
     page: Any,
     page_size: Any,
@@ -156,9 +232,9 @@ def build_pagination(
     Use directly when the data source already returned just one page and only the
     totals are known; use :func:`paginate` when you hold the full list.
     """
-    safe_page = max(1, _to_int(page, 1))
-    safe_size = max(1, _to_int(page_size, PAGE_SIZE))
-    total = max(0, _to_int(total_items, 0))
+    safe_page = max(1, coerce_int(page, 1))
+    safe_size = max(1, coerce_int(page_size, PAGE_SIZE))
+    total = max(0, coerce_int(total_items, 0))
     envelope: Dict[str, Any] = {
         "page": safe_page,
         "page_size": safe_size,
@@ -215,8 +291,7 @@ def paginate(
     * ``list_id`` names the list so the agent knows which list "next" continues.
     """
     items = sorted(records, key=sort_key) if sort_key is not None else records
-    safe_page = max(1, _to_int(page, 1))
-    safe_size = max(1, min(max_page_size, _to_int(page_size, PAGE_SIZE)))
+    safe_page, safe_size = normalize_page_args(page, page_size, PAGE_SIZE, max_page_size)
     start = (safe_page - 1) * safe_size
     page_records = list(items[start:start + safe_size]) if start < len(items) else []
     return page_records, build_pagination(safe_page, safe_size, len(items), list_id)

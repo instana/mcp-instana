@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import resolve_nav_page
+from src.core.pagination import apply_navigation
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -45,14 +45,13 @@ Parameters (params dict):
 - dashboard_id: Dashboard ID (for get, update, delete only)
 - custom_dashboard: Dashboard config (for create, update) - see model below
 - query: Search filter (for get_all)
-- page_size: Items per page (for get_all, optional, default 10)
-- page: Page number, 1-indexed (for get_all, optional, default 1)
-- with_total_hits: Include total count (for get_all, optional, default True)
+- page_size: Items per page (for get_all, optional)
+- page: Page number, 1-indexed (for get_all, optional)
+- with_total_hits: Include total count (for get_all, optional; defaults to True when page/page_size is given)
 
-Pagination: get_all returns page 1 (10 items) by default along with pagination metadata
+Pagination: get_all with page/page_size returns pagination metadata
 ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-To change page, call operation=<next_operation or previous_operation> (e.g. "page_2", "next", "previous",
-"go_to_page") with the same params plus page (current page; for go_to_page, the target page).
+To change page, call operation=<next_operation or previous_operation> (e.g. "page_2") with the same params.
 
 Note: get_shareable_users and get_shareable_api_tokens return ALL users/tokens globally, not for a specific dashboard
 
@@ -91,16 +90,13 @@ Examples:
 
             # Pagination navigation (shared, stateless - src/core/pagination.py):
             # page_N / next / previous / go_to_page re-run get_all on that page.
-            _nav_page = resolve_nav_page(operation, params)
-            if _nav_page is not None:
-                params = {**params, "page": _nav_page, "with_total_hits": True}
+            _requested_op = operation
+            operation, params, _nav_error = apply_navigation(operation, params, "get_all")
+            if _nav_error:
+                return _nav_error
+            if operation != _requested_op:
+                params = {**params, "with_total_hits": True}  # envelope needs the total
                 params.setdefault("page_size", 10)
-                operation = "get_all"
-
-            if operation == "get_all":
-                params.setdefault("page", 1)
-                params.setdefault("page_size", 10)
-                params.setdefault("with_total_hits", True)
 
             # Validate operation
             valid_operations = [

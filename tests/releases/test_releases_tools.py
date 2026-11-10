@@ -572,9 +572,8 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertIn("Failed to delete release", result["error"])
         self.assertEqual(result["release_id"], "rel-123")
 
-    def test_get_all_releases_defaults_to_first_page(self):
-        """Test that pagination defaults to page 1 and page_size 50 for large result sets"""
-        # Mock response with many releases
+    def test_get_all_releases_without_paging_returns_everything(self):
+        """Default behaviour is unchanged: no page params -> all releases plus a hint"""
         mock_response = MagicMock()
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
@@ -583,16 +582,40 @@ class TestReleasesMCPTools(unittest.TestCase):
         mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
-        # Call without pagination params
         result = asyncio.run(self.client.get_all_releases())
 
-        # Verify first page of 50 releases is returned with pagination envelope
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 100)
-        self.assertEqual(len(result["releases"]), 50)
-        self.assertEqual(result["page_number"], 1)
+        self.assertEqual(len(result["releases"]), 100)
+        self.assertNotIn("pagination", result)
+        self.assertIn("page_number=1", result["pagination_hint"])
+
+    def test_get_all_releases_accepts_string_page_args(self):
+        """LLM clients often send numbers as strings"""
+        mock_response = MagicMock()
+        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 26)]
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
+        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_all_releases(page_number="2", page_size="10"))
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["page_number"], 2)
+        self.assertEqual(result["page_size"], 10)
+        self.assertEqual(len(result["releases"]), 10)
+        self.assertEqual(result["pagination"]["next_operation"], "page_3")
+
+    def test_get_all_releases_only_page_number_uses_default_page_size(self):
+        mock_response = MagicMock()
+        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 101)]
+        mock_response.data = json.dumps(releases_data).encode('utf-8')
+        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_all_releases(page_number=2))
+
         self.assertEqual(result["page_size"], 50)
-        self.assertEqual(result["pagination"]["next_operation"], "page_2")
+        self.assertEqual(len(result["releases"]), 50)
+        self.assertFalse(result["has_next_page"])
 
     def test_get_all_releases_returns_standard_pagination_envelope(self):
         """Paged responses carry the shared pagination envelope with navigation operations."""

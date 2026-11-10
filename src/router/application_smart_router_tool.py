@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import paginate, resolve_nav_page
+from src.core.pagination import apply_navigation, page_kwargs, paginate, stable_sort_key
 from src.core.timestamp_utils import (
     convert_datetime_param,
     convert_nested_datetime_param,
@@ -138,16 +138,16 @@ GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
     params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
 
 PAGINATION (alert_config / global_alert_config find_active, settings get_all):
-    Paged responses return page 1 (10 items) by default with a pagination envelope
+    alert_config / global_alert_config find_active return page 1 (10 items) by default. settings get_all
+    returns every item unless page/page_size is given. Paged responses carry a pagination envelope
     ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
     To change page, call the same resource_type with operation=<next_operation or previous_operation>
-    (or "next"/"previous"/"go_to_page") and the same params plus page (current page; for go_to_page,
-    the target page). Do not track page numbers yourself.
+    (e.g. "page_2") and the same params. Do not track page numbers yourself.
 
 SETTINGS (resource_type="settings"):
     operations: get_all, get, create, update, delete
     params: {resource_subtype, id, application_name, service_name, service_id, payload, request_body, page, page_size}
-    get_all defaults to page 1 with page_size 10 (see PAGINATION).
+    get_all is paged only when page/page_size is given (see PAGINATION).
     resource_subtypes: "application"
 
     Creating application (resource_subtype="application", operation="create"):
@@ -414,10 +414,9 @@ Examples:
 
         # Pagination navigation (shared, stateless - src/core/pagination.py):
         # page_N / next / previous / go_to_page re-run find_active on that page.
-        _nav_page = resolve_nav_page(operation, params)
-        if _nav_page is not None:
-            params = {**params, "page": _nav_page}
-            operation = "find_active"
+        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
+        if _nav_error:
+            return _nav_error
 
         if operation not in valid_operations:
             return {
@@ -468,7 +467,7 @@ Examples:
             payload=payload,
             ctx=ctx,
             resource_type="alert_config", tool_name="manage_applications",
-            **self._page_kwargs(params),
+            **page_kwargs(params),
         )
 
         return {
@@ -492,10 +491,9 @@ Examples:
         ]
 
         # Pagination navigation (shared, stateless - src/core/pagination.py)
-        _nav_page = resolve_nav_page(operation, params)
-        if _nav_page is not None:
-            params = {**params, "page": _nav_page}
-            operation = "find_active"
+        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
+        if _nav_error:
+            return _nav_error
 
         if operation not in valid_operations:
             return {
@@ -546,7 +544,7 @@ Examples:
             payload=payload,
             ctx=ctx,
             resource_type="global_alert_config", tool_name="manage_applications",
-            **self._page_kwargs(params),
+            **page_kwargs(params),
         )
 
         return {
@@ -556,11 +554,6 @@ Examples:
             "application_id": application_id,
             "results": result
         }
-
-    @staticmethod
-    def _page_kwargs(params: Dict[str, Any]) -> Dict[str, Any]:
-        """Optional page/page_size kwargs; empty when the caller did not ask for paging."""
-        return {k: params[k] for k in ("page", "page_size") if params.get(k) is not None}
 
     async def _resolve_application_name(
         self,
@@ -619,12 +612,12 @@ Examples:
 
         # Pagination navigation (shared, stateless - src/core/pagination.py):
         # page_N / next / previous / go_to_page re-run get_all on that page.
-        _nav_page = resolve_nav_page(operation, params)
-        if _nav_page is not None:
-            params = {**params, "page": _nav_page}
-            params.setdefault("page_size", 10)
+        _requested_op = operation
+        operation, params, _nav_error = apply_navigation(operation, params, "get_all")
+        if _nav_error:
+            return _nav_error
+        if operation != _requested_op:
             params.setdefault("resource_subtype", "application")
-            operation = "get_all"
 
         if operation not in valid_operations:
             return {
@@ -697,13 +690,18 @@ Examples:
             "results": result
         }
 
-        # get_all is paginated by default (page=1, page_size=10)
-        if operation == "get_all" and isinstance(result, list):
+        # get_all is paginated only when page/page_size is requested (opt-in)
+        if (
+            operation == "get_all"
+            and isinstance(result, list)
+            and (params.get("page") is not None or params.get("page_size") is not None)
+        ):
             page_items, pagination = paginate(
                 result,
-                params.get("page", 1),
-                params.get("page_size", 10),
+                params.get("page"),
+                params.get("page_size"),
                 max_page_size=100,
+                sort_key=stable_sort_key,
                 list_id=f"{resource_subtype}_settings",
             )
             response["results"] = page_items

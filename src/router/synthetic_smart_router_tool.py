@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import resolve_nav_page
+from src.core.pagination import apply_navigation
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -156,11 +156,12 @@ SETTINGS (resource_type="settings"):
 
     get_synthetic_tests - List synthetic tests, optionally filtered and paginated.
         params: {application_id, location_id, credential_name, sort, offset, limit, filter_param, page, page_size} — all optional.
-        Defaults to page 1 with page_size 10. The response carries pagination metadata
+        Without page/page_size/offset/limit all tests are returned. With page/page_size the response
+        carries pagination metadata
         ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-        To change page, call resource_type="settings" with operation=<next_operation or previous_operation>
-        (or "next"/"previous"/"go_to_page") and the same filters plus page (current page; for
-        go_to_page, the target page). The same applies to resource_type="alert" find_active.
+        page/page_size cannot be combined with offset/limit. To change page, call
+        resource_type="settings" with operation=<next_operation or previous_operation> (e.g. "page_2")
+        and the same filters. The same applies to resource_type="alert" find_active.
 
     get_locations - List all locations with full metadata (id, label, displayLabel, locationType,
         status, geoPoint, customProperties.datacenterFlag, totalTests).
@@ -497,11 +498,9 @@ Examples:
 
         # Pagination navigation (shared, stateless - src/core/pagination.py):
         # page_N / next / previous / go_to_page re-run get_synthetic_tests on that page.
-        _nav_page = resolve_nav_page(operation, params)
-        if _nav_page is not None:
-            params = {**params, "page": _nav_page}
-            params.setdefault("page_size", 10)
-            operation = "get_synthetic_tests"
+        operation, params, _nav_error = apply_navigation(operation, params, "get_synthetic_tests")
+        if _nav_error:
+            return _nav_error
 
         if operation not in SETTINGS_VALID_OPERATIONS:
             return {
@@ -531,11 +530,6 @@ Examples:
 
             elif operation == "get_synthetic_tests":
                 logger.debug("[_handle_settings] Routing to get_synthetic_tests | params=%s", params)
-                page = params.get("page")
-                page_size = params.get("page_size")
-                if page is None and page_size is None and params.get("offset") is None and params.get("limit") is None:
-                    page = 1
-                    page_size = 10
                 result = await self.synthetic_settings_client.get_synthetic_tests(
                     application_id=params.get("application_id"),
                     location_id=params.get("location_id"),
@@ -544,8 +538,8 @@ Examples:
                     offset=params.get("offset"),
                     limit=params.get("limit"),
                     filter_param=params.get("filter"),
-                    page=page,
-                    page_size=page_size,
+                    page=params.get("page"),
+                    page_size=params.get("page_size"),
                     ctx=ctx,
                     resource_type="settings", tool_name="manage_synthetics",
                 )
@@ -725,10 +719,9 @@ Examples:
 
         # Pagination navigation (shared, stateless - src/core/pagination.py):
         # page_N / next / previous / go_to_page re-run find_active on that page.
-        _nav_page = resolve_nav_page(operation, params)
-        if _nav_page is not None:
-            params = {**params, "page": _nav_page}
-            operation = "find_active"
+        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
+        if _nav_error:
+            return _nav_error
 
         if operation not in ALERT_VALID_OPERATIONS:
             return {

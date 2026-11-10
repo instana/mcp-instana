@@ -1,56 +1,77 @@
 """
-Tests for the shared, stateless pagination helpers (src/core/pagination.py) and a
-cross-tool check that the list tools using them accept page_N / next / previous /
-go_to_page and resolve them to the same destination page.
+Tests for the shared, stateless pagination helpers (src/core/pagination.py).
+Router-level navigation tests live in tests/router/test_pagination_navigation.py.
 """
 
-import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch
 
-import src.core.pagination as pagination_module
 from src.core.pagination import (
+    NavigationError,
     add_navigation,
+    apply_navigation,
     build_pagination,
+    coerce_int,
+    normalize_page_args,
     operation_for_page,
+    page_kwargs,
     paginate,
     resolve_nav_page,
+    stable_sort_key,
 )
-from src.router.application_smart_router_tool import ApplicationSmartRouterMCPTool
-from src.router.custom_dashboard_smart_router_tool import (
-    CustomDashboardSmartRouterMCPTool,
-)
-from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
-from src.router.synthetic_smart_router_tool import SyntheticSmartRouterMCPTool
 
 
 class TestResolveNavPage(unittest.TestCase):
     def test_page_n_embeds_the_number(self):
         self.assertEqual(resolve_nav_page("page_10", {}), 10)
         self.assertEqual(resolve_nav_page("PAGE_3", {}), 3)
+        self.assertEqual(resolve_nav_page("  Page_2 ", {}), 2)
 
     def test_next_and_previous_use_current_page(self):
         self.assertEqual(resolve_nav_page("next", {"page_number": 4}), 5)
         self.assertEqual(resolve_nav_page("next", {"page_number": "4"}), 5)
         self.assertEqual(resolve_nav_page("previous", {"page_number": 4}), 3)
 
+    def test_operations_are_case_insensitive(self):
+        self.assertEqual(resolve_nav_page("Next", {"page": 1}), 2)
+        self.assertEqual(resolve_nav_page(" PREVIOUS ", {"page": 3}), 2)
+        self.assertEqual(resolve_nav_page("Go_To_Page", {"target_page": 6}), 6)
+
     def test_page_param_is_accepted_as_current_page(self):
         self.assertEqual(resolve_nav_page("next", {"page": 4}), 5)
-
-    def test_previous_never_goes_below_one(self):
-        self.assertEqual(resolve_nav_page("previous", {"page_number": 1}), 1)
 
     def test_flat_page_number_is_accepted(self):
         self.assertEqual(resolve_nav_page("next", {}, page_number="7"), 8)
 
-    def test_go_to_page_prefers_target_page(self):
-        self.assertEqual(resolve_nav_page("go_to_page", {"target_page": 9, "page_number": 2}), 9)
-        self.assertEqual(resolve_nav_page("go_to_page", {"page_number": 6}), 6)
+    def test_next_and_previous_without_current_page_are_errors(self):
+        for op in ("next", "previous"):
+            with self.assertRaises(NavigationError):
+                resolve_nav_page(op, {})
 
-    def test_missing_current_page_defaults_to_one(self):
-        with patch.object(pagination_module.logger, "warning") as warn:
-            self.assertEqual(resolve_nav_page("next", {}), 2)
-        warn.assert_called_once()
+    def test_previous_on_first_page_is_an_error(self):
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("previous", {"page_number": 1})
+
+    def test_invalid_current_page_is_an_error(self):
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("next", {"page": "abc"})
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("next", {"page": 0})
+
+    def test_go_to_page_requires_a_valid_target(self):
+        self.assertEqual(resolve_nav_page("go_to_page", {"target_page": "9"}), 9)
+        for params in ({}, {"target_page": "abc"}, {"target_page": 0}, {"target_page": ""}):
+            with self.assertRaises(NavigationError):
+                resolve_nav_page("go_to_page", params)
+
+    def test_go_to_page_does_not_fall_back_to_the_current_page(self):
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("go_to_page", {"page_number": 6})
+
+    def test_absurd_page_numbers_are_rejected(self):
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("page_99999999999999999999", {})
+        with self.assertRaises(NavigationError):
+            resolve_nav_page("page_0", {})
 
     def test_non_navigation_operation_returns_none(self):
         self.assertIsNone(resolve_nav_page("get_all", {}))
@@ -159,122 +180,50 @@ class TestBuildPagination(unittest.TestCase):
         self.assertEqual((meta["page"], meta["page_size"], meta["total_items"]), (1, 10, 0))
 
 
-def _run(coro):
-    return asyncio.run(coro)
-
-
-class TestPageNWorksOnEveryRouter(unittest.TestCase):
-    """page_N / next / previous / go_to_page reach the data layer as the right page."""
-
-    def _tool(self, cls):
-        return cls("tok", "https://x.instana.io")
-
-    def test_releases(self):
-        router = self._tool(ReleasesSmartRouterMCPTool)
-        asked = []
-
-        async def fake(page_number=None, page_size=None, **kw):
-            asked.append((page_number, page_size))
-            return {"success": True}
-
-        with patch.object(router.releases_client, "get_all_releases", new=AsyncMock(side_effect=fake)):
-            _run(router.manage_releases("page_7"))
-            _run(router.manage_releases("PAGE_3", {"page_size": 20}))
-            _run(router.manage_releases("next", {"page_number": 4}))
-            _run(router.manage_releases("previous", {"page_number": 4}))
-            _run(router.manage_releases("go_to_page", {"page_number": 9}))
-        self.assertEqual(asked, [(7, 50), (3, 20), (5, 50), (3, 50), (9, 50)])
-
-    def test_custom_dashboards(self):
-        router = self._tool(CustomDashboardSmartRouterMCPTool)
-        asked = []
-
-        async def fake(operation, params=None, **kw):
-            asked.append((operation, params["page"], params["page_size"], params["with_total_hits"]))
-            return {}
-
-        with patch.object(router.dashboard_client, "execute_dashboard_operation", new=AsyncMock(side_effect=fake)):
-            _run(router.manage_custom_dashboards("page_7"))
-            _run(router.manage_custom_dashboards("next", {"page": 4, "page_size": 25}))
-            _run(router.manage_custom_dashboards("previous", {"page": 4}))
-            _run(router.manage_custom_dashboards("go_to_page", {"page": 9}))
-        self.assertEqual(asked, [
-            ("get_all", 7, 10, True),
-            ("get_all", 5, 25, True),
-            ("get_all", 3, 10, True),
-            ("get_all", 9, 10, True),
-        ])
-
-    def test_synthetic_settings_and_alert(self):
-        router = self._tool(SyntheticSmartRouterMCPTool)
-        tests, alerts = [], []
-
-        async def fake_tests(page=None, page_size=None, **kw):
-            tests.append((page, page_size))
-            return {"items": []}
-
-        async def fake_alerts(page=None, page_size=None, **kw):
-            alerts.append((page, page_size))
-            return {"configs": []}
-
-        with patch.object(router.synthetic_settings_client, "get_synthetic_tests", new=AsyncMock(side_effect=fake_tests)), \
-             patch.object(router.synthetic_alert_client, "find_active_synthetic_alert_configs", new=AsyncMock(side_effect=fake_alerts)):
-            _run(router.manage_synthetics("settings", "page_7"))
-            _run(router.manage_synthetics("settings", "next", {"page": 4, "page_size": 20}))
-            _run(router.manage_synthetics("alert", "page_3"))
-            _run(router.manage_synthetics("alert", "previous", {"page": 4, "page_size": 20}))
-        self.assertEqual(tests, [(7, 10), (5, 20)])
-        self.assertEqual(alerts, [(3, None), (3, 20)])
-
-    def test_application_alert_configs(self):
-        router = self._tool(ApplicationSmartRouterMCPTool)
-        seen = {"alert_config": [], "global_alert_config": []}
-
-        def fake_for(kind):
-            async def fake(operation, **kw):
-                seen[kind].append((operation, kw.get("page"), kw.get("page_size")))
-                return {}
-            return AsyncMock(side_effect=fake)
-
-        with patch.object(router.app_alert_config_client, "execute_alert_config_operation", new=fake_for("alert_config")), \
-             patch.object(router.app_global_alert_config_client, "execute_alert_config_operation", new=fake_for("global_alert_config")):
-            for rt in ("alert_config", "global_alert_config"):
-                _run(router.manage_applications(rt, "page_7", {"application_id": "a1"}))
-                _run(router.manage_applications(rt, "next", {"application_id": "a1", "page": 2, "page_size": 5}))
-        for rt in seen:
-            self.assertEqual(seen[rt], [("find_active", 7, None), ("find_active", 3, 5)])
-
-    def test_application_settings_get_all_paginates_by_default(self):
-        router = self._tool(ApplicationSmartRouterMCPTool)
-        items = [{"id": f"{i:02d}"} for i in range(25)]
-        with patch.object(router.app_settings_client, "execute_settings_operation", new=AsyncMock(return_value=items)):
-            plain = _run(router.manage_applications(
-                "settings", "get_all", {"resource_subtype": "application"}))
-            self.assertEqual(len(plain["results"]), 10)
-            self.assertIn("pagination", plain)
-            self.assertEqual(plain["pagination"]["page"], 1)
-            self.assertEqual(plain["pagination"]["page_size"], 10)
-            self.assertEqual(plain["pagination"]["total_items"], 25)
-            self.assertEqual(plain["pagination"]["next_operation"], "page_2")
-            self.assertEqual(plain["pagination"]["list_id"], "application_settings")
-
-            page1 = _run(router.manage_applications(
-                "settings", "get_all", {"resource_subtype": "application", "page_size": 5}))
-            self.assertEqual(len(page1["results"]), 5)
-            self.assertEqual(page1["pagination"]["next_operation"], "page_2")
-
-            # Follow next_operation; the agent need not repeat resource_subtype / page_size.
-            page3 = _run(router.manage_applications("settings", "page_3", {}))
-            self.assertEqual([r["id"] for r in page3["results"]], [f"{i:02d}" for i in range(20, 25)])
-            self.assertIsNone(page3["pagination"]["next_operation"])
-            self.assertEqual(page3["pagination"]["previous_operation"], "page_2")
-
+class TestPaginateStableSorting(unittest.TestCase):
     def test_paginate_stable_sorting(self):
         """paginate with stable_sort_key sorts records to prevent skipping/duplicating items."""
-        from src.core.pagination import stable_sort_key
         unsorted_items = [{"id": "b"}, {"id": "c"}, {"id": "a"}]
-        page, meta = paginate(unsorted_items, page=1, page_size=2, sort_key=stable_sort_key)
+        page, _ = paginate(unsorted_items, page=1, page_size=2, sort_key=stable_sort_key)
         self.assertEqual([item["id"] for item in page], ["a", "b"])
+
+
+class TestArgumentHelpers(unittest.TestCase):
+    def test_coerce_int(self):
+        self.assertEqual(coerce_int("7", 1), 7)
+        self.assertEqual(coerce_int(7, 1), 7)
+        self.assertEqual(coerce_int(None, 3), 3)
+        self.assertEqual(coerce_int("", 3), 3)
+        self.assertEqual(coerce_int("abc", 3), 3)
+
+    def test_normalize_page_args(self):
+        self.assertEqual(normalize_page_args(None, None), (1, 10))
+        self.assertEqual(normalize_page_args("2", "25"), (2, 25))
+        self.assertEqual(normalize_page_args(0, 0), (1, 1))
+        self.assertEqual(normalize_page_args("abc", "abc", default_size=20), (1, 20))
+        self.assertEqual(normalize_page_args(1, 5000, max_size=100), (1, 100))
+
+    def test_page_kwargs_keeps_only_supplied_values(self):
+        self.assertEqual(page_kwargs({}), {})
+        self.assertEqual(page_kwargs({"page": 0, "page_size": None, "x": 1}), {"page": 0})
+        self.assertEqual(page_kwargs({"page": 2, "page_size": 5}), {"page": 2, "page_size": 5})
+
+
+class TestApplyNavigation(unittest.TestCase):
+    def test_non_navigation_is_untouched(self):
+        params = {"a": 1}
+        self.assertEqual(apply_navigation("find_active", params, "find_active"),
+                         ("find_active", params, None))
+
+    def test_navigation_is_rewritten(self):
+        op, params, err = apply_navigation("page_4", {"a": 1}, "get_all", page_key="page_number")
+        self.assertEqual((op, params, err), ("get_all", {"a": 1, "page_number": 4}, None))
+
+    def test_unresolvable_navigation_returns_elicitation_error(self):
+        op, params, err = apply_navigation("next", {}, "get_all")
+        self.assertEqual(op, "next")
+        self.assertTrue(err["elicitation_needed"])
+        self.assertEqual(err["reason"], "invalid_pagination")
 
 
 if __name__ == "__main__":

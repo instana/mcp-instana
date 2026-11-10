@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import resolve_nav_page
+from src.core.pagination import apply_navigation
 from src.core.timestamp_utils import convert_datetime_param, convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
 
@@ -62,15 +62,15 @@ Operations: get_all_releases, get_release, create_release, update_release, delet
 
 GET_ALL_RELEASES - List releases in time range with pagination and filtering
     params: from_time, to_time, name_filter, page_number, page_size
-    Paged responses return page 1 (50 items) by default with a pagination envelope
+    Without page_number/page_size all matching releases are returned. With either one the response
+    is paged and carries a pagination envelope
     ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-    To change page, call operation=<next_operation or previous_operation> (e.g. "page_2", "next",
-    "previous", "go_to_page") with the same params plus page_number (current page; for go_to_page,
-    the target page).
+    To change page, call operation=<next_operation or previous_operation> (e.g. "page_2") with the
+    same params; the page number is inside the operation string.
     Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
     name_filter: Filter releases by name (case-insensitive substring match)
-    page_number: Page number (1-based, optional, default: 1)
-    page_size: Results per page (optional, default: 50)
+    page_number: Page number (1-based, optional; "page" is accepted as an alias)
+    page_size: Results per page (optional, default: 50 when paging)
 
 GET_RELEASE - Get release by ID
     params: release_id (required)
@@ -135,15 +135,16 @@ Examples:
 
             # Pagination navigation (shared, stateless - src/core/pagination.py):
             # page_N / next / previous / go_to_page re-run get_all_releases on that page.
-            _nav_page = resolve_nav_page(operation, params)
-            if _nav_page is not None:
-                params = {**params, "page_number": _nav_page}
-                params.setdefault("page_size", 50)
-                operation = OPERATION_GET_ALL_RELEASES
+            operation, params, _nav_error = apply_navigation(
+                operation, params, OPERATION_GET_ALL_RELEASES, page_key="page_number"
+            )
+            if _nav_error:
+                return _nav_error
 
-            if operation == OPERATION_GET_ALL_RELEASES:
-                params.setdefault("page_number", 1)
-                params.setdefault("page_size", 50)
+            # "page" and "page_number" are interchangeable
+            if operation == OPERATION_GET_ALL_RELEASES and params.get("page_number") is None \
+                    and params.get("page") is not None:
+                params = {**params, "page_number": params["page"]}
 
             # Validate operation
             if operation not in RELEASES_VALID_OPERATIONS:
