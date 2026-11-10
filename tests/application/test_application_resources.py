@@ -497,6 +497,39 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertTrue(svc["link"].startswith("[checkout \\[v2\\] (prod)]("))
         self.assertNotIn("(prod)", svc["link"].split("](", 1)[1])
 
+    def test_get_applications_adds_url_and_link(self):
+        """Test get_applications adds an Instana UI url/link to each application perspective"""
+        payload = {"items": [{"id": "app-1", "label": "My App [prod]"}]}
+        response = MagicMock()
+        response.data = json.dumps(payload).encode('utf-8')
+        self.resources_api.get_applications_without_preload_content.return_value = response
+
+        result = asyncio.run(self.client.get_applications())
+
+        app = result["items"][0]
+        self.assertEqual(
+            app["url"],
+            "https://test.instana.io/#/application;appId=app-1/summary;latencyTab=overTime",
+        )
+        self.assertEqual(app["link"], f"[My App \\[prod\\]]({app['url']})")
+
+    def test_get_services_adds_url_and_link(self):
+        """Test get_services adds an Instana UI url/link to each service"""
+        payload = {"items": [{"id": "svc-1", "label": "checkout"}]}
+        response = MagicMock()
+        response.data = json.dumps(payload).encode('utf-8')
+        self.resources_api.get_services_without_preload_content.return_value = response
+
+        result = asyncio.run(self.client.get_services())
+
+        svc = result["items"][0]
+        self.assertEqual(
+            svc["url"],
+            "https://test.instana.io/#/service;serviceId=svc-1;"
+            "boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+        )
+        self.assertEqual(svc["link"], f"[checkout]({svc['url']})")
+
     def test_get_application_services_error_handling(self):
         """Test get_application_services returns a meaningful error message on exception"""
         self.resources_api.get_application_services_without_preload_content.side_effect = Exception("Application services failure")
@@ -546,7 +579,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertEqual(result, payload)
 
     def test_get_applications_success_without_to_dict(self):
-        """Test get_applications returns parsed JSON from raw response"""
+        """Test get_applications returns parsed JSON from raw response with url/link enrichment"""
         payload = {"items": [{"id": "app-789", "label": "Plain App"}]}
         mock_response = MagicMock()
         mock_response.data = json.dumps(payload).encode('utf-8')
@@ -554,7 +587,18 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.client.get_applications(name_filter="Plain App"))
 
-        self.assertEqual(result, payload)
+        expected_url = "https://test.instana.io/#/application;appId=app-789/summary;latencyTab=overTime"
+        expected = {
+            "items": [
+                {
+                    "id": "app-789",
+                    "label": "Plain App",
+                    "url": expected_url,
+                    "link": f"[Plain App]({expected_url})",
+                }
+            ]
+        }
+        self.assertEqual(result, expected)
         self.resources_api.get_applications_without_preload_content.assert_called_once_with(
             name_filter="Plain App",
             application_boundary_scope=None

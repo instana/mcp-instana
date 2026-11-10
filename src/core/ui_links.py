@@ -17,15 +17,18 @@ def _base(base_url: Optional[str]) -> str:
     return (base_url or "").rstrip("/")
 
 
-def build_markdown_link(label: str, url: str) -> str:
+def build_markdown_link(label: Optional[str], url: str) -> str:
     """
     Build a plain markdown link.
 
     Brackets in the label are escaped so they cannot end the link text, and
     parentheses in the URL are percent-encoded so they cannot end the link early.
     """
-    md_label = str(label).replace("[", "\\[").replace("]", "\\]")
-    md_url = url.replace("(", "%28").replace(")", "%29")
+    clean_label = str(label).strip() if label is not None else ""
+    if not clean_label:
+        clean_label = url
+    md_label = clean_label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    md_url = url.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
     return f"[{md_label}]({md_url})"
 
 
@@ -34,7 +37,7 @@ def build_application_url(base_url: Optional[str], app_id: Optional[str]) -> str
     base = _base(base_url)
     if not app_id:
         return f"{base}/#/applications"
-    return f"{base}/#/application;appId={app_id}/summary;latencyTab=overTime"
+    return f"{base}/#/application;appId={urllib.parse.quote(str(app_id), safe='')}/summary;latencyTab=overTime"
 
 
 def build_service_url(
@@ -44,8 +47,10 @@ def build_service_url(
     base = _base(base_url)
     if not service_id:
         return f"{base}/#/services"
+    app_param = f"appId={urllib.parse.quote(str(application_id), safe='')};" if application_id else ""
+    svc_param = urllib.parse.quote(str(service_id), safe="")
     return (
-        f"{base}/#/service;appId={application_id};serviceId={service_id};"
+        f"{base}/#/service;{app_param}serviceId={svc_param};"
         f"boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call"
     )
 
@@ -54,12 +59,16 @@ def build_synthetic_test_url(base_url: Optional[str], test: Dict[str, Any]) -> s
     """URL of a synthetic test's summary page in the Instana UI."""
     base = _base(base_url)
     try:
-        test_id = test.get("id", "")
-        test_label = test.get("label", "")
-        test_type = (test.get("configuration") or {}).get("syntheticType", "HTTPAction")
+        test_id = str(test.get("id") or "")
+        test_label = str(test.get("label") or "")
+        config = test.get("configuration") or {}
+        test_type = str(config.get("syntheticType") or "HTTPAction")
 
-        location_ids = test.get("locations") or []
-        location_labels = test.get("locationDisplayLabels") or []
+        raw_loc_ids = test.get("locations") or []
+        raw_loc_labels = test.get("locationDisplayLabels") or []
+
+        location_ids = [str(x) for x in raw_loc_ids if x is not None]
+        location_labels = [str(x) for x in raw_loc_labels if x is not None]
 
         # "/" is deliberately not in the safe set: a label such as "/testpath" would
         # otherwise add a path segment and break the Instana URL parser.
@@ -86,7 +95,7 @@ def add_application_link(base_url: Optional[str], app: Dict[str, Any]) -> None:
     """Add ``url`` and ``link`` to an application config / perspective dict in place."""
     url = build_application_url(base_url, app.get("id"))
     app["url"] = url
-    app["link"] = build_markdown_link(app.get("label") or app.get("id") or "", url)
+    app["link"] = build_markdown_link(app.get("label") or app.get("id"), url)
 
 
 def add_service_link(base_url: Optional[str], application_id: Optional[str], service: Dict[str, Any]) -> None:
@@ -94,11 +103,11 @@ def add_service_link(base_url: Optional[str], application_id: Optional[str], ser
     service_id = service.get("id")
     url = build_service_url(base_url, application_id, service_id)
     service["url"] = url
-    service["link"] = build_markdown_link(service.get("label") or service_id or "", url)
+    service["link"] = build_markdown_link(service.get("label") or service_id, url)
 
 
 def add_synthetic_test_link(base_url: Optional[str], test: Dict[str, Any]) -> None:
     """Add ``url`` and ``link`` to a synthetic test dict in place."""
     url = build_synthetic_test_url(base_url, test)
     test["url"] = url
-    test["link"] = build_markdown_link(test.get("label") or test.get("id") or "", url)
+    test["link"] = build_markdown_link(test.get("label") or test.get("id"), url)

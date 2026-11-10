@@ -29,6 +29,23 @@ class TestMarkdownLink(unittest.TestCase):
         link = build_markdown_link("a [b]", "https://x/y(1)")
         self.assertEqual(link, "[a \\[b\\]](https://x/y%281%29)")
 
+    def test_empty_or_none_label_falls_back_to_url(self):
+        self.assertEqual(build_markdown_link(None, "https://x/y"), "[https://x/y](https://x/y)")
+        self.assertEqual(build_markdown_link("", "https://x/y"), "[https://x/y](https://x/y)")
+        self.assertEqual(build_markdown_link("   ", "https://x/y"), "[https://x/y](https://x/y)")
+
+    def test_escapes_backslashes_in_label(self):
+        self.assertEqual(
+            build_markdown_link("Domain\\User", "https://x/y"),
+            "[Domain\\\\User](https://x/y)",
+        )
+
+    def test_encodes_spaces_in_url(self):
+        self.assertEqual(
+            build_markdown_link("My App", "https://x/y?a=b c"),
+            "[My App](https://x/y?a=b%20c)",
+        )
+
 
 class TestApplicationLinks(unittest.TestCase):
     def test_application_url(self):
@@ -39,6 +56,18 @@ class TestApplicationLinks(unittest.TestCase):
 
     def test_application_url_without_id(self):
         self.assertEqual(build_application_url(BASE, None), f"{BASE}/#/applications")
+
+    def test_application_url_quotes_app_id(self):
+        self.assertEqual(
+            build_application_url(BASE, "app/1;test"),
+            f"{BASE}/#/application;appId=app%2F1%3Btest/summary;latencyTab=overTime",
+        )
+
+    def test_base_url_none(self):
+        self.assertEqual(
+            build_application_url(None, "app1"),
+            "/#/application;appId=app1/summary;latencyTab=overTime",
+        )
 
     def test_add_application_link(self):
         app = {"id": "app1", "label": "My App"}
@@ -62,9 +91,30 @@ class TestServiceLinks(unittest.TestCase):
     def test_service_url_without_id(self):
         self.assertEqual(build_service_url(BASE, "app1", None), f"{BASE}/#/services")
 
+    def test_global_service_url_without_app_id(self):
+        self.assertEqual(
+            build_service_url(BASE, None, "svc1"),
+            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+        )
+
+    def test_service_url_quotes_ids(self):
+        self.assertEqual(
+            build_service_url(BASE, "app/1", "svc/1"),
+            f"{BASE}/#/service;appId=app%2F1;serviceId=svc%2F1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+        )
+
     def test_add_service_link(self):
         svc = {"id": "svc1", "label": "checkout"}
         add_service_link(BASE, "app1", svc)
+        self.assertEqual(svc["link"], f"[checkout]({svc['url']})")
+
+    def test_add_service_link_without_app_id(self):
+        svc = {"id": "svc1", "label": "checkout"}
+        add_service_link(BASE, None, svc)
+        self.assertEqual(
+            svc["url"],
+            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+        )
         self.assertEqual(svc["link"], f"[checkout]({svc['url']})")
 
 
@@ -89,6 +139,25 @@ class TestSyntheticTestLinks(unittest.TestCase):
         url = build_synthetic_test_url(BASE, {"id": "t1", "label": "x", "configuration": None, "locations": None})
         self.assertIn("type=HTTPAction;", url)
         self.assertIn("locationIds=;", url)
+
+    def test_handles_none_elements_in_locations_and_labels(self):
+        test = {
+            "id": "t1",
+            "label": "test",
+            "configuration": {"syntheticType": None},
+            "locations": [None, "loc1", None],
+            "locationDisplayLabels": [None, "Loc 1", None],
+        }
+        url = build_synthetic_test_url(BASE, test)
+        self.assertIn("type=HTTPAction;", url)
+        self.assertIn("locationIds=loc1;", url)
+        self.assertIn("locationDisplayLabels=Loc%201;", url)
+
+    def test_handles_missing_and_none_ids(self):
+        url = build_synthetic_test_url(BASE, {"id": None, "label": None, "configuration": {}})
+        self.assertIn("testId=;", url)
+        self.assertIn("testLabel=;", url)
+        self.assertIn("type=HTTPAction;", url)
 
     def test_add_synthetic_test_link_encodes_parens_in_link(self):
         test = {"id": "t1", "label": "Login (prod)"}
