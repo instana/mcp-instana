@@ -244,5 +244,35 @@ class TestSyntheticTestLinks(unittest.TestCase):
             self.assertNotIn("url", test)
 
 
+class TestRealTenantRoutes(unittest.TestCase):
+    """URLs copied from a live Instana tenant (minus the optional ?timeline.* query)."""
+
+    def test_application_route_matches_live_ui(self):
+        self.assertEqual(
+            build_application_url(BASE, "SZNCeB7YR_iR1xMZrlN2bw"),
+            f"{BASE}/#/application;appId=SZNCeB7YR_iR1xMZrlN2bw/summary;latencyTab=overTime",
+        )
+
+    def test_synthetic_route_matches_live_ui(self):
+        test = {
+            "id": "aPWC9igVbh2bb3931kvZ",
+            "label": "aia-next-step-ai-query-processor-prod",
+            "configuration": {"syntheticType": "HTTPAction"},
+            "locations": ["V1qf1jYior6JJtfxDzm1", "My8SQjD429jtae2QxbkO"],
+            "locationDisplayLabels": [
+                "(Internal)DallasTX_dal-ciomon-prod",
+                "(Internal)WashingtonDC_wdc-ciomon-prod",
+            ],
+        }
+        self.assertEqual(
+            build_synthetic_test_url(BASE, test),
+            f"{BASE}/#/synthetic;testId=aPWC9igVbh2bb3931kvZ;"
+            "testLabel=aia-next-step-ai-query-processor-prod;type=HTTPAction;"
+            "locationDisplayLabels=(Internal)DallasTX_dal-ciomon-prod%2C(Internal)WashingtonDC_wdc-ciomon-prod;"
+            "locationIds=V1qf1jYior6JJtfxDzm1%2CMy8SQjD429jtae2QxbkO;"
+            "runType=Scheduled;executionType=Scheduled/summary",
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
