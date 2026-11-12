@@ -192,9 +192,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 return self.handle_api_error_response(response, "list synthetic tests", logger)
 
             items = json.loads(decode_response(response))
-            for test in items:
-                if isinstance(test, dict):
-                    add_synthetic_test_link(self.base_url, test)
+            if isinstance(items, list):
+                for test in items:
+                    if isinstance(test, dict):
+                        add_synthetic_test_link(self.base_url, test)
 
             logger.debug("[get_synthetic_tests] Returning %d tests", len(items))
             return {

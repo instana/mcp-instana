@@ -156,7 +156,7 @@ SETTINGS (resource_type="settings"):
     get_synthetic_tests - List synthetic tests, optionally filtered and paginated.
         params: {application_id, location_id, credential_name, sort, offset, limit, filter_param} — all optional.
 
-    get_synthetic_test / get_synthetic_tests results include a "url" and "link" for each test.
+    get_synthetic_test / get_synthetic_tests results include a markdown "link" for each test.
         ALWAYS show each test name using its 'link' field verbatim (markdown, already URL-encoded).
         NEVER shorten, rebuild or drop the URL - truncated URLs do not open in the Instana UI.
 

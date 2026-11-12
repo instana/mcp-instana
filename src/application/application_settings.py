@@ -244,7 +244,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                     # If it's a single object, wrap it in a list
                     result_dict = [json_data] if json_data else []
                 logger.debug("Successfully retrieved application configs data")
-                # Add Instana UI url/link to each application
+                # Add an Instana UI link to each application
                 for app in result_dict:
                     if isinstance(app, dict):
                         add_application_link(self.base_url, app)
@@ -470,7 +470,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
     def _prepare_update_application_body(self, payload: Dict[str, Any], id: Optional[str] = None) -> Dict[str, Any]:
         """Prepare and serialize update payload for SDK API call."""
-        request_body = dict(payload)  # shallow copy to avoid mutating the original
+        # Shallow copy to avoid mutating the original; drop the read-only "link"/"url"
+        # fields that get/get_all add, so a fetched object can be passed back unchanged.
+        request_body = {k: v for k, v in payload.items() if k not in ("url", "link")}
         # The Instana PUT endpoint requires 'id' in the request body as well as the URL path.
         if id and not request_body.get("id"):
             request_body["id"] = id
@@ -732,7 +734,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
             result = json.loads(response.data.decode('utf-8'))
-            # Add Instana UI url/link to the application
+            # Add an Instana UI link to the application
             if isinstance(result, dict):
                 add_application_link(self.base_url, result)
             return result

@@ -5,6 +5,7 @@
 - **Enhancement:** Improved performance of the `get_events` operation and the `find_active` operation for infrastructure and global application Smart Alerts.
 - **Enhancement:** Enhanced the SLO prompts.
 - **New**: Introducing smart alerts for synthetics.
+- **Enhancement:** Application, service and synthetic test results now include a markdown `link` that opens the entity in the Instana UI.
 
 ### 1.0.3
 - **IMPORTANT**: SSL certificate verification is **enabled by default** and configurable

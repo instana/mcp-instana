@@ -3,7 +3,7 @@ Instana UI link helpers.
 
 Build deep links into the Instana UI for applications, application services and
 synthetic tests, plus ready-to-paste markdown links, so tool results can carry a
-clickable ``url`` / ``link`` next to each entity.
+clickable ``link`` next to each entity.
 """
 
 import logging
@@ -24,7 +24,8 @@ def build_markdown_link(label: Optional[str], url: str) -> str:
     Brackets in the label are escaped so they cannot end the link text, and
     parentheses in the URL are percent-encoded so they cannot end the link early.
     """
-    clean_label = str(label).strip() if label is not None else ""
+    # Collapse all whitespace (incl. newlines) so a label cannot break the link syntax.
+    clean_label = " ".join(str(label).split()) if label is not None else ""
     if not clean_label:
         clean_label = url
     md_label = clean_label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
@@ -41,7 +42,10 @@ def build_application_url(base_url: Optional[str], app_id: Optional[str]) -> str
 
 
 def build_service_url(
-    base_url: Optional[str], application_id: Optional[str], service_id: Optional[str]
+    base_url: Optional[str],
+    application_id: Optional[str],
+    service_id: Optional[str],
+    boundary_scope: str = "ALL",
 ) -> str:
     """URL of a service within an application perspective in the Instana UI."""
     base = _base(base_url)
@@ -51,7 +55,7 @@ def build_service_url(
     svc_param = urllib.parse.quote(str(service_id), safe="")
     return (
         f"{base}/#/service;{app_param}serviceId={svc_param};"
-        f"boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call"
+        f"boundaryScope={urllib.parse.quote(str(boundary_scope), safe='')}/summary;latencyTab=overTime;callsTab=call"
     )
 
 
@@ -74,7 +78,7 @@ def build_synthetic_test_url(base_url: Optional[str], test: Dict[str, Any]) -> s
         # otherwise add a path segment and break the Instana URL parser.
         encoded_label = urllib.parse.quote(test_label, safe="()")
         encoded_location_labels = urllib.parse.quote(",".join(location_labels), safe="()")
-        encoded_location_ids = urllib.parse.quote(",".join(location_ids))
+        encoded_location_ids = urllib.parse.quote(",".join(location_ids), safe="")
 
         return (
             f"{base}/#/synthetic;"
@@ -92,22 +96,33 @@ def build_synthetic_test_url(base_url: Optional[str], test: Dict[str, Any]) -> s
 
 
 def add_application_link(base_url: Optional[str], app: Dict[str, Any]) -> None:
-    """Add ``url`` and ``link`` to an application config / perspective dict in place."""
-    url = build_application_url(base_url, app.get("id"))
-    app["url"] = url
-    app["link"] = build_markdown_link(app.get("label") or app.get("id"), url)
+    """
+    Add a markdown ``link`` to an application config / perspective dict in place.
+
+    Does nothing without a base URL or an ``id``: such a link could not open anything useful.
+    """
+    if not _base(base_url) or not app.get("id"):
+        return
+    url = build_application_url(base_url, app["id"])
+    app["link"] = build_markdown_link(app.get("label") or app["id"], url)
 
 
-def add_service_link(base_url: Optional[str], application_id: Optional[str], service: Dict[str, Any]) -> None:
-    """Add ``url`` and ``link`` to a service dict in place."""
-    service_id = service.get("id")
-    url = build_service_url(base_url, application_id, service_id)
-    service["url"] = url
-    service["link"] = build_markdown_link(service.get("label") or service_id, url)
+def add_service_link(
+    base_url: Optional[str],
+    application_id: Optional[str],
+    service: Dict[str, Any],
+    boundary_scope: str = "ALL",
+) -> None:
+    """Add a markdown ``link`` to a service dict in place (skipped without a base URL or ``id``)."""
+    if not _base(base_url) or not service.get("id"):
+        return
+    url = build_service_url(base_url, application_id, service["id"], boundary_scope)
+    service["link"] = build_markdown_link(service.get("label") or service["id"], url)
 
 
 def add_synthetic_test_link(base_url: Optional[str], test: Dict[str, Any]) -> None:
-    """Add ``url`` and ``link`` to a synthetic test dict in place."""
+    """Add a markdown ``link`` to a synthetic test dict in place (skipped without a base URL or ``id``)."""
+    if not _base(base_url) or not test.get("id"):
+        return
     url = build_synthetic_test_url(base_url, test)
-    test["url"] = url
-    test["link"] = build_markdown_link(test.get("label") or test.get("id"), url)
+    test["link"] = build_markdown_link(test.get("label") or test["id"], url)

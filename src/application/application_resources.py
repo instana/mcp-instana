@@ -318,11 +318,14 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
             result_dict = json.loads(response.data.decode('utf-8'))
             self._sanitize_items_technologies(result_dict)
 
-            # Add Instana UI url/link to each service
+            # Add an Instana UI link to each service
             if isinstance(result_dict, dict):
                 for svc in result_dict.get('items') or []:
                     if isinstance(svc, dict):
-                        add_service_link(self.base_url, application_id, svc)
+                        add_service_link(
+                            self.base_url, application_id, svc,
+                            "INBOUND" if application_boundary_scope == "INBOUND" else "ALL",
+                        )
 
             logger.debug(f"Result from get_application_services: {result_dict}")
             return result_dict
