@@ -79,10 +79,10 @@ def build_synthetic_test_url(base_url: Optional[str], test: Dict[str, Any]) -> s
     """URL of a synthetic test's summary page in the Instana UI."""
     base = _base(base_url)
     try:
-        test_id = str(test.get("id") or "")
+        test_id = urllib.parse.quote(str(test.get("id") or ""), safe="")
         test_label = str(test.get("label") or "")
         config = test.get("configuration") or {}
-        test_type = str(config.get("syntheticType") or "HTTPAction")
+        test_type = urllib.parse.quote(str(config.get("syntheticType") or "HTTPAction"), safe="")
 
         raw_loc_ids = test.get("locations") or []
         raw_loc_labels = test.get("locationDisplayLabels") or []

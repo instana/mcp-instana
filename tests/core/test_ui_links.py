@@ -202,6 +202,13 @@ class TestSyntheticTestLinks(unittest.TestCase):
         self.assertIn("locationIds=loc%20a%2Cloc2;", url)
         self.assertTrue(url.endswith("runType=Scheduled;executionType=Scheduled/summary"))
 
+    def test_test_id_and_type_are_encoded(self):
+        url = build_synthetic_test_url(
+            BASE, {"id": "a;b/c d", "label": "l", "configuration": {"syntheticType": "HTTP;Action"}}
+        )
+        self.assertIn("testId=a%3Bb%2Fc%20d;", url)
+        self.assertIn("type=HTTP%3BAction;", url)
+
     def test_location_ids_encode_slashes(self):
         url = build_synthetic_test_url(BASE, {"id": "t1", "label": "x", "locations": ["a/b", "c"]})
         self.assertIn("locationIds=a%2Fb%2Cc;", url)
