@@ -8,9 +8,11 @@ instead of guessing.
 """
 
 import asyncio
+import json
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.core.pagination import apply_navigation, paginate, resolve_nav_page
 from src.router.application_smart_router_tool import ApplicationSmartRouterMCPTool
 from src.router.custom_dashboard_smart_router_tool import (
     CustomDashboardSmartRouterMCPTool,
@@ -284,3 +286,65 @@ class TestApplicationSettingsNavigation(NavigationCases, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEndToEndNavigationFlow(unittest.TestCase):
+    """
+    Follow ``pagination.next_operation`` from each real tool response back through the
+    router's navigation rewriting until it is ``None``: the pages must tile the data exactly
+    (no gaps, no repeats), and ``previous_operation`` must walk back the same way.
+    """
+
+    TOTAL = 23
+    PAGE_SIZE = 5
+
+    def _api_client(self, payload):
+        response = MagicMock()
+        response.status = 200
+        response.data = json.dumps(payload).encode("utf-8")
+        response.headers = {"Content-Type": "application/json"}
+        client = MagicMock()
+        client.get_all_releases_without_preload_content = MagicMock(return_value=response)
+        return client
+
+    def test_releases_pages_tile_the_data(self):
+        client = _tool(ReleasesSmartRouterMCPTool).releases_client
+        releases = [{"id": f"r{i:03d}", "name": f"rel-{i}"} for i in range(self.TOTAL)]
+        api = self._api_client(releases)
+
+        # Other test modules swap with_header_auth for a mock at import time, so pin the
+        # API client on the instance and call through whichever wrapper is in place.
+        client.releases_api = api
+
+        def fetch(page):
+            return _run(client.get_all_releases(
+                page_number=page, page_size=self.PAGE_SIZE, api_client=api))
+
+        seen, result = [], fetch(1)
+        for _ in range(50):  # hard stop: a broken envelope must not loop forever
+            self.assertTrue(result["success"])
+            seen.extend(result["releases"])
+            op = result["pagination"]["next_operation"]
+            if op is None:
+                break
+            operation, params, error = apply_navigation(
+                op, {"page_size": self.PAGE_SIZE}, "get_all_releases", page_key="page_number")
+            self.assertIsNone(error)
+            self.assertEqual(operation, "get_all_releases")
+            result = fetch(params["page_number"])
+        else:
+            self.fail("next_operation never became None")
+
+        self.assertEqual([r["id"] for r in seen], [r["id"] for r in releases])
+        self.assertEqual(result["pagination"]["page"], 5)
+        self.assertEqual(result["pagination"]["total_pages"], 5)
+
+    def test_previous_operation_walks_back_to_page_one(self):
+        records = [{"id": f"{i:03d}"} for i in range(self.TOTAL)]
+        _, envelope = paginate(records, page=5, page_size=self.PAGE_SIZE)
+        visited = [envelope["page"]]
+        while envelope["previous_operation"] is not None:
+            page = resolve_nav_page(envelope["previous_operation"], {})
+            _, envelope = paginate(records, page=page, page_size=self.PAGE_SIZE)
+            visited.append(envelope["page"])
+        self.assertEqual(visited, [5, 4, 3, 2, 1])
