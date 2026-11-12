@@ -80,6 +80,24 @@ class TestResolveNavPage(unittest.TestCase):
         self.assertIsNone(resolve_nav_page("page_x", {}))
 
 
+class TestCoerceInt(unittest.TestCase):
+    def test_accepts_ints_and_numeric_strings(self):
+        self.assertEqual(coerce_int(3, 1), 3)
+        self.assertEqual(coerce_int(" 3 ", 1), 3)
+
+    def test_accepts_whole_floats(self):
+        self.assertEqual(coerce_int("2.0", 1), 2)
+        self.assertEqual(coerce_int(2.0, 1), 2)
+
+    def test_rejects_fractions_and_garbage(self):
+        for bad in ("2.5", "abc", "inf", "nan", [], {}):
+            self.assertEqual(coerce_int(bad, 7), 7)
+
+    def test_missing_uses_default(self):
+        self.assertEqual(coerce_int(None, 7), 7)
+        self.assertEqual(coerce_int("", 7), 7)
+
+
 class TestAddNavigation(unittest.TestCase):
     def test_first_page(self):
         meta = add_navigation({"page": 1, "has_more": True})
@@ -95,6 +113,15 @@ class TestAddNavigation(unittest.TestCase):
         meta = add_navigation({"page": 10, "has_more": False})
         self.assertIsNone(meta["next_operation"])
         self.assertEqual(meta["previous_operation"], "page_9")
+
+    def test_previous_operation_after_overshoot_points_at_last_real_page(self):
+        _, meta = paginate(list(range(25)), page=99, page_size=10)
+        self.assertEqual(meta["total_pages"], 3)
+        self.assertIsNone(meta["next_operation"])
+        self.assertEqual(meta["previous_operation"], "page_3")
+
+    def test_previous_operation_without_total_pages_is_page_minus_one(self):
+        self.assertEqual(add_navigation({"page": 99, "has_more": False})["previous_operation"], "page_98")
 
     def test_operation_for_page_round_trips_through_resolver(self):
         self.assertEqual(resolve_nav_page(operation_for_page(7), {}), 7)

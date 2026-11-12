@@ -71,6 +71,12 @@ def coerce_int(value: Any, default: int) -> int:
     try:
         return int(value)
     except (ValueError, TypeError):
+        pass
+    try:
+        # "2.0" / 2.0 (LLMs and JSON round-trips) are whole numbers too
+        as_float = float(value)
+        return int(as_float) if as_float.is_integer() else default
+    except (ValueError, TypeError, OverflowError):
         return default
 
 
@@ -206,7 +212,9 @@ def add_navigation(pagination: Dict[str, Any]) -> Dict[str, Any]:
     dict (in place).
 
     The operation values are ``None`` when there is no such page, otherwise the exact
-    operation string (``"page_N"``) the agent should call to move there.
+    operation string (``"page_N"``) the agent should call to move there. When the
+    requested page lies beyond ``total_pages`` (if known), ``previous_operation`` points
+    at the last real page.
     """
     if not isinstance(pagination, dict):
         return pagination
@@ -216,7 +224,12 @@ def add_navigation(pagination: Dict[str, Any]) -> Dict[str, Any]:
         page = 1
     pagination["has_previous"] = page > 1
     pagination["next_operation"] = operation_for_page(page + 1) if pagination.get("has_more") else None
-    pagination["previous_operation"] = operation_for_page(page - 1) if page > 1 else None
+    previous_page = page - 1
+    total_pages = coerce_int(pagination.get("total_pages"), 0)
+    if total_pages >= 1:
+        # Past the end: step back to the last real page, not to another empty one.
+        previous_page = min(previous_page, total_pages)
+    pagination["previous_operation"] = operation_for_page(previous_page) if page > 1 else None
     return pagination
 
 
