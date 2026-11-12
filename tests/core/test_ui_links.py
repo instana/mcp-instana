@@ -134,7 +134,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_service_url(self):
         self.assertEqual(
             build_service_url(BASE, "app1", "svc1"),
-            f"{BASE}/#/service;appId=app1;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;appId=app1;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime",
         )
 
     def test_service_url_without_id(self):
@@ -143,7 +143,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_global_service_url_without_app_id(self):
         self.assertEqual(
             build_service_url(BASE, None, "svc1"),
-            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime",
         )
 
     def test_service_url_boundary_scope(self):
@@ -155,7 +155,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_service_url_quotes_ids(self):
         self.assertEqual(
             build_service_url(BASE, "app/1", "svc/1"),
-            f"{BASE}/#/service;appId=app%2F1;serviceId=svc%2F1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;appId=app%2F1;serviceId=svc%2F1;boundaryScope=ALL/summary;latencyTab=overTime",
         )
 
     def test_add_service_link(self):
@@ -181,7 +181,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_add_service_link_without_app_id(self):
         svc = {"id": "svc1", "label": "checkout"}
         add_service_link(BASE, None, svc)
-        url = f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call"
+        url = f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime"
         self.assertEqual(svc["link"], f"[checkout]({url})")
 
 
@@ -275,16 +275,19 @@ class TestRealTenantRoutes(unittest.TestCase):
 
 
     def test_service_route_matches_live_ui(self):
-        # callsTab is the UI's selected calls tab (live links show both "call" and "http");
-        # "call" is the generic default.
+        # Live links may carry UI-state segments (callsTab=call|http, timeline.*); the route
+        # works without them, so we omit them and let the UI choose its defaults.
         self.assertEqual(
             build_service_url(
                 BASE, "SZNCeB7YR_iR1xMZrlN2bw", "390e6786b09eedd740b5239f50c40197b4582469", "INBOUND"
             ),
             f"{BASE}/#/service;appId=SZNCeB7YR_iR1xMZrlN2bw;"
             "serviceId=390e6786b09eedd740b5239f50c40197b4582469;boundaryScope=INBOUND"
-            "/summary;latencyTab=overTime;callsTab=call",
+            "/summary;latencyTab=overTime",
         )
+
+        self.assertNotIn("callsTab", build_service_url(BASE, "a", "s"))
+        self.assertNotIn("timeline", build_service_url(BASE, "a", "s"))
 
 
 if __name__ == '__main__':

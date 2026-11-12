@@ -493,7 +493,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertTrue(svc["link"].startswith("[checkout \\[v2\\] (prod)]("))
         self.assertIn(
             "https://test.instana.io/#/service;appId=app-1;serviceId=svc-1;"
-            "boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            "boundaryScope=ALL/summary;latencyTab=overTime",
             svc["link"],
         )
         self.assertNotIn("(prod)", svc["link"].split("](", 1)[1])
@@ -552,7 +552,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         self.assertEqual(
             svc["link"],
             "[checkout](https://test.instana.io/#/service;serviceId=svc-1;"
-            "boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call)",
+            "boundaryScope=ALL/summary;latencyTab=overTime)",
         )
 
     def test_get_application_services_error_handling(self):

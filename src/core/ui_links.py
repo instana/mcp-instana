@@ -71,7 +71,7 @@ def build_service_url(
     svc_param = urllib.parse.quote(str(service_id), safe="")
     return (
         f"{base}/#/service;{app_param}serviceId={svc_param};"
-        f"boundaryScope={urllib.parse.quote(str(boundary_scope), safe='')}/summary;latencyTab=overTime;callsTab=call"
+        f"boundaryScope={urllib.parse.quote(str(boundary_scope), safe='')}/summary;latencyTab=overTime"
     )
 
 
