@@ -98,6 +98,21 @@ class TestCoerceInt(unittest.TestCase):
         self.assertEqual(coerce_int("", 7), 7)
 
 
+class TestNavigationNumberParsing(unittest.TestCase):
+    def test_whole_number_floats_are_accepted(self):
+        self.assertEqual(resolve_nav_page("next", {"page": "2.0"}), 3)
+        self.assertEqual(resolve_nav_page("go_to_page", {"target_page": "4.0"}), 4)
+        self.assertEqual(resolve_nav_page("previous", {"page": 3.0}), 2)
+
+    def test_booleans_and_fractions_are_rejected(self):
+        for params in ({"page": True}, {"page": "2.5"}):
+            with self.assertRaises(NavigationError):
+                resolve_nav_page("next", params)
+        for params in ({"target_page": True}, {"target_page": "1.5"}):
+            with self.assertRaises(NavigationError):
+                resolve_nav_page("go_to_page", params)
+
+
 class TestAddNavigation(unittest.TestCase):
     def test_first_page(self):
         meta = add_navigation({"page": 1, "has_more": True})

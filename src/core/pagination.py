@@ -102,15 +102,32 @@ def page_kwargs(params: Dict[str, Any]) -> Dict[str, Any]:
     return {k: params[k] for k in ("page", "page_size") if params.get(k) is not None}
 
 
+def _whole_number(value: Any, name: str) -> int:
+    """Parse *value* as a whole number (``3``, ``"3"``, ``"3.0"``); raise otherwise.
+
+    Booleans are rejected explicitly: ``True`` would otherwise silently mean page 1.
+    """
+    if isinstance(value, bool):
+        raise NavigationError(f"{name} must be a whole number, got {value!r}")
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        pass
+    try:
+        as_float = float(value)
+        if as_float.is_integer():
+            return int(as_float)
+    except (ValueError, TypeError, OverflowError):
+        pass
+    raise NavigationError(f"{name} must be a whole number, got {value!r}")
+
+
 def _current_page(params: Dict[str, Any], page_number: Any = None) -> Optional[int]:
     """The caller-supplied current page (``page_number`` / ``page``), or ``None``."""
     for value in (params.get("page_number"), page_number, params.get("page")):
         if value is None or str(value).strip() == "":
             continue
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            raise NavigationError(f"page must be a whole number, got {value!r}") from None
+        return _whole_number(value, "page")
     return None
 
 
@@ -142,10 +159,7 @@ def resolve_nav_page(
         raw = params.get("target_page") if params.get("target_page") is not None else target_page
         if raw is None or str(raw).strip() == "":
             raise NavigationError("go_to_page requires target_page (a whole number >= 1)")
-        try:
-            destination = int(raw)
-        except (ValueError, TypeError):
-            raise NavigationError(f"target_page must be a whole number, got {raw!r}") from None
+        destination = _whole_number(raw, "target_page")
     elif op in ("next", "previous"):
         current = _current_page(params, page_number)
         if current is None:
