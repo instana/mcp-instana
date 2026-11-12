@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import build_pagination
+from src.core.pagination import build_pagination, normalize_page_args
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -352,13 +352,16 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             #     When paging is requested, withTotalHits defaults to true (needed for the
             #     pagination envelope) unless the caller explicitly passed False.
             paging_requested = page is not None or page_size is not None
-            effective_page = page
-            if page_size is not None and page is None:
-                effective_page = 1  # page is required for pageSize to have effect
-            effective_page_size = page_size
-            effective_with_total_hits = with_total_hits
-            if paging_requested and with_total_hits is None:
-                effective_with_total_hits = True
+            if paging_requested:
+                # Always send an explicit page AND size (coerced + clamped) so the
+                # envelope matches what the server actually used.
+                effective_page, effective_page_size = normalize_page_args(
+                    page, page_size, default_size=10, max_size=100
+                )
+                effective_with_total_hits = True if with_total_hits is None else with_total_hits
+            else:
+                effective_page = effective_page_size = None
+                effective_with_total_hits = with_total_hits
 
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_custom_dashboards_without_preload_content,
