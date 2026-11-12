@@ -159,7 +159,9 @@ class TestFindActiveSyntheticAlertConfigs(unittest.TestCase):
 
         self.assertEqual(result['total'], 0)
         self.assertEqual(result['configs'], [])
-        self.assertEqual(result['total_pages'], 0)
+        # legacy total_pages uses the same formula as the pagination envelope
+        self.assertEqual(result['total_pages'], 1)
+        self.assertEqual(result['total_pages'], result['pagination']['total_pages'])
         self.assertFalse(result['has_next'])
         self.assertFalse(result['has_previous'])
         self.assertIn('No active', result['message'])
@@ -202,6 +204,24 @@ class TestFindActiveSyntheticAlertConfigs(unittest.TestCase):
         self.assertFalse(result['has_next'])
         self.assertTrue(result['has_previous'])
 
+    def test_returns_standard_pagination_envelope(self):
+        configs = [{'id': f'a{i}'} for i in range(25)]
+        self.client.alert_api.find_active_synthetic_alert_configs_without_preload_content.return_value = \
+            _mock_response(200, configs)
+
+        result = asyncio.run(self.client.find_active_synthetic_alert_configs(page=2, page_size=10))
+
+        pagination = result['pagination']
+        self.assertEqual(pagination['page'], 2)
+        self.assertEqual(pagination['total_items'], 25)
+        self.assertEqual(pagination['next_operation'], 'page_3')
+        self.assertEqual(pagination['previous_operation'], 'page_1')
+        self.assertEqual(pagination['list_id'], 'synthetic_alert_configs')
+        # Legacy keys are unchanged.
+        self.assertTrue(result['has_next'])
+        self.assertEqual(result['total_pages'], 3)
+
+
     def test_api_error_returns_error_dict(self):
         self.client.alert_api.find_active_synthetic_alert_configs_without_preload_content.return_value = \
             _mock_response(500, {'message': 'Internal error'})
@@ -236,14 +256,15 @@ class TestFindActiveSyntheticAlertConfigs(unittest.TestCase):
 
         result = asyncio.run(self.client.find_active_synthetic_alert_configs(page=99, page_size=10))
 
-        # page is clamped to total_pages (1) — returns the last valid page instead of an empty result
-        self.assertEqual(result['page'], 1)
+        # same policy as paginate(): an out-of-range page is empty, has_more=False
+        self.assertEqual(result['page'], 99)
         self.assertEqual(result['total_pages'], 1)
-        self.assertEqual(result['count'], 5)
+        self.assertEqual(result['count'], 0)
         self.assertEqual(result['total'], 5)
-        self.assertEqual(len(result['configs']), 5)
+        self.assertEqual(result['configs'], [])
         self.assertFalse(result['has_next'])
-        self.assertFalse(result['has_previous'])
+        self.assertTrue(result['has_previous'])
+        self.assertFalse(result['pagination']['has_more'])
 
     def test_pagination_invalid_page_and_page_size_fallbacks(self):
         configs = [{'id': f'a{i}'} for i in range(5)]

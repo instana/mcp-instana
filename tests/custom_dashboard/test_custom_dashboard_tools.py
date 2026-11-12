@@ -131,7 +131,7 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
             query="test",
             page_size=10,
-            page=0,
+            page=1,
             with_total_hits=True,
             api_client=self.custom_dashboards_api
         ))
@@ -139,11 +139,11 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         self.custom_dashboards_api.get_custom_dashboards_without_preload_content.assert_called_once_with(
             query="test",
             page_size=10,
-            page=0,
+            page=1,
             with_total_hits=True
         )
         self.assertIn("page", result)
-        self.assertEqual(result["page"], 0)
+        self.assertEqual(result["page"], 1)
         self.assertIn("page_size", result)
         self.assertEqual(result["page_size"], 10)
 
@@ -1220,6 +1220,90 @@ class TestCustomDashboardMCPTools(unittest.TestCase):
         self.assertTrue(any("widgets[0].type" in e for e in errors))
         self.assertTrue(any("widgets[0].config" in e for e in errors))
         self.custom_dashboards_api.add_custom_dashboard_without_preload_content.assert_not_called()
+
+    def test_get_custom_dashboards_returns_pagination_envelope_with_total_hits(self):
+        """With withTotalHits the response carries the shared pagination envelope."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps(
+            {"totalHits": 25, "items": [{"id": f"d{i}"} for i in range(10)]}
+        ).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
+            page_size=10, page=2, with_total_hits=True,
+            api_client=self.custom_dashboards_api,
+        ))
+
+        pagination = result["pagination"]
+        self.assertEqual((pagination["page"], pagination["page_size"]), (2, 10))
+        self.assertEqual(pagination["total_items"], 25)
+        self.assertEqual(pagination["total_pages"], 3)
+        self.assertEqual(pagination["next_operation"], "page_3")
+        self.assertEqual(pagination["previous_operation"], "page_1")
+        self.assertEqual(pagination["list_id"], "custom_dashboards")
+        self.assertEqual(result["total_hits"], 25)  # legacy key unchanged
+
+    def test_get_custom_dashboards_has_no_envelope_without_total(self):
+        """A flat-list response has no total, so no envelope is fabricated."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps([{"id": "d1"}]).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
+            page_size=10, page=1, api_client=self.custom_dashboards_api,
+        ))
+
+        self.assertNotIn("pagination", result)
+
+    def _mock_flat_response(self):
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps([]).encode('utf-8')
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.return_value = mock_response
+
+    def test_get_custom_dashboards_page_alone_sends_explicit_page_size(self):
+        """page=2 without page_size must send page_size=10, matching the envelope."""
+        self._mock_flat_response()
+
+        result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
+            page=2, api_client=self.custom_dashboards_api,
+        ))
+
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.assert_called_once_with(
+            query=None, page_size=10, page=2, with_total_hits=True
+        )
+        self.assertEqual(result["page"], 2)
+        self.assertEqual(result["page_size"], 10)
+
+    def test_get_custom_dashboards_clamps_and_coerces_page_args(self):
+        """Oversized page_size is clamped to 100; string args are coerced to int."""
+        self._mock_flat_response()
+
+        result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
+            page="2", page_size=500, api_client=self.custom_dashboards_api,
+        ))
+
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.assert_called_once_with(
+            query=None, page_size=100, page=2, with_total_hits=True
+        )
+        self.assertEqual(result["page_size"], 100)
+
+    def test_get_custom_dashboards_no_paging_sends_no_page_args(self):
+        """Without page/page_size the API defaults apply unchanged."""
+        self._mock_flat_response()
+
+        result = asyncio.run(self.custom_dashboard_tools.get_custom_dashboards(
+            api_client=self.custom_dashboards_api,
+        ))
+
+        self.custom_dashboards_api.get_custom_dashboards_without_preload_content.assert_called_once_with(
+            query=None, page_size=None, page=None, with_total_hits=None
+        )
+        self.assertNotIn("page", result)
+        self.assertNotIn("page_size", result)
+
 
 
 if __name__ == '__main__':

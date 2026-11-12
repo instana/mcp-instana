@@ -175,6 +175,23 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["total"], 1)
 
+    def test_find_active_global_application_alert_configs_pagination(self):
+        """page/page_size select a slice of the streamed array and return the shared envelope."""
+        body = ('[' + ','.join(f'{{"id": "g{i}"}}' for i in range(25)) + ']').encode()
+        api = self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock()
+        api.return_value = _make_streaming_response(body)
+
+        result = asyncio.run(self.client.find_active_global_application_alert_configs(
+            application_id="app1", page=3, page_size=10,
+        ))
+
+        self.assertEqual([c["id"] for c in result["configs"]], [f"g{i}" for i in range(20, 25)])
+        pagination = result["pagination"]
+        self.assertEqual((pagination["page"], pagination["total_pages"]), (3, 3))
+        self.assertIsNone(pagination["next_operation"])
+        self.assertEqual(pagination["previous_operation"], "page_2")
+        self.assertEqual(pagination["list_id"], "global_application_alert_configs")
+
     def test_find_active_global_application_alert_configs_empty_result(self):
         """Test find_active_global_application_alert_configs with empty result"""
         import json

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from instana_client.api.releases_api import ReleasesApi
 from instana_client.models.release import Release
 
+from src.core.pagination import coerce_int, paginate
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -64,8 +65,9 @@ class ReleasesMCPTools(BaseInstanaClient):
             from_time: Start timestamp in milliseconds (optional)
             to_time: End timestamp in milliseconds (optional)
             name_filter: Filter releases by name (case-insensitive substring match, optional)
-            page_number: Page number for pagination (1-based, optional)
-            page_size: Number of results per page (optional, default: 50)
+            page_number: Page number for pagination (1-based, optional). Without page_number and
+                page_size all matching releases are returned.
+            page_size: Number of results per page (optional, default: 50, max: 1000)
             ctx: MCP context (internal)
 
         Returns:
@@ -75,6 +77,7 @@ class ReleasesMCPTools(BaseInstanaClient):
                 - page_number: Current page number (if pagination used)
                 - page_size: Size of each page (if pagination used)
                 - total_pages: Total number of pages (if pagination used)
+                - pagination: Standard envelope with next_operation / previous_operation (if pagination used)
                 - releases: List of releases for current page
                 - has_next_page: Boolean indicating if more pages exist
                 - has_previous_page: Boolean indicating if previous pages exist
@@ -105,50 +108,10 @@ class ReleasesMCPTools(BaseInstanaClient):
 
             total_count = len(all_releases)
 
-            # Apply pagination if specified
-            if page_number is not None and page_size is not None:
-                # Validate pagination parameters
-                if page_number < 1:
-                    return {
-                        "success": False,
-                        "error": "page_number must be >= 1"
-                    }
-                if page_size < 1:
-                    return {
-                        "success": False,
-                        "error": "page_size must be >= 1"
-                    }
-
-                # Calculate pagination
-                start_idx = (page_number - 1) * page_size
-                end_idx = start_idx + page_size
-                total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
-
-                # Get the page slice
-                paginated_releases = all_releases[start_idx:end_idx]
-
-                logger.info(
-                    f"Retrieved page {page_number}/{total_pages} "
-                    f"({len(paginated_releases)} releases)"
-                )
-
-                return {
-                    "success": True,
-                    "count": total_count,
-                    "page_number": page_number,
-                    "page_size": page_size,
-                    "total_pages": total_pages,
-                    "releases": paginated_releases,
-                    "has_next_page": page_number < total_pages,
-                    "has_previous_page": page_number > 1
-                }
-            else:
-                # No pagination - return all results
-                # Set default page_size for consistency
-                default_page_size = page_size or 50
-
+            default_page_size = 50
+            if page_number is None and page_size is None:
+                # No pagination requested - return all results (unchanged default behaviour)
                 logger.info(f"Retrieved {total_count} releases (no pagination)")
-
                 return {
                     "success": True,
                     "count": total_count,
@@ -158,6 +121,43 @@ class ReleasesMCPTools(BaseInstanaClient):
                         f"Use page_number=1 and page_size={default_page_size} to get started."
                     ) if total_count > default_page_size else None
                 }
+
+            # LLM clients often send numbers as strings, so coerce before validating.
+            effective_page = coerce_int(page_number, 1)
+            effective_page_size = coerce_int(page_size, default_page_size)
+            if effective_page < 1:
+                return {
+                    "success": False,
+                    "error": "page_number must be >= 1"
+                }
+            if effective_page_size < 1:
+                return {
+                    "success": False,
+                    "error": "page_size must be >= 1"
+                }
+
+            paginated_releases, pagination = paginate(
+                all_releases, effective_page, effective_page_size,
+                max_page_size=1000, list_id="releases",
+            )
+            total_pages = pagination["total_pages"]
+
+            logger.info(
+                f"Retrieved page {pagination['page']}/{total_pages} "
+                f"({len(paginated_releases)} releases)"
+            )
+
+            return {
+                "success": True,
+                "count": total_count,
+                "page_number": pagination["page"],
+                "page_size": pagination["page_size"],
+                "total_pages": total_pages,
+                "pagination": pagination,
+                "releases": paginated_releases,
+                "has_next_page": pagination["has_more"],
+                "has_previous_page": pagination["has_previous"]
+            }
 
         except Exception as e:
             logger.error(f"Error getting all releases: {e}", exc_info=True)

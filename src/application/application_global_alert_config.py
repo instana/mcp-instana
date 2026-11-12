@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import build_pagination, normalize_page_args
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -231,11 +232,14 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
         ctx,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Route a validated global_alert_config operation to the appropriate handler."""
         _r = {"resource_type": resource_type, "tool_name": tool_name}
+        _pg = {k: v for k, v in (("page", page), ("page_size", page_size)) if v is not None}
         dispatch = {
-            "find_active": lambda: self._find_active_configs(application_id, alert_ids, ctx, **_r),
+            "find_active": lambda: self._find_active_configs(application_id, alert_ids, ctx, **_r, **_pg),
             "find_versions": lambda: self._find_config_versions(id, ctx, **_r),
             "find": lambda: self._find_config(id, valid_on, ctx, **_r),
             "create": lambda: self._create_config(payload, ctx, **_r),
@@ -262,6 +266,8 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
         ctx=None,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Execute Global Application Alert Config CRUD operations.
@@ -276,6 +282,8 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             created: Unix timestamp for restore
             payload: Configuration payload
             ctx: MCP context
+            page: 1-based page of find_active results (optional, default 1)
+            page_size: find_active page size (optional, default 10)
 
         Returns:
             Operation result dictionary
@@ -295,6 +303,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             return await self._dispatch_global_alert_config(
                 operation, application_id, id, alert_ids, valid_on, created, payload, ctx,
                 resource_type=resource_type, tool_name=tool_name,
+                page=page, page_size=page_size,
             )
 
         except Exception as e:
@@ -312,11 +321,15 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
         api_client=None,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Find active global application alert configs."""
         if not application_id:
             return {"error": "application_id is required for find_active operation"}
 
+        # Only forward paging when requested, so callers that do not page see no change.
+        paging = {k: v for k, v in (("page", page), ("page_size", page_size)) if v is not None}
         return await self.find_active_global_application_alert_configs(
             application_id=application_id,
             alert_ids=alert_ids,
@@ -324,6 +337,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             api_client=api_client,
             resource_type=resource_type,
             tool_name=tool_name,
+            **paging,
         )
 
     @with_header_auth(GlobalApplicationAlertConfigurationApi)
@@ -510,7 +524,9 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                                             alert_ids: Optional[List[str]] = None,
                                             ctx=None, api_client=None,
                                             resource_type: Optional[str] = None,
-                                            tool_name: Optional[str] = None) -> Dict[str, Any]:
+                                            tool_name: Optional[str] = None,
+                                            page: Optional[int] = None,
+                                            page_size: Optional[int] = None) -> Dict[str, Any]:
         """
         Get All Global Smart Alert Configuration.
 
@@ -523,9 +539,12 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
             id: The ID of a specific global application.
             valid_on: A list of Global Smart Alert Configuration IDs. This allows fetching of a specific set of Configurations. This query can be repeated to use multiple IDs.
             ctx: The MCP context (optional)
+            page: 1-based page number (optional, default 1)
+            page_size: Items per page (optional, default 10, max 100)
 
         Returns:
-            Dictionary containing the Smart Alert Configuration or error information
+            Dictionary containing the Smart Alert Configuration or error information,
+            with a standard ``pagination`` envelope (``next_operation`` / ``previous_operation``).
         """
         try:
             logger.debug(f"find_active_global_application_alert_configs called with application_id={application_id}, alert_ids={alert_ids}")
@@ -547,10 +566,15 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
-            # Stream-parse only the first 10 items so the full array is
+            # Stream-parse only the requested page so the full array is
             # never buffered in memory, regardless of tenant size.
+            safe_page, safe_size = normalize_page_args(page, page_size, default_size=10, max_size=100)
+            start_idx = (safe_page - 1) * safe_size
             limited_configs, total_count = stream_json_array_page(
-                response, start_idx=0, end_idx=10
+                response, start_idx=start_idx, end_idx=start_idx + safe_size
+            )
+            pagination = build_pagination(
+                safe_page, safe_size, total_count, list_id="global_application_alert_configs"
             )
 
             if not limited_configs and total_count == 0:
@@ -559,6 +583,7 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                     "count": 0,
                     "total": 0,
                     "showing": 0,
+                    "pagination": pagination,
                     "message": f"No active global alert configurations found for application ID: {application_id}",
                     "suggestion": "You can create a new global alert configuration using the 'create' operation."
                 }
@@ -567,7 +592,15 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 "count": len(limited_configs),
                 "total": total_count,
                 "showing": len(limited_configs),
-                "message": f"Found {total_count} active global alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
+                "pagination": pagination,
+                "message": (
+                    f"Found {total_count} active global alert configuration(s) for application ID: {application_id}. "
+                    + (
+                        f"Showing first {len(limited_configs)}."
+                        if safe_page == 1
+                        else f"Showing page {safe_page} of {pagination['total_pages']} ({len(limited_configs)} item(s))."
+                    )
+                ),
             }
 
         except Exception as e:

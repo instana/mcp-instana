@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import apply_navigation
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,13 @@ SETTINGS (resource_type="settings"):
         - test_name: The synthetic test label (case-insensitive match)
 
     get_synthetic_tests - List synthetic tests, optionally filtered and paginated.
-        params: {application_id, location_id, credential_name, sort, offset, limit, filter_param} — all optional.
+        params: {application_id, location_id, credential_name, sort, offset, limit, filter_param, page, page_size} — all optional.
+        Without page/page_size/offset/limit all tests are returned. With page/page_size the response
+        carries pagination metadata
+        ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
+        page/page_size cannot be combined with offset/limit. To change page, call
+        resource_type="settings" with operation=<next_operation or previous_operation> (e.g. "page_2")
+        and the same filters. The same applies to resource_type="alert" find_active.
 
     get_locations - List all locations with full metadata (id, label, displayLabel, locationType,
         status, geoPoint, customProperties.datacenterFlag, totalTests).
@@ -489,6 +496,12 @@ Examples:
     ) -> Dict[str, Any]:
         """Handle Synthetic settings operations."""
 
+        # Pagination navigation (shared, stateless - src/core/pagination.py):
+        # page_N / next / previous / go_to_page re-run get_synthetic_tests on that page.
+        operation, params, _nav_error = apply_navigation(operation, params, "get_synthetic_tests")
+        if _nav_error:
+            return _nav_error
+
         if operation not in SETTINGS_VALID_OPERATIONS:
             return {
                 "elicitation_needed": True,
@@ -525,6 +538,8 @@ Examples:
                     offset=params.get("offset"),
                     limit=params.get("limit"),
                     filter_param=params.get("filter"),
+                    page=params.get("page"),
+                    page_size=params.get("page_size"),
                     ctx=ctx,
                     resource_type="settings", tool_name="manage_synthetics",
                 )
@@ -701,6 +716,12 @@ Examples:
         ctx,
     ) -> Dict[str, Any]:
         """Handle Synthetic smart alert configuration operations."""
+
+        # Pagination navigation (shared, stateless - src/core/pagination.py):
+        # page_N / next / previous / go_to_page re-run find_active on that page.
+        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
+        if _nav_error:
+            return _nav_error
 
         if operation not in ALERT_VALID_OPERATIONS:
             return {
