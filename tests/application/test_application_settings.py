@@ -998,6 +998,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         sent = mock_settings_api._put_application_config_serialize.call_args.kwargs
         self.assertNotIn("link", json.dumps(sent, default=str))
 
+    def test_build_serializable_body_strips_link_and_url(self):
+        """create and update both go through _build_serializable_body, so both drop link/url"""
+        body = self.client._build_serializable_body(
+            {"label": "App", "url": "https://x/y", "link": "[App](https://x/y)"}
+        )
+        self.assertEqual(body, {"label": "App"})
+
     def test_update_application_config_with_ast_literal_eval(self):
         """Test _update_application_config with Python dict string"""
         data = {"id": "app1", "label": "Updated"}

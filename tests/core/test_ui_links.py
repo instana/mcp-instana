@@ -5,6 +5,7 @@ Unit tests for the Instana UI link helpers.
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -51,6 +52,38 @@ class TestMarkdownLink(unittest.TestCase):
             build_markdown_link("My App", "https://x/y?a=b c"),
             "[My App](https://x/y?a=b%20c)",
         )
+
+
+class TestRequestBaseUrl(unittest.TestCase):
+    """In HTTP mode the tenant comes from the instana-base-url request header."""
+
+    HEADER_BASE = "https://other-tenant.instana.io"
+
+    def test_header_base_url_wins_over_server_base_url(self):
+        app = {"id": "app1", "label": "A"}
+        with patch("fastmcp.server.dependencies.get_http_headers",
+                   return_value={"instana-base-url": self.HEADER_BASE + "/"}):
+            add_application_link(BASE, app)
+        self.assertTrue(app["link"].startswith(f"[A]({self.HEADER_BASE}/#/application;"))
+
+    def test_header_base_url_used_when_server_base_url_empty(self):
+        svc = {"id": "svc1", "label": "S"}
+        with patch("fastmcp.server.dependencies.get_http_headers",
+                   return_value={"instana-base-url": self.HEADER_BASE}):
+            add_service_link("", None, svc)
+        self.assertIn(f"({self.HEADER_BASE}/#/service;", svc["link"])
+
+    def test_falls_back_to_server_base_url_without_header(self):
+        app = {"id": "app1", "label": "A"}
+        with patch("fastmcp.server.dependencies.get_http_headers", return_value={}):
+            add_application_link(BASE, app)
+        self.assertTrue(app["link"].startswith(f"[A]({BASE}/#/application;"))
+
+    def test_falls_back_to_server_base_url_when_header_lookup_fails(self):
+        app = {"id": "app1", "label": "A"}
+        with patch("fastmcp.server.dependencies.get_http_headers", side_effect=RuntimeError("no request")):
+            add_application_link(BASE, app)
+        self.assertTrue(app["link"].startswith(f"[A]({BASE}/#/application;"))
 
 
 class TestApplicationLinks(unittest.TestCase):

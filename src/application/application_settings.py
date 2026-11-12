@@ -72,6 +72,10 @@ VALID_BOUNDARY_SCOPE_VALUES = frozenset({"ALL", "INBOUND", "DEFAULT"})
 VALID_ENDPOINT_CASE_VALUES = frozenset({"ORIGINAL", "LOWER", "UPPER"})
 
 
+# Display-only fields that get/get_all add to results; stripped from create/update bodies.
+_READ_ONLY_LINK_FIELDS = frozenset({"url", "link"})
+
+
 class ApplicationSettingsMCPTools(BaseInstanaClient):
     """Tools for application settings in Instana MCP."""
 
@@ -422,6 +426,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         serializable_body = {}
         for k, v in request_body.items():
+            if k in _READ_ONLY_LINK_FIELDS:
+                continue  # added by get/get_all for display; never send back to the API
             if k == 'businessCriticality':
                 if isinstance(v, int):
                     serializable_body[k] = v
@@ -470,9 +476,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
     def _prepare_update_application_body(self, payload: Dict[str, Any], id: Optional[str] = None) -> Dict[str, Any]:
         """Prepare and serialize update payload for SDK API call."""
-        # Shallow copy to avoid mutating the original; drop the read-only "link"/"url"
-        # fields that get/get_all add, so a fetched object can be passed back unchanged.
-        request_body = {k: v for k, v in payload.items() if k not in ("url", "link")}
+        request_body = dict(payload)  # shallow copy to avoid mutating the original
         # The Instana PUT endpoint requires 'id' in the request body as well as the URL path.
         if id and not request_body.get("id"):
             request_body["id"] = id

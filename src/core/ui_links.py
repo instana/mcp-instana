@@ -13,8 +13,24 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+def _request_base_url() -> Optional[str]:
+    """The ``instana-base-url`` header of the current HTTP request, if there is one."""
+    try:
+        from fastmcp.server.dependencies import get_http_headers
+
+        return get_http_headers().get("instana-base-url") or None
+    except Exception:  # not in an HTTP request context (stdio mode, tests)
+        return None
+
+
 def _base(base_url: Optional[str]) -> str:
-    return (base_url or "").rstrip("/")
+    """
+    UI base URL without a trailing slash.
+
+    In HTTP mode the tenant is chosen per request via the ``instana-base-url`` header
+    (the same one API calls use), so it wins over the server-level *base_url*.
+    """
+    return (_request_base_url() or base_url or "").rstrip("/")
 
 
 def build_markdown_link(label: Optional[str], url: str) -> str:
