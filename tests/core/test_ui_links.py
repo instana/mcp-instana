@@ -134,7 +134,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_service_url(self):
         self.assertEqual(
             build_service_url(BASE, "app1", "svc1"),
-            f"{BASE}/#/service;appId=app1;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;appId=app1;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=http",
         )
 
     def test_service_url_without_id(self):
@@ -143,7 +143,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_global_service_url_without_app_id(self):
         self.assertEqual(
             build_service_url(BASE, None, "svc1"),
-            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=http",
         )
 
     def test_service_url_boundary_scope(self):
@@ -155,7 +155,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_service_url_quotes_ids(self):
         self.assertEqual(
             build_service_url(BASE, "app/1", "svc/1"),
-            f"{BASE}/#/service;appId=app%2F1;serviceId=svc%2F1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call",
+            f"{BASE}/#/service;appId=app%2F1;serviceId=svc%2F1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=http",
         )
 
     def test_add_service_link(self):
@@ -181,7 +181,7 @@ class TestServiceLinks(unittest.TestCase):
     def test_add_service_link_without_app_id(self):
         svc = {"id": "svc1", "label": "checkout"}
         add_service_link(BASE, None, svc)
-        url = f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=call"
+        url = f"{BASE}/#/service;serviceId=svc1;boundaryScope=ALL/summary;latencyTab=overTime;callsTab=http"
         self.assertEqual(svc["link"], f"[checkout]({url})")
 
 
@@ -271,6 +271,17 @@ class TestRealTenantRoutes(unittest.TestCase):
             "locationDisplayLabels=(Internal)DallasTX_dal-ciomon-prod%2C(Internal)WashingtonDC_wdc-ciomon-prod;"
             "locationIds=V1qf1jYior6JJtfxDzm1%2CMy8SQjD429jtae2QxbkO;"
             "runType=Scheduled;executionType=Scheduled/summary",
+        )
+
+
+    def test_service_route_matches_live_ui(self):
+        self.assertEqual(
+            build_service_url(
+                BASE, "SZNCeB7YR_iR1xMZrlN2bw", "c66a197cae46f3d33805ebbe08b7d7adc2d66dcf", "INBOUND"
+            ),
+            f"{BASE}/#/service;appId=SZNCeB7YR_iR1xMZrlN2bw;"
+            "serviceId=c66a197cae46f3d33805ebbe08b7d7adc2d66dcf;boundaryScope=INBOUND"
+            "/summary;latencyTab=overTime;callsTab=http",
         )
 
 
