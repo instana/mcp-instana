@@ -505,9 +505,9 @@ def get_prompt_categories():
     """Get prompt categories organized by functionality"""
     # Import the class-based prompts
     try:
-        from src.prompts.alert_channels.alert_channels_prompts import AlertChannelsPrompts
-        from src.prompts.automation.action_catalog import ActionCatalogPrompts
-        from src.prompts.automation.action_history import ActionHistoryPrompts
+        from src.prompts.alert_channels.alert_channels_prompts import (
+            AlertChannelsPrompts,
+        )
         from src.prompts.application.application_alerts import ApplicationAlertsPrompts
         from src.prompts.application.application_metrics import (
             ApplicationMetricsPrompts,
@@ -558,8 +558,6 @@ def get_prompt_categories():
 
     # Get prompts from each class (alphabetical by class name)
     alert_channels_prompts = AlertChannelsPrompts.get_prompts()
-    action_catalog_prompts = ActionCatalogPrompts.get_prompts()
-    action_history_prompts = ActionHistoryPrompts.get_prompts()
     app_alerts_prompts = ApplicationAlertsPrompts.get_prompts()
     app_metrics_prompts = ApplicationMetricsPrompts.get_prompts()
     app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
