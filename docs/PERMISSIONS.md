@@ -60,6 +60,16 @@ Resource types `catalog` (`get_actions`, `get_action_details`, `get_action_match
 
 > **Note:** The `advanced_config` source-map operations (`get_source_map_upload_config`, `get_mobile_app_source_map_upload_config_by_id`) are currently unavailable due to an authentication limitation in the tool itself. They will return an error regardless of token permissions.
 
+#### manage_alert_channels
+
+This tool is read-only (`get_overview`, `get`) and masks all secrets in its responses.
+
+| Category | Permission | Required |
+| :--- | :--- | :---: |
+| **Alert Channels** | Configuration of alert channels | `Yes` |
+
+> **Note:** To fetch Instana's alert channel details the `Configuration of alert channels` (`canConfigureIntegrations`) permission is required for read access.
+
 ### Tools With Write Operations
 
 These tools can create, update, or delete Instana configuration. The tables show which permissions the operations need.
