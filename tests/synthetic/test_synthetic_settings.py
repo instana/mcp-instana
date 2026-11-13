@@ -206,6 +206,40 @@ class TestSyntheticSettingsMCPTools(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["items"]), 2)
 
+    def test_get_synthetic_tests_adds_url_and_link(self):
+        """Each listed test should carry an Instana UI url and markdown link."""
+        self.settings_api.get_synthetic_tests_without_preload_content = Mock(
+            return_value=_ok_response(SAMPLE_TESTS)
+        )
+
+        result = asyncio.run(self.client.get_synthetic_tests())
+
+        first = result["items"][0]
+        self.assertNotIn("url", first)
+        self.assertTrue(first["link"].startswith("[Login Flow](https://test.instana.io/#/synthetic;testId=test-001;"))
+        self.assertEqual(first["description"], "End-to-end login check")
+
+    def test_get_synthetic_test_adds_url_and_link(self):
+        """A single test lookup should carry an Instana UI url and markdown link."""
+        self.settings_api.get_synthetic_test_without_preload_content = Mock(
+            return_value=_ok_response(dict(SAMPLE_TESTS[0]))
+        )
+
+        result = asyncio.run(self.client.get_synthetic_test(test_id="test-001"))
+
+        self.assertNotIn("url", result)
+        self.assertTrue(result["link"].startswith("[Login Flow](https://test.instana.io/#/synthetic;testId=test-001;"))
+
+    def test_get_synthetic_tests_tolerates_non_list_response(self):
+        """A non-list body must not crash link enrichment."""
+        self.settings_api.get_synthetic_tests_without_preload_content = Mock(
+            return_value=_ok_response({"unexpected": "shape"})
+        )
+
+        result = asyncio.run(self.client.get_synthetic_tests())
+
+        self.assertNotIn("link", str(result))
+
     def test_get_synthetic_tests_with_limit(self):
         """Limit param should be forwarded to the API."""
         self.settings_api.get_synthetic_tests_without_preload_content = Mock(

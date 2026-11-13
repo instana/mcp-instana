@@ -925,7 +925,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         self.assertIn("error", result)
 
     def test_get_application_config_no_to_dict(self):
-        """Test _get_application_config returns parsed JSON from raw response"""
+        """Test _get_application_config returns parsed JSON from raw response plus url/link"""
         data = {"id": "app1", "label": "App"}
         mock_response = MagicMock()
         mock_response.data = json.dumps(data).encode('utf-8')
@@ -933,7 +933,20 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
-        self.assertEqual(result, data)
+        expected_url = "https://test.instana.io/#/application;appId=app1/summary;latencyTab=overTime"
+        self.assertEqual(result, {**data, "link": f"[App]({expected_url})"})
+
+    def test_get_all_applications_configs_adds_url_and_link(self):
+        """Test _get_all_applications_configs adds an Instana UI url/link to each application"""
+        mock_result = MagicMock()
+        mock_result.data.decode.return_value = '[{"id": "app1", "label": "My [App]"}]'
+        mock_settings_api.get_application_configs_without_preload_content.return_value = mock_result
+
+        result = asyncio.run(self.client._get_all_applications_configs())
+
+        expected_url = "https://test.instana.io/#/application;appId=app1/summary;latencyTab=overTime"
+        self.assertNotIn("url", result[0])
+        self.assertEqual(result[0]["link"], f"[My \\[App\\]]({expected_url})")
 
     def test_add_application_config_validation_error(self):
         """Test _add_application_config without label returns elicitation"""
@@ -966,6 +979,31 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client._update_application_config("app1", payload))
 
         self.assertIn("id", result)
+
+    def test_update_application_config_strips_link_and_url_from_body(self):
+        """A fetched object (carrying link/url) can be passed back to update without forwarding them"""
+        data = {"id": "app1", "label": "Updated"}
+        mock_rest_response = MagicMock()
+        mock_rest_response.data = json.dumps(data).encode('utf-8')
+        mock_settings_api.api_client.call_api.return_value = mock_rest_response
+        mock_settings_api._put_application_config_serialize.reset_mock()
+        mock_settings_api._put_application_config_serialize.return_value = ("url", "method", {}, {}, {})
+
+        payload = {"id": "app1", "label": "Updated", "url": "https://x/y", "link": "[Updated](https://x/y)"}
+        asyncio.run(self.client._update_application_config("app1", payload))
+
+        body = self.client._prepare_update_application_body(payload, id="app1")
+        self.assertEqual(body, {"id": "app1", "label": "Updated"})
+        self.assertIn("link", payload)  # caller's dict is not mutated
+        sent = mock_settings_api._put_application_config_serialize.call_args.kwargs
+        self.assertNotIn("link", json.dumps(sent, default=str))
+
+    def test_build_serializable_body_strips_link_and_url(self):
+        """create and update both go through _build_serializable_body, so both drop link/url"""
+        body = self.client._build_serializable_body(
+            {"label": "App", "url": "https://x/y", "link": "[App](https://x/y)"}
+        )
+        self.assertEqual(body, {"label": "App"})
 
     def test_update_application_config_with_ast_literal_eval(self):
         """Test _update_application_config with Python dict string"""
