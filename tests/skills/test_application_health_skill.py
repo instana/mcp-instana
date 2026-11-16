@@ -76,8 +76,67 @@ class TestSkillProtocol(unittest.TestCase):
 
     def test_report_sections(self):
         c = _content()
-        for section in ("Verdict", "Needs attention", "Elevated", "Healthy", "Coverage"):
+        for section in ("Verdict", "Needs attention", "Elevated", "Healthy", "Coverage", "SLOs"):
             self.assertIn(section, c)
+
+    def test_low_volume_never_healthy(self):
+        c = _content()
+        self.assertIn("Low volume", c)
+        self.assertIn('never "healthy"', c)
+
+
+class TestSkillVerdict(unittest.TestCase):
+    def test_never_a_bare_no(self):
+        c = _content()
+        self.assertIn('never a bare "No"', c)
+        # Old binary verdict must be gone.
+        self.assertNotIn("Otherwise `No`", c)
+
+    def test_graded_verdicts(self):
+        c = _content()
+        self.assertIn("Yes, all N rated applications are healthy", c)
+        self.assertIn("Mostly healthy", c)
+        self.assertIn("rated applications need attention", c)
+
+
+class TestSkillSlo(unittest.TestCase):
+    def test_queries_breaching_application_slos(self):
+        c = _content()
+        self.assertIn('manage_slo(resource_type="configuration", operation="get_all"', c)
+        # The SLO API takes entity_type as a list and slo_status as an uppercase string.
+        self.assertIn('"entity_type":["application"]', c)
+        self.assertIn('"slo_status":"BREACHING"', c)
+
+    def test_slo_affects_verdict(self):
+        c = _content()
+        self.assertIn("no breaching SLOs", c)
+        self.assertIn("breaching SLO", c)
+
+    def test_slo_report_section_and_empty_case(self):
+        c = _content()
+        self.assertIn("No application SLOs breaching", c)
+        self.assertIn("entity.applicationId", c)
+
+
+class TestSkillLinks(unittest.TestCase):
+    def test_resolves_id_with_filtered_lookup(self):
+        c = _content()
+        self.assertIn('operation="get_applications", params={"name_filter"', c)
+        self.assertIn("without `name_filter`", c)
+
+    def test_link_format(self):
+        c = _content()
+        self.assertIn(
+            "<base>/#/application;appId=<id>/summary"
+            "?timeline.to&timeline.fm&timeline.ar=true&timeline.ws=<ms>",
+            c,
+        )
+
+    def test_base_url_derived_not_hardcoded(self):
+        c = _content()
+        self.assertIn("_links.self", c)
+        self.assertNotIn("instana.rocks", c)
+        self.assertIn("Never guess a base or id", c)
 
 
 class TestSkillsToolIntegration(unittest.TestCase):

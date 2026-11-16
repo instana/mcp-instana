@@ -331,7 +331,14 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MCPState]:
 def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "8080")), enabled_categories: str = "all") -> tuple[FastMCP, int, int]:
     """Create and configure the MCP server with the given credentials."""
     try:
-        server = FastMCP(name="Instana MCP Server")
+        server = FastMCP(
+            name="Instana MCP Server",
+            instructions=(
+                "Instana skills are fixed, tested protocols for common questions. "
+                "Before calling other Instana tools, check the skills listed in the "
+                "load_instana_skills tool description. "
+            ),
+        )
 
         # Register the per-request tool-category filter middleware so clients
         # can pass ``select-tools: infra,events`` in their mcp.json headers

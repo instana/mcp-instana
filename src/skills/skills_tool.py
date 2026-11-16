@@ -119,6 +119,10 @@ def _build_tool_description() -> str:
     return f"""\
 Load Instana skill instructions, list available skills, or load a skill reference file.
 
+ROUTING: Before answering with other Instana tools, check the skills below. If the user's
+request matches a skill's "Use when" description, call operation="get" for that skill FIRST
+and follow its protocol instead of improvising with lower-level tools.
+
 Operations:
   list          — returns metadata only (no SKILL.md body) for every skill.
   get           — returns the full SKILL.md content for the skill given in `name`,
