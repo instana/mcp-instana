@@ -85,8 +85,12 @@ mcp-instana --transport streamable-http --omit-tools maintenance_windows,slo
 
 # Combine --tools and --omit-tools
 mcp-instana --transport streamable-http --tools app,infra,events --omit-tools events
+```
 
-# List all available tool categories and their tools
+Note: If you just want to list tools without starting the server, you can use the `--list-tools` flag as shown below
+
+```bash
+# List all available tool categories and their tools 
 mcp-instana --list-tools
 ```
 
@@ -134,8 +138,11 @@ uv run src/core/server.py --transport streamable-http --omit-tools maintenance_w
 
 # Combine --tools and --omit-tools
 uv run src/core/server.py --transport streamable-http --tools app,infra,events --omit-tools events
+```
 
-# List all available tool categories and their tools
+Note: If you just want to list tools without starting the server, you can use the `--list-tools` flag as shown below
+
+```bash
 uv run src/core/server.py --list-tools
 ```
 

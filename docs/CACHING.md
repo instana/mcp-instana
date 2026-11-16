@@ -35,8 +35,6 @@ The server caches Instana catalog API responses (metrics and tags) in memory to 
 
 Two calls to the same operation share a cache entry only if the Instana base URL and all of their cache key parameters match.
 
-The metric catalogs are also fetched internally for pre-flight metric validation (when a metrics query is checked against the catalog). That internal fetch uses the same in-process store, but it always uses the default TTL and is **not** affected by `INSTANA_CACHE_ENABLED`, `INSTANA_CACHE_TTL`, or the per-request headers described below.
-
 ## Configuration Options
 
 | Setting | Environment variable | HTTP header (streamable HTTP only) | Default |
