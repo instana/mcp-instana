@@ -27,7 +27,7 @@ SKILL_NAME = "application-health"
 SKILL_MD = SKILLS_DIR / SKILL_NAME / "SKILL.md"
 
 # Token-budget guard: the skill is loaded into context on every health query.
-MAX_SKILL_CHARS = 4500
+MAX_SKILL_CHARS = 6000
 
 
 def _content() -> str:
@@ -59,11 +59,13 @@ class TestSkillProtocol(unittest.TestCase):
         self.assertIn('operation="get_grouped_calls_metrics"', c)
         self.assertIn('operation="get_events"', c)
 
-    def test_queries_open_application_and_service_events(self):
+    def test_queries_open_application_events_only(self):
         c = _content()
         self.assertIn('"entity_type":"APPLICATION"', c)
-        self.assertIn('"entity_type":"SERVICE"', c)
+        self.assertNotIn('"entity_type":"SERVICE"', c)
+        self.assertEqual(c.count('operation="get_events"'), 1)
         self.assertIn('"state":"open"', c)
+        self.assertNotIn("max_events", c)
 
     def test_forbids_catalog_and_alert_config_calls(self):
         c = _content()
@@ -118,7 +120,33 @@ class TestSkillSlo(unittest.TestCase):
         self.assertIn("entity.applicationId", c)
 
 
+class TestSkillSynthetics(unittest.TestCase):
+    def test_queries_synthetic_test_summary(self):
+        c = _content()
+        self.assertIn('manage_synthetics(resource_type="test_playback", operation="get_test_summary_list"', c)
+        self.assertIn('"metric":"success_rate"', c)
+
+    def test_synthetics_is_best_effort(self):
+        c = _content()
+        self.assertIn("Synthetic monitoring unavailable", c)
+        self.assertIn("No synthetic tests failing", c)
+
+    def test_failing_tests_affect_verdict(self):
+        self.assertIn("failing test", _content())
+
+    def test_links_call_is_after_synthetics_call(self):
+        c = _content()
+        self.assertIn("5. Links, after 1-4", c)
+        self.assertIn("`_links.self` in a call 5 result", c)
+
+
 class TestSkillLinks(unittest.TestCase):
+    def test_single_lookup_call(self):
+        c = _content()
+        self.assertIn("5. Links, after 1-4, one call", c)
+        self.assertNotIn("at most 3", c)
+        self.assertEqual(c.count('operation="get_applications"'), 1)
+
     def test_resolves_id_with_filtered_lookup(self):
         c = _content()
         self.assertIn('operation="get_applications", params={"name_filter"', c)
@@ -131,6 +159,14 @@ class TestSkillLinks(unittest.TestCase):
             "?timeline.to&timeline.fm&timeline.ar=true&timeline.ws=<ms>",
             c,
         )
+
+    def test_reuses_ids_from_earlier_calls(self):
+        c = _content()
+        self.assertIn("entity.applicationId", c)
+        self.assertIn("entity.label", c)
+        self.assertIn("applicationIds", c)
+        self.assertIn("applicationLabels", c)
+        self.assertIn("Unknown id: plain text", c)
 
     def test_base_url_derived_not_hardcoded(self):
         c = _content()
