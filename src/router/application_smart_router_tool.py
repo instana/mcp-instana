@@ -140,6 +140,9 @@ SETTINGS (resource_type="settings"):
     operations: get_all, get, create, update, delete
     params: {resource_subtype, id, application_name, service_name, service_id, payload, request_body}
     resource_subtypes: "application"
+    get_all / get (resource_subtype="application") results include a markdown "link" per application.
+    ALWAYS show each application name using its 'link' field verbatim (markdown) so it opens in the
+    Instana UI. NEVER shorten, rebuild or drop the URL.
 
     Creating application (resource_subtype="application", operation="create"):
     REQUIRED: label | OPTIONAL: scope, boundaryScope, accessRules, tagFilterExpression
@@ -158,7 +161,8 @@ RESOURCES (resource_type="resources"):
         Returns: Paginated list of services across all applications
     get_application_services - Get services for a specific application perspective
         params: {application_id, service_id, name_filter, application_boundary_scope, include_snapshot_ids}
-        Returns: Paginated services filtered by application context
+        Returns: Paginated services filtered by application context. Each service includes a markdown
+        "link"; ALWAYS show service names using the 'link' field verbatim (markdown).
     get_application_endpoints - Get endpoints for an application service
         params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope}
         Returns: Paginated endpoints with type and technology metadata
