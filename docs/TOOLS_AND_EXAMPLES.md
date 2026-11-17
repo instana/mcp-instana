@@ -1786,5 +1786,6 @@ Step 5: Check for errors
 
 For more information:
 - Check the main [README.md](../README.md) for setup and configuration
+- Check [TOOLS_FILTERING_CUSTOMIZATIONS](TOOLS_FILTERING_CUSTOMIZATIONS.md) for options on various Tools related filtering and customization options
 - Review [OBSERVABILITY.md](../OBSERVABILITY.md) for monitoring the MCP server itself
 - See [DOCKER.md](../DOCKER.md) for containerized deployment options
