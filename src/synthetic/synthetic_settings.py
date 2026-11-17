@@ -18,6 +18,8 @@ except ImportError as e:
     raise
 
 from src.core.pagination import paginate, stable_sort_key
+from src.core.ui_links import add_synthetic_test_link
+
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -118,7 +120,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                     "test_id": test_id,
                 }
 
-            return json.loads(decode_response(response))
+            test = json.loads(decode_response(response))
+            if isinstance(test, dict):
+                add_synthetic_test_link(self.base_url, test)
+            return test
 
         except Exception as e:
             logger.error("[get_synthetic_test] Error: %s", e, exc_info=True)
@@ -200,6 +205,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 return self.handle_api_error_response(response, "list synthetic tests", logger)
 
             items = json.loads(decode_response(response))
+            if isinstance(items, list):
+                for test in items:
+                    if isinstance(test, dict):
+                        add_synthetic_test_link(self.base_url, test)
 
             if client_side_paging:
                 page_items, pagination = paginate(

@@ -96,6 +96,7 @@ from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 # frozenset values avoid repeated set() conversions at call time and are
 # safe to use directly in set arithmetic inside _get_visible_tool_names.
 _CATEGORY_TO_TOOLS: dict[str, frozenset[str]] = {
+    "alert_channels":    frozenset({"manage_alert_channels"}),
     "app":               frozenset({"manage_applications"}),
     "infra":             frozenset({"manage_infrastructure"}),
     "automation":        frozenset({"manage_automation"}),
@@ -258,6 +259,7 @@ class InstanaToolsFilterMiddleware(Middleware):
 class MCPState:
     """State for the MCP server with all tool categories."""
     # Router tools
+    smart_router_alert_channels_client: Any = None
     smart_router_client: Any = None
     smart_router_custom_dashboard_client: Any = None
     smart_router_events_client: Any = None
@@ -434,6 +436,9 @@ async def execute_tool(tool_name: str, arguments: dict, clients_state) -> str:
 def get_client_categories():
     """Get client categories with lazy imports to avoid circular dependencies"""
     try:
+        from src.router.alert_channels_smart_router_tool import (
+            AlertChannelsSmartRouterMCPTool,
+        )
         from src.router.application_smart_router_tool import (
             ApplicationSmartRouterMCPTool,
         )
@@ -458,6 +463,9 @@ def get_client_categories():
         return {}
 
     return {
+        "alert_channels": [
+            ('smart_router_alert_channels_client', AlertChannelsSmartRouterMCPTool),
+        ],
         "app": [
             ('smart_router_client', ApplicationSmartRouterMCPTool),
         ],
@@ -497,6 +505,9 @@ def get_prompt_categories():
     """Get prompt categories organized by functionality"""
     # Import the class-based prompts
     try:
+        from src.prompts.alert_channels.alert_channels_prompts import (
+            AlertChannelsPrompts,
+        )
         from src.prompts.application.application_alerts import ApplicationAlertsPrompts
         from src.prompts.application.application_metrics import (
             ApplicationMetricsPrompts,
@@ -545,7 +556,8 @@ def get_prompt_categories():
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
 
-    # Get prompts from each class
+    # Get prompts from each class (alphabetical by class name)
+    alert_channels_prompts = AlertChannelsPrompts.get_prompts()
     app_alerts_prompts = ApplicationAlertsPrompts.get_prompts()
     app_metrics_prompts = ApplicationMetricsPrompts.get_prompts()
     app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
@@ -572,6 +584,9 @@ def get_prompt_categories():
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
 
     return {
+        "alert_channels": [
+            ("Alert Channels", alert_channels_prompts),
+        ],
         "app": [
             ("Application Alerts", app_alerts_prompts),
             ("Application Metrics", app_metrics_prompts),
@@ -710,7 +725,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, custom_dashboards, slo, releases, maintenance_windows, synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, custom_dashboards, slo, releases, maintenance_windows, synthetic, alert_channels). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--omit-tools",

@@ -163,6 +163,10 @@ SETTINGS (resource_type="settings"):
         resource_type="settings" with operation=<next_operation or previous_operation> (e.g. "page_2")
         and the same filters. The same applies to resource_type="alert" find_active.
 
+    get_synthetic_test / get_synthetic_tests results include a markdown "link" for each test.
+        ALWAYS show each test name using its 'link' field verbatim (markdown, already URL-encoded).
+        NEVER shorten, rebuild or drop the URL - truncated URLs do not open in the Instana UI.
+
     get_locations - List all locations with full metadata (id, label, displayLabel, locationType,
         status, geoPoint, customProperties.datacenterFlag, totalTests).
         locationType="Managed" = datacenter (IBM/AWS/Azure hosted). locationType="Private" = self-hosted PoP.

@@ -220,6 +220,7 @@ class TestMCPServer(unittest.TestCase):
         category_keys = list(categories.keys())
         self.assertEqual(category_keys, sorted(category_keys))
         expected_keys = [
+            "alert_channels",
             "app",
             "automation",
             "custom_dashboards",
@@ -240,6 +241,7 @@ class TestMCPServer(unittest.TestCase):
         category_keys = list(categories.keys())
         self.assertEqual(category_keys, sorted(category_keys))
         expected_keys = [
+            "alert_channels",
             "app",
             "custom_dashboards",
             "events",
@@ -1721,7 +1723,7 @@ class TestInstanaToolsFilterMiddleware(unittest.TestCase):
     def test_category_map_has_all_known_categories(self):
         """Every category known to the server must be represented in the map."""
         expected = {
-            "app", "infra", "automation", "website", "mobile_app",
+            "alert_channels", "app", "infra", "automation", "website", "mobile_app",
             "events", "custom_dashboards", "slo", "synthetic", "releases", "maintenance_windows",
         }
         self.assertEqual(set(_CATEGORY_TO_TOOLS.keys()), expected)
