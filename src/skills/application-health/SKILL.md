@@ -8,9 +8,9 @@ description: >
   or a specific application, are healthy or performing well.
   NOT for root cause, traces, infrastructure or host health.
 references:
+  - all-applications-query.md
   - application-query.md
-  - applications-query.md
-content_hash: sha256:ec2ddc4a38a42544ffce34e729e302d24e48691e952718ceb5ee70155c1884b4
+content_hash: sha256:e303a7ea010dc284714b1d1ee5b506e9637ee38263928288a6ec2fea06ec8a88
 ---
 
 # Application Health
@@ -28,12 +28,12 @@ Determine the target mode from the user's query:
      - `"how is app TxpllV3RQNCYKA-v_cRpuw doing"` -> `application-query.md`
      - `"is payment-service healthy"` -> `application-query.md`
 
-2. **All Applications / Fleet** (`applications-query.md`):
+2. **All Applications / Fleet** (`all-applications-query.md`):
    - The user asks about all applications, my applications, or the overall application fleet.
    - Examples:
-     - `"are all my applications healthy"` -> `applications-query.md`
-     - `"how is my application fleet doing"` -> `applications-query.md`
-     - `"application health overview"` -> `applications-query.md`
+     - `"are all my applications healthy"` -> `all-applications-query.md`
+     - `"how is my application fleet doing"` -> `all-applications-query.md`
+     - `"application health overview"` -> `all-applications-query.md`
 
 3. **Ambiguous / Unclear Scope**:
    - If it is unclear whether the user wants a single application or all applications, stop and ask the user to clarify. Do NOT guess.
@@ -46,7 +46,7 @@ BEFORE issuing any Instana data tool calls, you MUST load the selected reference
 load_instana_skills(operation="get_reference", name="application-health", path="<file>")
 ```
 
-- Where `<file>` is either `application-query.md` or `applications-query.md`.
+- Where `<file>` is either `application-query.md` or `all-applications-query.md`.
 - Follow the loaded reference protocol exactly.
 - If the load fails, report the failure to the user and stop immediately.
 - Do NOT reconstruct the protocol or call parameters from memory.

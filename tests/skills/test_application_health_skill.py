@@ -25,7 +25,7 @@ for mod_name, stub in _SDK_STUBS.items():
 SKILLS_DIR = Path(__file__).parent.parent.parent / "src" / "skills"
 SKILL_NAME = "application-health"
 SKILL_MD = SKILLS_DIR / SKILL_NAME / "SKILL.md"
-FLEET_MD = SKILLS_DIR / SKILL_NAME / "references" / "applications-query.md"
+FLEET_MD = SKILLS_DIR / SKILL_NAME / "references" / "all-applications-query.md"
 SINGLE_MD = SKILLS_DIR / SKILL_NAME / "references" / "application-query.md"
 
 # Token-budget guard: the skill is loaded into context on every health query.
@@ -40,7 +40,7 @@ def _content() -> str:
 
 
 def _fleet() -> str:
-    """references/applications-query.md (all applications)."""
+    """references/all-applications-query.md (all applications)."""
     return FLEET_MD.read_text(encoding="utf-8")
 
 
@@ -73,7 +73,7 @@ class TestSkillRouter(unittest.TestCase):
     def test_mentions_both_references(self):
         c = _content()
         self.assertIn("application-query.md", c)
-        self.assertIn("applications-query.md", c)
+        self.assertIn("all-applications-query.md", c)
 
     def test_has_get_reference_gate(self):
         c = _content()
@@ -96,7 +96,7 @@ class TestSkillRouter(unittest.TestCase):
         frontmatter = _content().split("---", 2)[1]
         self.assertIn("references:", frontmatter)
         self.assertIn("  - application-query.md", frontmatter)
-        self.assertIn("  - applications-query.md", frontmatter)
+        self.assertIn("\n  - all-applications-query.md\n", frontmatter)
 
 
 class TestSingleApplicationReference(unittest.TestCase):
@@ -303,7 +303,7 @@ class TestSkillsToolIntegration(unittest.TestCase):
         tool = skills_tool.SkillsMCPTool(read_token="t", base_url="https://x.instana.io")
         result = asyncio.run(tool.load_instana_skills(operation="get", name=SKILL_NAME))
         self.assertEqual(result["skill"], SKILL_NAME)
-        self.assertEqual(result["references"], ["application-query.md", "applications-query.md"])
+        self.assertEqual(result["references"], ["all-applications-query.md", "application-query.md"])
         self.assertIn("Application Health", result["content"])
 
     def test_get_reference_returns_each_file(self):
@@ -312,7 +312,7 @@ class TestSkillsToolIntegration(unittest.TestCase):
         tool = skills_tool.SkillsMCPTool(read_token="t", base_url="https://x.instana.io")
         for path, expected in (
             ("application-query.md", _single()),
-            ("applications-query.md", _fleet()),
+            ("all-applications-query.md", _fleet()),
         ):
             result = asyncio.run(
                 tool.load_instana_skills(operation="get_reference", name=SKILL_NAME, path=path)
