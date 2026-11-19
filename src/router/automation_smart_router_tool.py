@@ -7,10 +7,10 @@ Automation-specific tools for Instana monitoring.
 import logging
 from typing import Any, Dict, Optional, Union
 
-from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.timestamp_utils import convert_datetime_param
+from fastmcp import Context
+from src.core.timestamp_utils import DEFAULT_TIMEZONE, convert_datetime_param
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -124,10 +124,9 @@ CATALOG (resource_type="catalog"):
     params:
         - application_id (optional): application ID (either this or snapshot_id required)
         - snapshot_id (optional): snapshot ID (either this or application_id required)
-        - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-            If timezone not specified, defaults to UTC
+        - to (optional): timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules.
         - window_size (optional): time window in milliseconds
-    Example: params={"application_id": "app-123", "snapshot_id": "snap-456", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
+    Example: params={"application_id": "app-123", "snapshot_id": "snap-456", "window_size": 3600000}
 
     Get action types:
     operation="get_action_types"
@@ -142,8 +141,7 @@ HISTORY (resource_type="history")
     operation="list"
     params (all optional):
         - window_size: time window in milliseconds
-        - to: timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-            If timezone not specified, defaults to UTC
+        - to: timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules.
         - page: page number
         - page_size: items per page
         - target_snapshot_id: filter by snapshot ID
@@ -154,16 +152,22 @@ HISTORY (resource_type="history")
         - action_statuses: list of statuses (e.g., ["SUCCESS", "FAILED"])
         - order_by: column name for sorting
         - order_direction: "ASC" or "DESC"
-    Example: params={"window_size": 3600000, "to": 1234567890000, "page": 1, "page_size": 50, "target_snapshot_id": "snapshot-id", "event_id": "event-id", "event_specification_id": "spec-id", "search": "search text", "types": ["type1", "type2"], "action_statuses": ["SUCCESS", "FAILED"], "order_by": "column_name", "order_direction": "ASC"}
+    Example: params={"window_size": 3600000, "page": 1, "page_size": 50, "target_snapshot_id": "snapshot-id", "event_id": "event-id", "event_specification_id": "spec-id", "search": "search text", "types": ["type1", "type2"], "action_statuses": ["SUCCESS", "FAILED"], "order_by": "column_name", "order_direction": "ASC"}
 
     Get action instance details:
     operation="get_details"
     params:
         - action_instance_id (required): instance UUID
         - window_size (optional): time window in milliseconds (default: 10 minutes)
-        - to (optional): timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
-            If timezone not specified, defaults to UTC
-    Example: params={"action_instance_id": "instance-uuid", "window_size": 600000, "to": "19 March 2026, 2:47 PM|IST"}
+        - to (optional): timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules.
+    Example: params={"action_instance_id": "instance-uuid", "window_size": 600000}
+
+Time parameters:
+    - Relative window (preferred): pass only window_size (milliseconds) and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
 
 Args:
     resource_type: "catalog" or "history"
@@ -177,9 +181,9 @@ Returns:
 Examples:
     resource_type="catalog", operation="get_actions"
     resource_type="catalog", operation="get_action_matches", params={"payload": {"name": "CPU", "description": "monitoring"}}
-    resource_type="catalog", operation="get_action_matches_by_id_and_time_window", params={"application_id": "app-123", "to": "19 March 2026, 2:47 PM|IST", "window_size": 3600000}
-    resource_type="history", operation="list", params={"window_size": 3600000, "to": 1234567890000, "page_size": 20}
-    resource_type="history", operation="get_details", params={"action_instance_id": "instance-uuid", "to": "19 March 2026, 2:47 PM|IST"}"""
+    resource_type="catalog", operation="get_action_matches_by_id_and_time_window", params={"application_id": "app-123", "window_size": 3600000}
+    resource_type="history", operation="list", params={"window_size": 3600000, "page_size": 20}
+    resource_type="history", operation="get_details", params={"action_instance_id": "instance-uuid"}"""
     )
     async def manage_automation(
         self,
@@ -341,9 +345,9 @@ Examples:
                 conversion_result = convert_datetime_param(
                     to,
                     PARAM_TO,
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE
                 )
-
+                
                 if "error" in conversion_result:
                     return {
                         "elicitation_needed": True,
@@ -351,7 +355,7 @@ Examples:
                         "api_error": [conversion_result["error"]],
                         "message": conversion_result["error"],
                     }
-
+                
                 # Update the converted value
                 to = conversion_result["value"]
 
@@ -458,14 +462,14 @@ Examples:
                 # Extract all list parameters
                 window_size = params.get(PARAM_WINDOW_SIZE)
                 to = params.get(PARAM_TO)
-
+                
                 # Convert datetime string to timestamp for 'to' if provided
                 conversion_result = convert_datetime_param(
                     to,
                     PARAM_TO,
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE
                 )
-
+                
                 if "error" in conversion_result:
                     return {
                         "elicitation_needed": True,
@@ -473,10 +477,10 @@ Examples:
                         "api_error": [conversion_result["error"]],
                         "message": conversion_result["error"],
                     }
-
+                
                 # Update the converted value
                 to = conversion_result["value"]
-
+                
                 page = params.get(PARAM_PAGE)
                 page_size = params.get(PARAM_PAGE_SIZE)
                 target_snapshot_id = params.get(PARAM_TARGET_SNAPSHOT_ID)
@@ -523,14 +527,14 @@ Examples:
                 action_instance_id = params.get(PARAM_ACTION_INSTANCE_ID)
                 window_size = params.get(PARAM_WINDOW_SIZE)
                 to = params.get(PARAM_TO)
-
+                
                 # Convert datetime string to timestamp for 'to' if provided
                 conversion_result = convert_datetime_param(
                     to,
                     PARAM_TO,
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE
                 )
-
+                
                 if "error" in conversion_result:
                     return {
                         "elicitation_needed": True,
@@ -538,10 +542,10 @@ Examples:
                         "api_error": [conversion_result["error"]],
                         "message": conversion_result["error"],
                     }
-
+                
                 # Update the converted value
                 to = conversion_result["value"]
-
+                
                 if not action_instance_id:
                     logger.warning(f"[_handle_history] Missing required parameter: {PARAM_ACTION_INSTANCE_ID}")
                     return {

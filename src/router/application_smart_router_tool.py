@@ -11,11 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import apply_navigation, page_kwargs, paginate, stable_sort_key
-from src.core.timestamp_utils import (
-    convert_datetime_param,
-    convert_nested_datetime_param,
-)
+from src.core.timestamp_utils import DEFAULT_TIMEZONE, convert_datetime_param, convert_nested_datetime_param, utc_now_ms
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -64,11 +60,11 @@ LLM/GenAI agents: route by what's asked, not by the agent's name.
 - Trace-level data (latency, errors, spans, prompt/output content, "most recently
   failed" calls) → analyze here. Prompt/output content is in span attributes.
   Not manage_events.
-- Entity metrics (token usage, cost, throughput, "list GenAI apps") →
-  manage_infrastructure (oTelLLM).
+- Entity metrics (LLM call count, token usage, cost, throughput, usage by model,
+  "list GenAI apps/services") → manage_infrastructure (oTelLLM).
 - Both (e.g. ".run.workflow traces with P95 latency and tokens"): get traces
   here, then token metrics from manage_infrastructure, joined on agent/service name.
-
+  
 Resource Types:
     - "metrics": Query application metrics, services, and endpoints
     - "alert_config": Manage application-specific alert configurations
@@ -82,16 +78,16 @@ CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER BEFORE METRICS/ANALYZE QUERIES:
     1. FIRST: Call get_metric_catalog to get valid metrics
        - resource_type="catalog", operation="get_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and data sources
-
+    
     2. SECOND: Call get_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_tag_catalog"
        - params: {"use_case": "GROUPING", "data_source": "CALLS"}
-
+    
     3. THIRD: Use ONLY the tag names and metrics returned from catalog operations
        - Metric names must match those from get_metric_catalog
        - Tag names must match those from get_tag_catalog
        - NEVER guess or invent tag names or metric names
-
+    
     4. FOURTH: Call metrics operations with validated tag names and metrics
        - Example invalid: "calls.error.count" (not in catalog)
        - Example valid: "calls" with aggregation "SUM"
@@ -104,7 +100,7 @@ METRICS (resource_type="metrics"):
     Operators: EQUALS, NOT_EQUAL, CONTAINS, NOT_CONTAIN, STARTS_WITH, ENDS_WITH, GREATER_THAN, GREATER_OR_EQUAL_THAN, LESS_THAN, LESS_OR_EQUAL_THAN, NOT_EMPTY, IS_EMPTY
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
-        - to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+        - to: Unix timestamp (ms) OR datetime string — see "Time parameters" section below for format rules.
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
         - CRITICAL: Never pass "to": 0. Zero is Unix epoch (1970-01-01) and returns no data.
           Omit "to" entirely when the user means "now", as "to" is OPTIONAL — the API defaults to the current time.
@@ -112,46 +108,35 @@ METRICS (resource_type="metrics"):
     tag_filter_expression: CRITICAL - Entity field is REQUIRED for ALL tag filters
 
     ENTITY FIELD VALUES:
-
+    
     "SOURCE" or "DESTINATION" → Tag identifies an infrastructure/service component
       (what/where: hosts, services, containers, databases, endpoints)
       (catalog hint: canApplyToSource/canApplyToDestination = true)
-
+    
     "NOT_APPLICABLE" → Tag describes call behavior or metadata
       (how/what happened: call metrics, trace properties, geo data, business context)
       (catalog hint: canApplyToSource/canApplyToDestination = false)
-
+    
     Never omit entity field or set to null - it is MANDATORY.
-
+    
     Examples:
       * Entity component: {"type": "TAG_FILTER", "name": "service.name", "entity": "DESTINATION", ...}
       * Call metadata: {"type": "TAG_FILTER", "name": "call.latency", "entity": "NOT_APPLICABLE", ...}
       * Geographic: {"type": "TAG_FILTER", "name": "geo.country", "entity": "NOT_APPLICABLE", ...}
-
+    
 
 ALERT_CONFIG (resource_type="alert_config"):
     operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
-    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
+    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
 
 GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
     operations: find_active, find_versions, find, create, update, delete, enable, disable, restore
-    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
-
-PAGINATION (alert_config / global_alert_config find_active, settings get_all):
-    alert_config / global_alert_config find_active return page 1 (10 items) by default. settings get_all
-    returns every item unless page/page_size is given. Paged responses carry a pagination envelope
-    ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-    To change page, call the same resource_type with operation=<next_operation or previous_operation>
-    (e.g. "page_2") and the same params. Do not track page numbers yourself.
+    params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
 
 SETTINGS (resource_type="settings"):
     operations: get_all, get, create, update, delete
-    params: {resource_subtype, id, application_name, service_name, service_id, payload, request_body, page, page_size}
-    get_all is paged only when page/page_size is given (see PAGINATION).
+    params: {resource_subtype, id, application_name, service_name, service_id, payload, request_body}
     resource_subtypes: "application"
-    get_all / get (resource_subtype="application") results include a markdown "link" per application.
-    ALWAYS show each application name using its 'link' field verbatim (markdown) so it opens in the
-    Instana UI. NEVER shorten, rebuild or drop the URL.
 
     Creating application (resource_subtype="application", operation="create"):
     REQUIRED: label | OPTIONAL: scope, boundaryScope, accessRules, tagFilterExpression
@@ -170,8 +155,7 @@ RESOURCES (resource_type="resources"):
         Returns: Paginated list of services across all applications
     get_application_services - Get services for a specific application perspective
         params: {application_id, service_id, name_filter, application_boundary_scope, include_snapshot_ids}
-        Returns: Paginated services filtered by application context. Each service includes a markdown
-        "link"; ALWAYS show service names using the 'link' field verbatim (markdown).
+        Returns: Paginated services filtered by application context
     get_application_endpoints - Get endpoints for an application service
         params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope}
         Returns: Paginated endpoints with type and technology metadata
@@ -193,28 +177,35 @@ ANALYZE (resource_type="analyze"):
     operations: get_all_traces, get_trace_details, get_trace_groups
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
-        - to: Unix timestamp in milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+        - to: Unix timestamp in milliseconds OR datetime string — see "Time parameters" section below for format rules.
         - If timezone not specified in datetime string, defaults to UTC
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
         - CRITICAL: Never pass "to": 0. Zero is Unix epoch (1970-01-01) and returns no data.
           Omit "to" entirely when the user means "now", as "to" is OPTIONAL — the API defaults to the current time.
-
+    
     get_all_traces - params: {payload}
         payload: {timeFrame, includeInternal, includeSynthetic, tagFilterExpression, pagination, order}
-        timeFrame.to: Unix timestamp (ms) OR datetime string with timezone
-
+        timeFrame.to: Unix timestamp (ms) OR datetime string — see "Time parameters" section below for format rules.
+    
     get_trace_details - params: {id, retrievalSize, offset, ingestionTime}
         Returns: items, itemCount, canLoadMore, cursor for pagination
-
+    
     get_trace_groups - params: {payload}
         payload: {group, metrics, timeFrame, tagFilterExpression, pagination, order, includeInternal, includeSynthetic}
         NOTE: 'group' and 'metrics' are mandatory payload fields.
         The 'group' object must include 'groupbyTag' and 'groupbyTagEntity'.
         Supported groupbyTag values are 'trace.endpoint.name' and 'trace.service.name'.
         Allowed groupbyTagEntity values are 'NOT_APPLICABLE', 'DESTINATION', and 'SOURCE'.
-
+        
         CRITICAL: The "calls" metric is NOT supported for trace operations. Use "traces" or other trace-specific metrics.
         Use get_metric_catalog first to look up valid metric names and aggregations as described in the critical workflow.
+
+Time parameters:
+    - Relative window (preferred): pass only time_frame/timeFrame {"windowSize": <milliseconds>} and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
 
 Args:
     resource_type: "metrics", "alert_config", "global_alert_config", "settings", "catalog", "resources", or "analyze"
@@ -228,51 +219,51 @@ Returns:
 Examples:
     # CATALOG operations
     resource_type="catalog", operation="get_metric_catalog"
-    resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS", "var_from": 1710658800000}
-
+    resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS", "var_from": <unix_timestamp_milliseconds>}
+    
     # METRICS operations
-    resource_type="metrics", operation="get_grouped_calls_metrics", params={"metrics": [{"metric": "calls", "aggregation": "SUM"}, {"metric": "latency", "aggregation": "MEAN"}], "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"}, "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}, "time_frame": {"to": 1710658800000, "windowSize": 3600000}, "order": {"by": "calls", "direction": "DESC"}, "pagination": {"page": 1, "pageSize": 50}, "include_internal": False, "include_synthetic": False}
-
+    resource_type="metrics", operation="get_grouped_calls_metrics", params={"metrics": [{"metric": "calls", "aggregation": "SUM"}, {"metric": "latency", "aggregation": "MEAN"}], "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"}, "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}, "time_frame": {"windowSize": 3600000}, "order": {"by": "calls", "direction": "DESC"}, "pagination": {"page": 1, "pageSize": 50}, "include_internal": False, "include_synthetic": False}
+    
     # ALERT_CONFIG operations
     resource_type="alert_config", operation="find_active", params={"application_name": "All Services", "alert_ids": ["alert-1", "alert-2"]}
     resource_type="alert_config", operation="find_versions", params={"application_id": "app-123", "id": "alert-456"}
-    resource_type="alert_config", operation="find", params={"application_id": "app-123", "id": "alert-456", "valid_on": 1710658800000}
+    resource_type="alert_config", operation="find", params={"application_id": "app-123", "id": "alert-456", "valid_on": <unix_timestamp_milliseconds>}
     resource_type="alert_config", operation="create", params={"application_id": "app-123", "payload": {"name": "High Error Rate", "severity": 5}}
     resource_type="alert_config", operation="update", params={"application_id": "app-123", "id": "alert-456", "payload": {"name": "Updated Alert"}}
     resource_type="alert_config", operation="delete", params={"application_id": "app-123", "id": "alert-456"}
     resource_type="alert_config", operation="enable", params={"application_id": "app-123", "id": "alert-456"}
     resource_type="alert_config", operation="disable", params={"application_id": "app-123", "id": "alert-456"}
-    resource_type="alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-456", "created": 1710658800000}
+    resource_type="alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-456", "created": <unix_timestamp_milliseconds>}
     resource_type="alert_config", operation="update_baseline", params={"application_id": "app-123", "id": "alert-456"}
-
+    
     # GLOBAL_ALERT_CONFIG operations
     resource_type="global_alert_config", operation="find_active", params={"application_name": "All Services"}
     resource_type="global_alert_config", operation="find_versions", params={"application_id": "app-123", "id": "alert-789"}
-    resource_type="global_alert_config", operation="find", params={"application_id": "app-123", "id": "alert-789", "valid_on": 1710658800000}
+    resource_type="global_alert_config", operation="find", params={"application_id": "app-123", "id": "alert-789", "valid_on": <unix_timestamp_milliseconds>}
     resource_type="global_alert_config", operation="create", params={"application_id": "app-123", "payload": {"name": "Global Alert"}}
     resource_type="global_alert_config", operation="update", params={"application_id": "app-123", "id": "alert-789", "payload": {"name": "Updated Global Alert"}}
     resource_type="global_alert_config", operation="delete", params={"application_id": "app-123", "id": "alert-789"}
     resource_type="global_alert_config", operation="enable", params={"application_id": "app-123", "id": "alert-789"}
     resource_type="global_alert_config", operation="disable", params={"application_id": "app-123", "id": "alert-789"}
-    resource_type="global_alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-789", "created": 1710658800000}
-
+    resource_type="global_alert_config", operation="restore", params={"application_id": "app-123", "id": "alert-789", "created": <unix_timestamp_milliseconds>}
+    
     # SETTINGS operations
     resource_type="settings", operation="get_all", params={"resource_subtype": "application"}
     resource_type="settings", operation="get", params={"resource_subtype": "application", "application_name": "My App"}
     resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App", "scope": "INCLUDE_ALL_DOWNSTREAM", "boundaryScope": "ALL"}}
     resource_type="settings", operation="update", params={"resource_subtype": "application", "id": "config-123", "payload": {"label": "Updated App"}}
     resource_type="settings", operation="delete", params={"resource_subtype": "application", "id": "config-123"}
-
+    
     # RESOURCES operations
     resource_type="resources", operation="get_applications", params={"name_filter": "My App"}
     resource_type="resources", operation="get_services", params={"name_filter": "My Service", "include_snapshot_ids": True}
     resource_type="resources", operation="get_application_services", params={"application_id": "app-123", "service_id": "svc-456", "name_filter": "API"}
     resource_type="resources", operation="get_application_endpoints", params={"application_id": "app-123", "service_id": "svc-456", "endpoint_id": "ep-789", "name_filter": "/api/users", "types": ["HTTP"], "technologies": ["Java"]}
-
+    
     # ANALYZE operations
     resource_type="analyze", operation="get_all_traces", params={"payload": {"timeFrame": {"windowSize": 3600000}, "includeInternal": True, "includeSynthetic": False, "pagination": {"retrievalSize": 200}}}
-    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": 1725519793}
-    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},  "includeInternal": True, "includeSynthetic": False, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"to": 1710658800000, "windowSize": 3600000}}}"""
+    resource_type="analyze", operation="get_trace_details", params={"id": "trace-123", "retrievalSize": 100, "offset": 0, "ingestionTime": <unix_timestamp_seconds>}
+    resource_type="analyze", operation="get_trace_groups", params={"payload": {"group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},  "includeInternal": True, "includeSynthetic": False, "metrics": [{"metric": "traces", "aggregation": "SUM"}], "timeFrame": {"windowSize": 3600000}}}"""
     )
     async def manage_applications(
         self,
@@ -352,15 +343,10 @@ Examples:
         ctx
     ) -> Dict[str, Any]:
         """Handle application metrics queries."""
-        # Guard: "to": 0 means Unix epoch (1970), not "now". Strip it so the
-        # API defaults to the current server time, which is the correct behaviour
-        # when the user asks for a relative window like "last 1 hour".
-        if isinstance(params.get("time_frame"), dict) and params["time_frame"].get("to") == 0:
-            del params["time_frame"]["to"]
-
         # Convert datetime string for time_frame.to if provided
+        # (convert_nested_datetime_param drops "to": 0 automatically)
         conversion_result = convert_nested_datetime_param(
-            params, "time_frame", "to", default_timezone="UTC"
+            params, "time_frame", "to", default_timezone=DEFAULT_TIMEZONE
         )
         if "error" in conversion_result:
             return {
@@ -416,12 +402,6 @@ Examples:
             "delete", "enable", "disable", "restore", "update_baseline"
         ]
 
-        # Pagination navigation (shared, stateless - src/core/pagination.py):
-        # page_N / next / previous / go_to_page re-run find_active on that page.
-        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
-        if _nav_error:
-            return _nav_error
-
         if operation not in valid_operations:
             return {
                 "elicitation_needed": True,
@@ -471,7 +451,6 @@ Examples:
             payload=payload,
             ctx=ctx,
             resource_type="alert_config", tool_name="manage_applications",
-            **page_kwargs(params),
         )
 
         return {
@@ -493,11 +472,6 @@ Examples:
             "find_active", "find_versions", "find", "create", "update",
             "delete", "enable", "disable", "restore"
         ]
-
-        # Pagination navigation (shared, stateless - src/core/pagination.py)
-        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
-        if _nav_error:
-            return _nav_error
 
         if operation not in valid_operations:
             return {
@@ -548,7 +522,6 @@ Examples:
             payload=payload,
             ctx=ctx,
             resource_type="global_alert_config", tool_name="manage_applications",
-            **page_kwargs(params),
         )
 
         return {
@@ -587,10 +560,10 @@ Examples:
         for config in all_configs_result:
             if not isinstance(config, dict):
                 continue
-
+            
             config_label = config.get('label', '')
             config_id = config.get('id', '')
-
+            
             if config_label.lower() == application_name.lower() and config_id:
                 logger.info(f"Found application config '{config_label}' with ID: {config_id}")
                 return config_id, None
@@ -613,15 +586,6 @@ Examples:
         valid_operations = [
             "get_all", "get", "create", "update", "delete"
         ]
-
-        # Pagination navigation (shared, stateless - src/core/pagination.py):
-        # page_N / next / previous / go_to_page re-run get_all on that page.
-        _requested_op = operation
-        operation, params, _nav_error = apply_navigation(operation, params, "get_all")
-        if _nav_error:
-            return _nav_error
-        if operation != _requested_op:
-            params.setdefault("resource_subtype", "application")
 
         if operation not in valid_operations:
             return {
@@ -685,7 +649,7 @@ Examples:
             resource_type="settings", tool_name="manage_applications",
         )
 
-        response = {
+        return {
             "resource_type": "settings",
             "resource_subtype": resource_subtype,
             "operation": operation,
@@ -693,25 +657,6 @@ Examples:
             "resolved_id": settings_id if application_name else None,
             "results": result
         }
-
-        # get_all is paginated only when page/page_size is requested (opt-in)
-        if (
-            operation == "get_all"
-            and isinstance(result, list)
-            and (params.get("page") is not None or params.get("page_size") is not None)
-        ):
-            page_items, pagination = paginate(
-                result,
-                params.get("page"),
-                params.get("page_size"),
-                max_page_size=100,
-                sort_key=stable_sort_key,
-                list_id=f"{resource_subtype}_settings",
-            )
-            response["results"] = page_items
-            response["pagination"] = pagination
-
-        return response
 
     async def _get_application_id_by_name(
         self,
@@ -729,12 +674,10 @@ Examples:
             Dictionary with application_id or error
         """
         try:
-            from datetime import datetime
-
             logger.info(f"Resolving application name '{application_name}' to application ID using Application Resources API")
 
             # Set time range (last hour)
-            to_time = int(datetime.now().timestamp() * 1000)
+            to_time = utc_now_ms()
             window_size = 60 * 60 * 1000  # 1 hour
 
             # Use the app_resources_client to get applications
@@ -798,13 +741,9 @@ Examples:
         if isinstance(payload, dict):
             time_frame = payload.get("timeFrame")
             if isinstance(time_frame, dict):
-                # Guard: "to": 0 means Unix epoch (1970), not "now". Strip it so the
-                # API defaults to the current server time, which is the correct behaviour
-                # when the user asks for a relative window like "last 1 hour".
-                if time_frame.get("to") == 0:
-                    del time_frame["to"]
+                # convert_nested_datetime_param drops "to": 0 automatically
                 conversion_result = convert_nested_datetime_param(
-                    payload, "timeFrame", "to", default_timezone="UTC"
+                    payload, "timeFrame", "to", default_timezone=DEFAULT_TIMEZONE
                 )
                 if "error" in conversion_result:
                     return {"error": conversion_result["error"], "operation": operation, "resource_type": "analyze"}
@@ -815,7 +754,7 @@ Examples:
             conversion_result = convert_datetime_param(
                 params["ingestionTime"],
                 "ingestionTime",
-                default_timezone="UTC",
+                default_timezone=DEFAULT_TIMEZONE,
                 output_unit="seconds"
             )
             if "error" in conversion_result:
@@ -888,6 +827,23 @@ Examples:
         use_case = params.get("use_case")
         data_source = params.get("data_source")
         var_from = params.get("var_from")
+
+        # 0 / "" mean "not supplied" (0 would be 1970-01-01): fall back to the tool's default lookback.
+        # Anything else may be a datetime string ("now", "2 days ago", "...|IST"), so convert it.
+        if var_from in (0, ""):
+            var_from = None
+        elif var_from is not None:
+            conversion_result = convert_datetime_param(
+                var_from, "var_from", default_timezone=DEFAULT_TIMEZONE
+            )
+            if "error" in conversion_result:
+                return {
+                    "elicitation_needed": True,
+                    "reason": "invalid_time_params",
+                    "api_error": [{"field": "var_from", "issue": conversion_result["error"]}],
+                    "message": conversion_result["error"],
+                }
+            var_from = conversion_result["value"]
 
         # Route to the appropriate catalog method
         if operation == "get_tag_catalog":

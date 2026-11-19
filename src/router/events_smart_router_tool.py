@@ -8,10 +8,10 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, Optional
 
-from fastmcp import Context
 from mcp.types import ToolAnnotations
+from fastmcp import Context
 
-from src.core.timestamp_utils import convert_datetime_params
+from src.core.timestamp_utils import DEFAULT_TIMEZONE, check_time_order, convert_datetime_params
 from src.core.utils import BaseInstanaClient, register_as_tool
 from src.core.validation import BooleanCoercer, EventsValidator
 
@@ -162,7 +162,7 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
             if not isinstance(max_events, int):
                 errors.append(f"filters.max_events: must be an integer, got {type(max_events).__name__!r}")
             elif max_events < 1 or max_events > 1000:
-                errors.append(f"filters.max_events: {max_events} is out of range. Must be 1-1000")
+                errors.append(f"filters.max_events: {max_events} is out of range. Must be 1–1000")
 
         for flag in (PARAM_FILTER_EVENT_UPDATES, PARAM_EXCLUDE_TRIGGERED_BEFORE):
             raw = filters[flag]
@@ -220,7 +220,8 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         if operation == OPERATION_GET_KUBERNETES_INFO_EVENTS:
             return await self.events_client.get_kubernetes_info_events(
                 from_time=from_time, to_time=to_time,
-                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS], ctx=ctx, **_routing,
+                time_range=filters[PARAM_TIME_RANGE], max_events=filters[PARAM_MAX_EVENTS],
+                entity_label=filters[PARAM_ENTITY_LABEL], ctx=ctx, **_routing,
             )
         if operation == OPERATION_GET_AGENT_MONITORING_EVENTS:
             return await self.events_client.get_agent_monitoring_events(
@@ -245,7 +246,7 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
 
     @register_as_tool(
         title="Manage Instana Events Resources",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
         description="""Unified Instana events resource manager for events monitoring operations.
 
 Operations:
@@ -260,15 +261,21 @@ Parameters (params dict):
 - For "get_event" and "get_events_by_ids", pass flat params:
     - event_id: Event ID (required for get_event)
     - event_ids: List of event IDs or comma-separated string (required for get_events_by_ids)
-- For "get_kubernetes_info_events" and "get_agent_monitoring_events", pass flat params:
+- For "get_kubernetes_info_events", pass flat params:
     - from_time: Start timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
         If timezone not specified in datetime string, defaults to UTC
-    - to_time: End timestamp - milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST" or "19 March 2026, 2:47 PM")
+    - to_time: End timestamp - milliseconds OR datetime string (e.g., "YYYY-MM-DD HH:mm:ss|UTC" or "YYYY-MM-DD HH:mm:ss")
         If timezone not specified in datetime string, defaults to UTC
     - time_range: Natural language time range (e.g., "last 10 minutes", "last 2 days"). DEFAULT when omitted: "last 10 minutes"
-    - query: Optional query string for agent monitoring events
+    - entity_label: Filter events by entity label — case-insensitive substring match against the event's entityLabel field (optional).
+        Use a service name, namespace/pod, or host label to scope results to specific entities.
+        Applied post-call; unmatched events are excluded from analysis and counted in events_filtered_out.
     - max_events: Maximum number of events to process for analysis (optional, default 50)
-        NOTE: This is a post-processing limit, not an API parameter
+        NOTE: This is a post-processing limit applied after entity_label filtering, not an API parameter
+- For "get_agent_monitoring_events", pass flat params:
+    - from_time, to_time, time_range, max_events: same as for "get_kubernetes_info_events"
+        (max_events is a post-processing limit, not an API parameter)
+    - query: Optional query string for agent monitoring events
 - For "get_events", pass a nested filters object:
     - filters: Dictionary containing event filters.
         - from_time: Start timestamp - milliseconds OR datetime string
@@ -303,6 +310,13 @@ Parameters (params dict):
             * Set to false to return only events where probableCause.found is false or missing (events without RCA)
             * If not provided, returns all events regardless of RCA status
 
+Time parameters:
+    - Relative window (preferred): pass time_range (for example "last 2 hours") or omit all time parameters (defaults to the last 10 minutes).
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
+
 Args:
     operation: Operation to perform
     params: Operation-specific parameters (optional)
@@ -314,6 +328,7 @@ Returns:
 Examples:
     operation="get_event", params={"event_id": "1a2b3c4d5e6f"}
     operation="get_kubernetes_info_events", params={"time_range": "last 2 hours", "max_events": 50}
+    operation="get_kubernetes_info_events", params={"time_range": "last 2 hours", "entity_label": "payment-service", "max_events": 50}
     operation="get_agent_monitoring_events", params={"query": "Monitoring issue", "from_time": "19 March 2026, 2:47 PM|IST", "to_time": "20 March 2026, 2:47 PM|IST", "max_events": 100}
     operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"]}}  # no time_range → defaults to last 10 minutes
     operation="get_events", params={"filters": {"event_type_filters": ["INCIDENT"], "entity_type": "service", "entity_name": "payment-service", "entity_label": "payment-service-v2", "state": "open", "problem": "High error rate", "severity": 10, "max_events": 50, "filter_event_updates": True, "exclude_triggered_before": False}}
@@ -348,7 +363,7 @@ Examples:
             conversion_result = convert_datetime_params(
                 {PARAM_FROM_TIME: filters[PARAM_FROM_TIME], PARAM_TO_TIME: filters[PARAM_TO_TIME]},
                 [PARAM_FROM_TIME, PARAM_TO_TIME],
-                default_timezone="UTC",
+                default_timezone=DEFAULT_TIMEZONE,
             )
             if "error" in conversion_result:
                 return {
@@ -358,13 +373,22 @@ Examples:
                     "message": (
                         "Could not parse the provided datetime value. "
                         "Use a Unix timestamp in milliseconds or a datetime string "
-                        'like "19 March 2026, 2:47 PM|IST".\n'
+                        'like "YYYY-MM-DD HH:mm:ss|UTC".\n'
                         f"  - {conversion_result['error']}"
                     ),
                 }
 
             from_time = conversion_result["params"][PARAM_FROM_TIME]
             to_time = conversion_result["params"][PARAM_TO_TIME]
+
+            order_error = check_time_order(from_time, to_time, PARAM_FROM_TIME, PARAM_TO_TIME)
+            if order_error:
+                return {
+                    "elicitation_needed": True,
+                    "reason": "invalid_time_params",
+                    "api_error": [order_error],
+                    "message": order_error,
+                }
 
             if operation in TIME_REQUIRED_OPERATIONS:
                 time_error = self._validate_time_and_max_events(operation, filters)

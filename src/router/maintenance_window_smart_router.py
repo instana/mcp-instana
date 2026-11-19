@@ -154,8 +154,9 @@ Args:
     imap_code: Single IMAP code (e.g., "EAL-012512")
     imap_codes: Comma-separated or JSON array of IMAP codes
     window_id: Maintenance window ID (for modify/close)
-    start_time: Start time (Unix timestamp ms or ISO string)
-    end_time: End time (Unix timestamp ms or ISO string)
+    start_time: Start time — "now", "in <N> minutes|hours|days", Unix timestamp in milliseconds, or a datetime string. See "Time parameters" section below for datetime string format rules.
+        Other natural language (for example "tomorrow at 10am") is NOT accepted.
+    end_time: End time, same formats as start_time
     duration_minutes: Duration in minutes (e.g., "120")
     duration_hours: Duration in hours (e.g., "2")
     duration_days: Duration in days (e.g., "1")
@@ -168,57 +169,65 @@ Args:
     use_tag_filter_expression: "true" or "false"
     tag_name: Tag name for filter expression
     rrule: Recurrence rule (RFC 5545)
-    until_date: End date for recurring windows (ISO string)
+    until_date: End date for recurring windows, ISO-8601 "YYYY-MM-DDTHH:mm:ssZ" (UTC)
     ctx: MCP context (internal)
+
+Time parameters:
+    - Relative window (preferred): pass "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "now", "in 2 hours") directly — the server resolves these from its own clock.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
+    - Recurring windows are always created with timezoneId "UTC". Validation errors include current_time_utc so you can correct a past start_time and retry.
 
 Returns:
     Dictionary with results from the appropriate tool
 
 Examples:
     # WINDOW operations - create (covers: imap_code, duration_minutes, duration_hours, template, recurring)
-    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120", reason="Scheduled deployment"
-    resource_type="window", operation="create", imap_code="EAL-012471", start_time="1748786400000", duration_hours="2", template="deployment", change_request_id="CHG0012345"
-    resource_type="window", operation="create", imap_code="ORZ-000012", start_time="1748786400000", duration_minutes="30", rrule="FREQ=DAILY;INTERVAL=1", until_date="2026-06-17T23:59:59Z"
+    resource_type="window", operation="create", params={"imap_code": "EAL-012471", "start_time": "now", "duration_minutes": "120", "reason": "Immediate deployment"}
+    resource_type="window", operation="create", params={"application_id": "app-123", "start_time": "now", "duration_hours": "2"}
+    resource_type="window", operation="create", params={"imap_code": "EAL-012471", "start_time": "in 2 hours", "duration_hours": "2", "template": "deployment", "change_request_id": "CHG0012345"}
+    resource_type="window", operation="create", params={"imap_code": "ORZ-000012", "start_time": <unix_timestamp_milliseconds>, "duration_minutes": "30", "rrule": "FREQ=DAILY;INTERVAL=1", "until_date": "YYYY-MM-DDTHH:mm:ssZ"}
 
     # WINDOW operations - modify (covers: duration_minutes, end_time, reason)
-    resource_type="window", operation="modify", window_id="mw-789", duration_minutes="60"
-    resource_type="window", operation="modify", window_id="mw-789", end_time="1748790000000", reason="Extended maintenance"
-    resource_type="window", operation="modify", window_id="mw-789", duration_hours="3", rrule="FREQ=DAILY;INTERVAL=2"
+    resource_type="window", operation="modify", params={"window_id": "mw-789", "duration_minutes": "60"}
+    resource_type="window", operation="modify", params={"window_id": "mw-789", "end_time": <unix_timestamp_milliseconds>, "reason": "Extended maintenance"}
+    resource_type="window", operation="modify", params={"window_id": "mw-789", "duration_hours": "3", "rrule": "FREQ=DAILY;INTERVAL=2"}
 
     # WINDOW operations - close (covers: with/without notes)
-    resource_type="window", operation="close", window_id="mw-789"
-    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed successfully"
-    resource_type="window", operation="close", window_id="mw-789", completion_notes="Completed with issues - rollback performed"
+    resource_type="window", operation="close", params={"window_id": "mw-789"}
+    resource_type="window", operation="close", params={"window_id": "mw-789", "completion_notes": "Completed successfully"}
+    resource_type="window", operation="close", params={"window_id": "mw-789", "completion_notes": "Completed with issues - rollback performed"}
 
     # WINDOW operations - list_active
     resource_type="window", operation="list_active"
-    resource_type="window", operation="list_active", imap_code="EAL-012471"
-    resource_type="window", operation="list_active", application_id="app-123"
+    resource_type="window", operation="list_active", params={"imap_code": "EAL-012471"}
+    resource_type="window", operation="list_active", params={"application_id": "app-123"}
 
     # WINDOW operations - list_scheduled
     resource_type="window", operation="list_scheduled"
-    resource_type="window", operation="list_scheduled", imap_code="EAL-012471"
-    resource_type="window", operation="list_scheduled", application_id="app-123"
+    resource_type="window", operation="list_scheduled", params={"imap_code": "EAL-012471"}
+    resource_type="window", operation="list_scheduled", params={"application_id": "app-123"}
 
     # WINDOW operations - list_all
     resource_type="window", operation="list_all"
-    resource_type="window", operation="list_all", imap_code="EAL-012471"
-    resource_type="window", operation="list_all", application_id="app-123"
+    resource_type="window", operation="list_all", params={"imap_code": "EAL-012471"}
+    resource_type="window", operation="list_all", params={"application_id": "app-123"}
 
     # WINDOW operations - list_expired
     resource_type="window", operation="list_expired"
-    resource_type="window", operation="list_expired", imap_code="EAL-012471"
-    resource_type="window", operation="list_expired", application_id="app-123"
+    resource_type="window", operation="list_expired", params={"imap_code": "EAL-012471"}
+    resource_type="window", operation="list_expired", params={"application_id": "app-123"}
 
     # WINDOW operations - bulk_create
-    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", duration_hours="2", reason="Coordinated deployment"
-    resource_type="window", operation="bulk_create", application_ids="app-123,app-456", start_time="1748786400000", duration_minutes="120", reason="Multi-app maintenance"
-    resource_type="window", operation="bulk_create", imap_codes="EAL-012471,ORZ-000012", start_time="1748786400000", template="deployment", change_request_id="CHG0012345"
+    resource_type="window", operation="bulk_create", params={"imap_codes": "EAL-012471,ORZ-000012", "start_time": <unix_timestamp_milliseconds>, "duration_hours": "2", "reason": "Coordinated deployment"}
+    resource_type="window", operation="bulk_create", params={"application_ids": "app-123,app-456", "start_time": <unix_timestamp_milliseconds>, "duration_minutes": "120", "reason": "Multi-app maintenance"}
+    resource_type="window", operation="bulk_create", params={"imap_codes": "EAL-012471,ORZ-000012", "start_time": <unix_timestamp_milliseconds>, "template": "deployment", "change_request_id": "CHG0012345"}
 
     # WINDOW operations - validate
-    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", duration_minutes="120"
-    resource_type="window", operation="validate", application_id="app-123", start_time="1748786400000", duration_hours="2"
-    resource_type="window", operation="validate", imap_code="EAL-012471", start_time="1748786400000", template="deployment"
+    resource_type="window", operation="validate", params={"imap_code": "EAL-012471", "start_time": <unix_timestamp_milliseconds>, "duration_minutes": "120"}
+    resource_type="window", operation="validate", params={"application_id": "app-123", "start_time": <unix_timestamp_milliseconds>, "duration_hours": "2"}
+    resource_type="window", operation="validate", params={"imap_code": "EAL-012471", "start_time": <unix_timestamp_milliseconds>, "template": "deployment"}
 
     # TEMPLATES operations (covers: get templates)
     resource_type="templates", operation="get\""""
@@ -238,7 +247,7 @@ Examples:
             # Initialize params if not provided
             if params is None:
                 params = {}
-
+            
             # Apply defaults for optional params (WatsonX may omit them entirely)
             resource_type = resource_type or RESOURCE_TYPE_WINDOW
             operation = operation or OP_LIST_SCHEDULED
@@ -394,7 +403,11 @@ Examples:
             errors.append({
                 "field": "start_time",
                 "issue": "start_time is required",
-                "expected": "Unix timestamp in milliseconds (e.g., 1748786400000)"
+                "expected": (
+                    "Unix timestamp in milliseconds (<unix_timestamp_milliseconds>), "
+                    "ISO-8601 'YYYY-MM-DDTHH:mm:ssZ', 'YYYY-MM-DD HH:mm:ss|UTC', "
+                    "or relative 'now' / 'in <N> minutes|hours|days'"
+                )
             })
         if template and template not in self.VALID_TEMPLATES:
             errors.append({
@@ -613,4 +626,3 @@ Examples:
                 pass
         # Fall back to comma-separated
         return [item.strip() for item in value_str.split(",") if item.strip()]
-

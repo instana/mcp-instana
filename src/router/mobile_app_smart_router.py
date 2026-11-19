@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.timestamp_utils import convert_nested_datetime_param
+from src.core.timestamp_utils import DEFAULT_TIMEZONE, convert_nested_datetime_param
 from src.core.utils import (
     MOBILE_BEACON_TYPE_MAP,
     BaseInstanaClient,
@@ -108,26 +108,26 @@ ANALYZE WORKFLOW:
     1. FIRST: Call get_mobile_app_metric_catalog to get valid metrics
        - resource_type="catalog", operation="get_mobile_app_metric_catalog"
        - Returns: Available metrics with metricId, aggregations, and beacon types
-
+    
     2. SECOND: Call get_mobile_app_tag_catalog to get valid tag names
        - resource_type="catalog", operation="get_mobile_app_tag_catalog"
        - params: {"beacon_type": "SESSION_START", "use_case": "FILTERING"}
-
+    
     3. THIRD: Use ONLY the tag names and metrics returned from catalog operations
        - Tag names MUST start with "mobileBeacon." (e.g., "mobileBeacon.mobileApp.name")
        - Metric names must match those from get_mobile_app_metric_catalog
        - NEVER guess or invent tag names or metric names
-
+    
     4. FOURTH: Call analyze operations with validated tag names and metrics
        - ALWAYS include "entity": "NOT_APPLICABLE" in EVERY TAG_FILTER
-
+    
     Default beacon_type: "SESSION_START" | Default use_case for get_all_mobile_app_beacons: "FILTERING"
 
 ANALYZE (resource_type="analyze"):
-    operations:
+    operations: 
         - get_all_mobile_app_beacons
             params: {time_frame, beacon_type, pagination, tag_filter_expression (optional), filter_fields (optional)}
-
+    
         - get_mobile_app_beacon_groups
             params: {time_frame, beacon_type, fill_time_series, pagination, tag_filter_expression (optional), metrics (optional), group (optional), order (optional)}
 
@@ -135,7 +135,7 @@ ANALYZE (resource_type="analyze"):
     Operators: EQUALS, NOT_EQUAL, CONTAINS, NOT_CONTAIN, STARTS_WITH, ENDS_WITH, NOT_STARTS_WITH, NOT_ENDS_WITH, GREATER_THAN, GREATER_OR_EQUAL_THAN, LESS_THAN, LESS_OR_EQUAL_THAN, NOT_EMPTY, IS_EMPTY, NOT_BLANK, IS_BLANK, REGEX_MATCH
 
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>}
-        - to: Unix timestamp in milliseconds OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+        - to: Unix timestamp in milliseconds OR datetime string — see "Time parameters" section below for format rules.
         - If timezone not specified in datetime string, defaults to UTC
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
 
@@ -144,7 +144,7 @@ ANALYZE (resource_type="analyze"):
         - This applies to ALL tags: mobileBeacon.mobileApp.*, mobileBeacon.view.*, mobileBeacon.device.*, mobileBeacon.geo.*, etc.
         - The entity field is MANDATORY - never omit it or set it to null
         - Tag names MUST start with "mobileBeacon." - get valid names from get_mobile_app_tag_catalog first
-
+        
         Examples:
           * {"type": "TAG_FILTER", "name": "mobileBeacon.mobileApp.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Robot Shop"}
           * {"type": "TAG_FILTER", "name": "mobileBeacon.view.name", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "value": "Products"}
@@ -154,7 +154,7 @@ ANALYZE (resource_type="analyze"):
         - Controls which fields are included in each returned beacon.
         - True / None / omitted — essential fields only
         -  False — all fields returned by the REST endpoint (unfiltered, larger payload)
-
+        
     get_all_mobile_app_beacons - Use for individual beacon data (e.g., "list all session start beacons")
     get_mobile_app_beacon_groups - Use for grouped/aggregated beacon metrics (e.g., "beacon count per mobile app")
 
@@ -163,12 +163,12 @@ CATALOG (resource_type="catalog"):
     params: {beacon_type, use_case}
 
     get_mobile_app_metric_catalog - Get mobile app metrics catalog with necessary metadata for query planning (metricId, label, description, formatter, aggregations, beaconTypes). Use params.view="full" to retrieve raw SDK metadata (rarely needed).
-
+    
     get_mobile_app_tag_catalog - MUST CALL THIS FIRST before using any tag names
         Returns: List of valid tag names that start with "mobileBeacon."
         Valid beacon_type: "SESSION_START", "VIEW_CHANGE", "HTTP_REQUEST", "CUSTOM", "CRASH", "PERF", "DROP_BEACON"
         Valid use_case: "GROUPING", "FILTERING", "SERVICE_MAPPING", "SMART_ALERTS", etc.
-
+        
         Example call:
         resource_type="catalog", operation="get_mobile_app_tag_catalog",
         params={"beacon_type": "SESSION_START", "use_case": "FILTERING"}
@@ -209,7 +209,7 @@ ALERT (resource_type="alert"):
     find_active_mobile_app_alert_configs - Get all alert configurations for a mobile app
         - mobile_app_id: Mobile app ID to get alert configs for (required)
         - alert_ids: Optional list of specific alert IDs to filter (optional)
-
+    
     find_mobile_app_alert_config - Get a specific alert configuration by ID
         - id: Specific alert config ID to retrieve (required)
         - valid_on: Unix timestamp to retrieve config valid at that time (optional, defaults to latest active version)
@@ -265,6 +265,13 @@ SESSION (resource_type="session"):
             Final response example:
                 {"beacons": [...], "nextCursor": null, "hasMore": false}
 
+Time parameters:
+    - Relative window (preferred): pass only time_frame {"windowSize": <milliseconds>} and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
+
 Args:
     resource_type: "analyze", "catalog", "configuration", "advanced_config", "alert", or "session"
     operation: Specific operation for the resource type
@@ -275,14 +282,14 @@ Returns:
 
         Examples:
             resource_type="catalog", operation="get_mobile_app_tag_catalog", params={"beacon_type": "SESSION_START", "use_case": "GROUPING"}
-            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
-            resource_type="analyze", operation="get_all_mobile_app_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "SESSION_START", "pagination": {"retrievalSize": 50}, "filter_fields": True}
+            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "YYYY-MM-DD HH:mm:ss|UTC", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
+            resource_type="analyze", operation="get_all_mobile_app_beacons", params={"time_frame": {"windowSize": 3600000}, "beacon_type": "SESSION_START", "pagination": {"retrievalSize": 50}, "filter_fields": True}
             resource_type="catalog", operation="get_mobile_app_metric_catalog"
             resource_type="configuration", operation="get_all"
             resource_type="configuration", operation="get", params={"mobile_app_name": "robot-shop"}
             resource_type="advanced_config", operation="get_geo_config", params={"mobile_app_name": "robot-shop"}
             resource_type="session", operation="get_session_replay_action_beacons", params={"mobile_app_id": "i1IsNS7FQAegEljBTkNBMQ", "session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "cursor": 10, "page_size": 100}
-            resource_type="session", operation="get_session_beacons", params={"session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "timestamp": 1785786779333}
+            resource_type="session", operation="get_session_beacons", params={"session_id": "1d616527-2635-407f-89fc-de7136b66fb4", "timestamp": <unix_timestamp_milliseconds>}
             """
     )
     async def manage_mobile_apps(
@@ -399,7 +406,7 @@ Returns:
             params,
             PARAM_TIME_FRAME,
             "to",
-            default_timezone="UTC"
+            default_timezone=DEFAULT_TIMEZONE
         )
 
         if "error" in conversion_result:
@@ -410,7 +417,7 @@ Returns:
                     {
                         "field": "time_frame.to",
                         "issue": conversion_result["error"],
-                        "expected": "Unix timestamp (ms) or datetime string with timezone (e.g., '10 March 2026, 2:00 PM|IST')"
+                        "expected": "Unix timestamp (ms) or datetime string (e.g., 'YYYY-MM-DD HH:mm:ss|UTC'; the zone defaults to UTC if omitted)"
                     }
                 ],
                 "message": conversion_result["error"]
