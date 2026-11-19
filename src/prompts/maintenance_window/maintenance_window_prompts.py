@@ -4,11 +4,13 @@ Maintenance Window Prompts for WatsonX Assistant Integration
 These prompts help WatsonX Assistant understand how to map natural language
 requests to the maintenance window management tool parameters.
 
-TIME FORMAT INSTRUCTIONS:
-    - start_time and end_time accept Unix timestamps in milliseconds (e.g., "1748786400000")
-    - Also accept ISO 8601 datetime strings (e.g., "2026-06-10T10:00:00Z")
-    - Natural language times like "in 2 hours" or "tomorrow at 10am" should be converted to timestamps
-    - Use src.core.timestamp_utils for timestamp conversions
+TIME FORMAT INSTRUCTIONS (all times are UTC):
+    - start_time and end_time accept Unix timestamps in milliseconds (<unix_timestamp_milliseconds>),
+      ISO 8601 datetime strings (YYYY-MM-DDTHH:mm:ssZ), or "YYYY-MM-DD HH:mm:ss|UTC"
+    - start_time also accepts "now" or a relative start: "in <N> minutes|hours|days" (for example "in 2 hours").
+      The server resolves it from its own clock, so no timestamp or current time is needed.
+    - Other natural language such as "tomorrow at 10am" is NOT accepted
+    - If the tool returns current_time_utc in an error, use it to correct the time and retry
 
 DURATION FORMAT INSTRUCTIONS:
     - duration_minutes: Specify duration in minutes (e.g., "120" for 2 hours)
@@ -51,12 +53,13 @@ class MaintenanceWindowPrompts:
         - "Open a maintenance window for the next 2 hours"
         - "Schedule downtime for application EAL-012471"
 
-        The start_time can be in natural language like "in 2 hours" or "tomorrow at 10am".
+        start_time is a UTC time (Unix timestamp in milliseconds, YYYY-MM-DDTHH:mm:ssZ or
+        "YYYY-MM-DD HH:mm:ss|UTC") or a relative start such as "in 2 hours".
         """
         return f"""
 Create a maintenance window:
 - IMAP Code: {imap_code}
-- Start Time: {start_time}
+- Start Time (UTC): {start_time}
 - Duration (minutes): {duration_minutes or '(use template default)'}
 - Duration (hours): {duration_hours or '(not specified)'}
 - Template: {template or '(not specified)'}

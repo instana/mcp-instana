@@ -16,7 +16,7 @@ class SyntheticMetricsPrompts:
 
         The payload must include:
         - metrics (required): List of metric/aggregation objects, e.g. [{{"metric": "synthetic.metricsResponseTime", "aggregation": "SUM"}}]
-        - timeFrame (optional): {{"to": <unix_ms>, "windowSize": <milliseconds>}}
+        - timeFrame (optional): {{"windowSize": <milliseconds>}} (omit "to" to use the current time)
         - pagination (optional): {{"page": 1, "pageSize": 3}}
         - groups (optional): List of grouping objects, e.g. [{{"groupbyTag": "synthetic.applicationId"}}]
         - tagFilterExpression (optional): Tag filter expression object

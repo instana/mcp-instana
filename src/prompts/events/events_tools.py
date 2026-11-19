@@ -97,11 +97,11 @@ class EventsPrompts:
         event_type_filters: Optional[List[str]] = None,
         max_events: Optional[int] = 50
     ) -> str:
-        """Show me all closed issues with severity higher than 5, group by metrics, for Apr 22 from 10 to 11 am """
+        """Show me all closed issues with severity higher than 5, group by metrics, for a given time range"""
         return f"""
         Get events using filters:
-        - From time: {from_time or 1745383800000} (Apr 22, 2025 10:00 AM)
-        - To time: {to_time or 1745387400000} (Apr 22, 2025 11:00 AM)
+        - From time: {from_time or '(not specified - defaulting to last 10 minutes)'}
+        - To time: {to_time or '(not specified - defaulting to current time)'}
         - State: {state or 'closed'}
         - Severity: {severity or 10} (critical)
         - Event type filters: {event_type_filters or '["ISSUE"]'}
