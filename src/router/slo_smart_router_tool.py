@@ -8,10 +8,10 @@ queries to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from fastmcp import Context
 from mcp.types import ToolAnnotations
+from fastmcp import Context
 
-from src.core.timestamp_utils import convert_datetime_param_with_required_timezone
+from src.core.timestamp_utils import check_time_order, convert_datetime_param
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -168,12 +168,7 @@ CONFIGURATION (resource_type="configuration") - Operations: get_all, get_by_id, 
 REPORT (resource_type="report") - Operations: get
     get: Generate SLO report - params: slo_id (required), var_from, to, exclude_correction_id, include_correction_id
         Returns: SLI value, SLO target, error budget (remaining/spent/total), burn rate, time range, charts
-        Time params: var_from/to can be provided as:
-            - Unix timestamp in milliseconds (e.g., 1741604400000)
-            - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-            - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-            - If no timezone specified, UTC is assumed
-        Supported datetime formats: "10 March 2026, 2:00 PM", "2026-03-10 14:00:00", "March 10, 2026 2 PM", etc.
+        Time params: var_from/to can be provided as milliseconds or a datetime string — see "Time parameters" section below for format rules.
 
 ALERT (resource_type="alert") - Operations: find_active, find, find_versions, create, update, delete, disable, enable, restore
     find_active: Find active alerts - params: slo_id, alert_ids
@@ -202,15 +197,17 @@ CORRECTION (resource_type="correction") - Operations: get_all, get_by_id, create
         REQUIRED FIELDS: name, sloIds (list of SLO config IDs, e.g. ["slo-abc123"]), scheduling (with duration, durationUnit, startTime optional, recurrent optional, recurrentRule optional)
         scheduling: {duration: 1, durationUnit: "hour"/"day"/"week"/"month", startTime: <timestamp_or_datetime>, recurrent: true/false, recurrentRule: "..."}
         durationUnit: Must be one of: millisecond, second, minute, hour, day, week, month
-        startTime: Can be provided as:
-            - Unix timestamp in milliseconds (e.g., 1741604400000)
-            - Human-readable datetime string (e.g., "10 March 2026, 2:00 PM")
-            - Datetime with timezone (e.g., "10 March 2026, 2:00 PM|IST")
-            - If no timezone specified, UTC is assumed
-            - CRITICAL: Always include timezone for correction windows to ensure accurate time context
+        startTime: Can be provided as milliseconds or a datetime string — see "Time parameters" section below for format rules.
     update: Update correction window - params: id (required), payload (required, same as create)
         CRITICAL: MUST use ID (not name). Always update by ID only
     delete: Delete correction window - params: id (required)
+
+Time parameters:
+    - Applies to var_from, to and scheduling.startTime. Omit to use the default range.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
 
 Examples:
     # Config: List all
@@ -223,7 +220,7 @@ Examples:
     resource_type="configuration", operation="create", params={"payload": {"name": "API SLO", "entity": {"type": "application", "applicationId": "app-123", "boundaryScope": "ALL"}, "indicator": {"type": "timeBased", "blueprint": "latency", "threshold": 100, "aggregation": "P90"}, "target": 0.95, "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}, "tags": ["api"]}}
 
     # Report: Get with datetime
-    resource_type="report", operation="get", params={"slo_id": "slo-123", "var_from": "10 March 2026, 2:00 PM|IST", "to": "17 March 2026, 2:00 PM|IST"}
+    resource_type="report", operation="get", params={"slo_id": "slo-123", "var_from": "YYYY-MM-DD HH:mm:ss|UTC", "to": "YYYY-MM-DD HH:mm:ss|UTC"}
 
     # Alert: Find active
     resource_type="alert", operation="find_active", params={"slo_id": "slo-123"}
@@ -235,11 +232,7 @@ Examples:
     resource_type="correction", operation="get_all"
 
     # Correction: Create with datetime
-    resource_type="correction", operation="create", params={"payload": {"name": "Maintenance", "scheduling": {"duration": 2, "durationUnit": "hour", "startTime": "12 March 2026, 1:47 AM|IST"}, "sloIds": ["slo-123"], "description": "Planned maintenance", "tags": ["maint"], "active": True}}
-
-    # Elicitation: Missing timezone
-    # Input: resource_type="report", operation="get", params={"slo_id": "abc", "var_from": "10 March 2026, 2:00 PM"}
-    # Response: {"elicitation_needed": True, "message": "I need timezone...", "missing_parameters": ["timezone"]}
+    resource_type="correction", operation="create", params={"payload": {"name": "Maintenance", "scheduling": {"duration": 2, "durationUnit": "hour", "startTime": "YYYY-MM-DD HH:mm:ss|UTC"}, "sloIds": ["slo-123"], "description": "Planned maintenance", "tags": ["maint"], "active": True}}
 
     # Elicitation: Missing alert fields
     # Input: resource_type="alert", operation="create", params={"payload": {"name": "Alert"}}
@@ -560,38 +553,40 @@ Examples:
                     }
 
                 # Convert datetime strings to timestamps for var_from and to parameters
-                # These parameters require explicit timezone specification
-                var_from_result = convert_datetime_param_with_required_timezone(var_from, "var_from")
-
-                # Check for elicitation or error
-                if "elicitation_needed" in var_from_result:
-                    return var_from_result
+                # If no timezone is specified, defaults to UTC
+                var_from_result = convert_datetime_param(var_from, "var_from")
                 if "error" in var_from_result:
                     return {
-                        "error": var_from_result["error"],
-                        "resource_type": RESOURCE_TYPE_REPORT,
-                        "operation": operation
+                        "elicitation_needed": True,
+                        "reason": "invalid_time_params",
+                        "api_error": [{"field": "var_from", "issue": var_from_result["error"]}],
+                        "message": var_from_result["error"],
                     }
+                var_from_val = var_from_result["value"]
 
-                # Convert to string as API expects StrictStr
-                if var_from_result["converted"]:
-                    var_from = str(var_from_result["value"])
-
-                to_result = convert_datetime_param_with_required_timezone(to, "to")
-
-                # Check for elicitation or error
-                if "elicitation_needed" in to_result:
-                    return to_result
+                to_result = convert_datetime_param(to, "to")
                 if "error" in to_result:
                     return {
-                        "error": to_result["error"],
-                        "resource_type": RESOURCE_TYPE_REPORT,
-                        "operation": operation
+                        "elicitation_needed": True,
+                        "reason": "invalid_time_params",
+                        "api_error": [{"field": "to", "issue": to_result["error"]}],
+                        "message": to_result["error"],
+                    }
+                to_val = to_result["value"]
+
+                # Both values are epoch milliseconds (int) or None here, whatever form the caller used
+                order_error = check_time_order(var_from_val, to_val, "var_from", "to")
+                if order_error:
+                    return {
+                        "elicitation_needed": True,
+                        "reason": "invalid_time_params",
+                        "api_error": [order_error],
+                        "message": order_error,
                     }
 
-                # Convert to string as API expects StrictStr
-                if to_result["converted"]:
-                    to = str(to_result["value"])
+                # The report client takes strings (StrictStr)
+                var_from = str(var_from_val) if var_from_val is not None else None
+                to = str(to_val) if to_val is not None else None
 
                 logger.debug(f"[_handle_report] Routing to get_slo_report with slo_id: {slo_id}, var_from: {var_from}, to: {to}")
                 result = await self.slo_report_client.get_slo_report(
@@ -800,12 +795,9 @@ Examples:
         }
 
     def _normalize_correction_start_time(self, scheduling: Dict[str, Any], operation: str) -> Optional[Dict[str, Any]]:
-        # If startTime is already a numeric ms timestamp, pass it through directly —
-        # no timezone elicitation needed.
-        if isinstance(scheduling["startTime"], (int, float)):
-            return None
-
-        start_time_result = convert_datetime_param_with_required_timezone(
+        # Numeric values go through the same range check as strings: 0, negatives and
+        # seconds-epoch values would otherwise reach the API as 1970 or year ~58000.
+        start_time_result = convert_datetime_param(
             scheduling["startTime"],
             "startTime"
         )
@@ -832,7 +824,7 @@ Examples:
         if not isinstance(payload, dict) or "scheduling" not in payload:
             return {
                 "elicitation_needed": True,
-                "message": "To create a correction window, I need the scheduling configuration. Please provide:\n\n- duration: How long should the correction window last? (e.g., 2 hours, 1 day)\n- durationUnit: Unit of time (hour, day, week, month)\n- startTime: When should it start? (e.g., '10 March 2026, 2:00 PM|IST')",
+                "message": "To create a correction window, I need the scheduling configuration. Please provide:\n\n- duration: How long should the correction window last? (e.g., 2 hours, 1 day)\n- durationUnit: Unit of time (hour, day, week, month)\n- startTime: When should it start? (e.g., 'YYYY-MM-DD HH:mm:ss|UTC')",
                 "missing_parameters": ["scheduling"],
                 "user_prompt": "Please specify the scheduling configuration for the correction window including duration, durationUnit, and startTime with timezone."
             }
@@ -840,7 +832,7 @@ Examples:
         if "startTime" not in payload["scheduling"]:
             return {
                 "elicitation_needed": True,
-                "message": "To create the correction window, I need to know when it should start.\n\nPlease provide the start time with timezone in format: 'datetime|timezone'\n\nExamples:\n- '10 March 2026, 2:00 PM|IST'\n- '2026-03-10 14:00:00|America/New_York'\n- 'March 10, 2026 2 PM|UTC'",
+                "message": "To create the correction window, I need to know when it should start.\n\nPlease provide the start time with timezone in format: 'datetime|timezone'\n\nExamples:\n- 'YYYY-MM-DD HH:mm:ss|UTC'\n- 'YYYY-MM-DD HH:mm:ss|IST'",
                 "missing_parameters": ["startTime"],
                 "user_prompt": "When should the correction window start? Please provide the date, time, and timezone."
             }
@@ -863,7 +855,7 @@ Examples:
         if not (isinstance(payload, dict) and "scheduling" in payload):
             return None
         scheduling = payload["scheduling"]
-        if "startTime" in scheduling and isinstance(scheduling["startTime"], str):
+        if "startTime" in scheduling:
             return self._normalize_correction_start_time(scheduling, CORRECTION_OP_UPDATE)
         return None
 

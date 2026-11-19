@@ -46,8 +46,8 @@ class SLOPrompts:
           params={params_dict}
           → slo_id (required): {slo_id}
           → var_from (optional): {var_from or '(not specified — defaults to SLO window start)'}
-            Accepts Unix ms timestamp (e.g. 1741604400000) or human datetime with timezone
-            (e.g. "10 March 2026, 2:00 PM|IST"). Same format for "to".
+            Accepts Unix ms timestamp (<unix_timestamp_milliseconds>) or human datetime with timezone
+            (e.g. "YYYY-MM-DD HH:mm:ss|IST"). Same format for "to".
           → to (optional): {to or '(not specified — defaults to current time)'}
           → exclude_correction_id / include_correction_id (optional): omit if not specified.
 
@@ -173,7 +173,7 @@ class SLOPrompts:
            a. Call manage_slo, resource_type="report", operation="get",
               params={{"slo_id": "<slo_id>"}}
               → Collect: SLI value, budget spent vs total, burn rate, fromTimestamp, toTimestamp.
-              → Use toTimestamp as timeFrame.to; derive windowSize = toTimestamp - fromTimestamp.
+              → Use toTimestamp as timeFrame.to; derive windowSize = toTimestamp − fromTimestamp.
            b. Call manage_infrastructure, resource_type="analyze", operation="get_entity_groups",
               params={{
                 "payload": {{
@@ -192,7 +192,7 @@ class SLOPrompts:
                   "pagination": {{"retrievalSize": 10}}
                 }}
               }}
-              → Window Note: timeFrame.windowSize is the SLO report span (toTimestamp - fromTimestamp),
+              → Window Note: timeFrame.windowSize is the SLO report span (toTimestamp − fromTimestamp),
                 NOT time_window_hours. The granularity {granularity_ms} ms (derived from
                 time_window_hours={effective_window} h) controls metric resolution only — it does not
                 set the query window.
@@ -205,7 +205,7 @@ class SLOPrompts:
                 further.
 
         4. Correlate:
-           - Unit Note: Infrastructure API metric values are 0.0-1.0 fractions (multiply by 100 for %).
+           - Unit Note: Infrastructure API metric values are 0.0–1.0 fractions (multiply by 100 for %).
            - Compare infrastructure peak utilization against thresholds (CPU MAX > 80%, Memory MAX > 85%)
              during the SLO evaluation window (fromTimestamp → toTimestamp).
 
@@ -300,7 +300,7 @@ class SLOPrompts:
         3. For each application SLO, generate the Post-Release Report:
            Call manage_slo, resource_type="report", operation="get",
            params={{"slo_id": "<slo_id>", "var_from": "<release_start_timestamp_or_formatted_date>"}}
-           → Accepted formats for var_from: Unix ms timestamp (e.g. 1772794460000) or datetime with timezone ("DD Month YYYY, HH:MM AM/PM|UTC").
+           → Accepted formats for var_from: Unix ms timestamp (<unix_timestamp_milliseconds>) or datetime with timezone ("YYYY-MM-DD HH:mm:ss|UTC").
            → Window Rule: If release is older than 7 days, cap the evaluation window to 7 days post-release.
            → Collect scalar metrics: SLI, totalErrorBudget, errorBudgetSpent, errorBurnRate (ignore raw chart series).
 
@@ -564,7 +564,7 @@ class SLOPrompts:
             → If syntheticTestIds has multiple IDs, use an EXPRESSION with logicalOperator "OR".
             → If entity.syntheticTestIds is empty or entity.type is not "synthetic", skip Steps
               3a and 3b and state "no synthetic test link available for this SLO".
-            → Collect: per-test overall success_rate (0.0-1.0), locationStatusList,
+            → Collect: per-test overall success_rate (0.0–1.0), locationStatusList,
               totalTestRuns, successRuns.
             → Skip location rows where totalTestRuns = 0 — location was inactive in this window.
 
@@ -593,16 +593,16 @@ class SLOPrompts:
             → Collect: start_time (ms), synthetic.metricsStatus, synthetic.metricsResponseTime
               for each run. This enables per-bucket failure matching.
             → Pagination loop: after each page, check the earliest start_time on that page.
-              If earliest start_time > earliest dip bucket start (fromTimestamp + dip_i x bucket_width)
-              AND totalHits > page x pageSize, fetch the next page (increment page by 1) and repeat.
+              If earliest start_time > earliest dip bucket start (fromTimestamp + dip_i × bucket_width)
+              AND totalHits > page × pageSize, fetch the next page (increment page by 1) and repeat.
               Stop when earliest start_time on the page is <= the earliest dip bucket start,
-              or when all pages are exhausted (page x pageSize >= totalHits).
+              or when all pages are exhausted (page × pageSize >= totalHits).
               This ensures runs closest in time to each dip bucket are always fetched.
 
         4. Correlate:
-           - Pass Rate Unit: success_rate is 0.0-1.0 (multiply by 100 for %).
+           - Pass Rate Unit: success_rate is 0.0–1.0 (multiply by 100 for %).
            - Map SLI dip buckets: bucket_i covers
-             [fromTimestamp + i x bucket_width, fromTimestamp + (i+1) x bucket_width).
+             [fromTimestamp + i × bucket_width, fromTimestamp + (i+1) × bucket_width).
            - Per-bucket matching: a test run falls in bucket_i if
              run.start_time >= bucket_i_start AND run.start_time < bucket_i_end.
              Count failed runs (metricsStatus = 0) per bucket.
@@ -696,7 +696,7 @@ class SLOPrompts:
         4. Correlate:
            - Continuous Breach Rule: If violationDistribution shows violations across all buckets,
              report that the SLO is continuously breached and backend latency is sustained.
-           - Compare page P95 latencies against relative baselines: flag pages more than 2x the
+           - Compare page P95 latencies against relative baselines: flag pages more than 2× the
              median page latency as elevated.
            - Note: Step 3 returns one aggregate per page across the whole window; per-bucket
              correlation is not possible — state this in the output.
@@ -741,11 +741,13 @@ class SLOPrompts:
            manage_slo, resource_type="report", operation="get",
            params={{
              "slo_id": "<slo_id>",
-             "var_from": <current_time_ms - {window_ms}>
+             "var_from": "<unix_timestamp_milliseconds>"
            }}
-           → var_from is the window start as a Unix ms integer: subtract {window_ms} ms from the
-             current Unix time in milliseconds (e.g. if now = 1792030000000, pass 1792030000000 - {window_ms}).
-             The tool accepts epoch ms integers directly — do not convert to a string or date.
+           → var_from is the window start. Use a Unix ms timestamp or a datetime string with timezone
+             (e.g. "YYYY-MM-DD HH:mm:ss|UTC"). Do NOT compute timestamps yourself — never subtract
+             from a guessed "now". If the user asked for a relative window (e.g. "last 7 days"),
+             omit var_from to use the SLO's own rolling window, or ask the user for the explicit
+             start date.
            → Collect scalar metrics: sli, totalErrorBudget, errorBudgetSpent, errorBurnRate,
              violationDistribution, fromTimestamp, toTimestamp.
            → bucket_width = (toTimestamp - fromTimestamp) / count(keys in violationDistribution).
@@ -771,11 +773,11 @@ class SLOPrompts:
             → Collect: event id, problem description, entity.label, start time, end time, severity.
 
         4. Correlate:
-           - Error Budget Spent %: (errorBudgetSpent / totalErrorBudget) x 100 when
+           - Error Budget Spent %: (errorBudgetSpent / totalErrorBudget) × 100 when
              totalErrorBudget > 0. If totalErrorBudget is 0, state "budget denominator is zero —
              percentage undefined". Values above 100% are valid and should be reported as-is.
            - Map burn windows: bucket i covers
-             [fromTimestamp + i x bucket_width, fromTimestamp + (i+1) x bucket_width).
+             [fromTimestamp + i × bucket_width, fromTimestamp + (i+1) × bucket_width).
            - For application SLOs: match event entity.label against service names from Step 3a.
              If no match is possible, state "correlation is time-based only".
            - Overlap rule: an event overlaps bucket i if event.start_time < bucket_i_end AND

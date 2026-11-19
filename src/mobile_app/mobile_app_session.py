@@ -42,6 +42,7 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
+from src.core.timestamp_utils import utc_now_ms
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -97,7 +98,7 @@ class MobileAppSessionMCPTools(BaseInstanaClient):
             missing_params.append({
                 "name": "timestamp",
                 "description": "Target session timestamp provided by user (REQUIRED)",
-                "examples": [1785783898711, 1785783909505, 1785783945054]
+                "examples": [utc_now_ms()]
             })
 
         if missing_params:

@@ -4,9 +4,9 @@ Synthetic Metrics MCP Tools Module
 This module provides synthetic metrics-specific MCP tools for Instana monitoring.
 """
 
-import json
 import logging
 from typing import Any, Dict, Optional, Union
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +18,8 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    parse_payload,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, parse_payload, sdk_call_with_keepalive, with_header_auth
 from src.core.validation import StructureValidator
-
 
 class SyntheticMetricsMCPTools(BaseInstanaClient):
     """Tools for synthetic metrics in Instana MCP."""
@@ -63,7 +55,6 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
                         }
                     ],
                     "timeFrame": {
-                        "to": 0,
                         "windowSize": 3600000
                     },
                     "groups": [

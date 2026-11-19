@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.pagination import apply_navigation
+from src.core.timestamp_utils import convert_nested_datetime_param
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -130,7 +130,7 @@ METRICS (resource_type="metrics"):
         payload: Complete request body as a dict or JSON string with the following fields:
             - metrics (required): List of metric/aggregation objects
                   e.g. [{"metric": "synthetic.metricsResponseTime", "aggregation": "SUM"}]
-            - timeFrame (optional): {"to": <unix_ms>, "windowSize": <milliseconds>}
+            - timeFrame (optional): {"windowSize": <milliseconds>, "to": <optional>} — see "Time parameters" section below for "to" format rules. Omit "to" to use the current time.
             - pagination (optional): {"page": 1, "pageSize": 3}
             - groups (optional): List of grouping objects. Each object MUST include all three fields:
                   - groupbyTag (required): tag name from get_synthetic_tag_catalog (use_case="GROUPING")
@@ -155,17 +155,7 @@ SETTINGS (resource_type="settings"):
         - test_name: The synthetic test label (case-insensitive match)
 
     get_synthetic_tests - List synthetic tests, optionally filtered and paginated.
-        params: {application_id, location_id, credential_name, sort, offset, limit, filter_param, page, page_size} — all optional.
-        Without page/page_size/offset/limit all tests are returned. With page/page_size the response
-        carries pagination metadata
-        ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-        page/page_size cannot be combined with offset/limit. To change page, call
-        resource_type="settings" with operation=<next_operation or previous_operation> (e.g. "page_2")
-        and the same filters. The same applies to resource_type="alert" find_active.
-
-    get_synthetic_test / get_synthetic_tests results include a markdown "link" for each test.
-        ALWAYS show each test name using its 'link' field verbatim (markdown, already URL-encoded).
-        NEVER shorten, rebuild or drop the URL - truncated URLs do not open in the Instana UI.
+        params: {application_id, location_id, credential_name, sort, offset, limit, filter_param} — all optional.
 
     get_locations - List all locations with full metadata (id, label, displayLabel, locationType,
         status, geoPoint, customProperties.datacenterFlag, totalTests).
@@ -288,6 +278,13 @@ ALERT (resource_type="alert"):
         - gracePeriod (optional): int, ms the alert stays open after conditions clear
         - includeOnDemand (optional): bool
 
+Time parameters:
+    - Relative window (preferred): pass only timeFrame {"windowSize": <milliseconds>} and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - All times are UTC. Never guess the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
+
 Args:
     resource_type: "catalog", "metrics", "settings", "test_playback", or "alert"
     operation: Specific operation for the resource type
@@ -301,16 +298,16 @@ Examples:
     resource_type="catalog", operation="get_synthetic_catalog_metrics"
     resource_type="catalog", operation="get_synthetic_tag_catalog", params={"use_case": "FILTERING"}
     # metrics
-    resource_type="metrics", operation="get_metrics_result", params={"payload": {"metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "SUM"}], "timeFrame": {"to": 0, "windowSize": 3600000}}}
+    resource_type="metrics", operation="get_metrics_result", params={"payload": {"metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "SUM"}], "timeFrame": {"windowSize": 3600000}}}
     # settings
     resource_type="settings", operation="get_synthetic_test", params={"test_name": "Login Flow"}
     resource_type="settings", operation="get_synthetic_tests", params={"limit": 20, "sort": "+label"}
     resource_type="settings", operation="get_all_datacenters", params={"status": "Online"}
     resource_type="settings", operation="get_location_by_id", params={"location_name": "ap-south-1(Mumbai)"}
     # test_playback
-    resource_type="test_playback", operation="get_synthetic_result_analytic", params={"payload": {"syntheticMetrics": ["synthetic.metricsResponseTime", "synthetic.metricsStatus"], "analyticFunction": "LAST_VALUE", "timeFrame": {"to": 0, "windowSize": 144000000}}}
-    resource_type="test_playback", operation="get_synthetic_result_list", params={"payload": {"syntheticMetrics": ["synthetic.metricsStatus", "synthetic.errors"], "timeFrame": {"to": 0, "windowSize": 3600000}, "TagFilterExpression": {"type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "stringValue": "<location_id>"}}}
-    resource_type="test_playback", operation="get_test_summary_list", params={"payload": {"metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}], "timeFrame": {"to": 0, "windowSize": 1800000}}}
+    resource_type="test_playback", operation="get_synthetic_result_analytic", params={"payload": {"syntheticMetrics": ["synthetic.metricsResponseTime", "synthetic.metricsStatus"], "analyticFunction": "LAST_VALUE", "timeFrame": {"windowSize": 144000000}}}
+    resource_type="test_playback", operation="get_synthetic_result_list", params={"payload": {"syntheticMetrics": ["synthetic.metricsStatus", "synthetic.errors"], "timeFrame": {"windowSize": 3600000}, "TagFilterExpression": {"type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "stringValue": "<location_id>"}}}
+    resource_type="test_playback", operation="get_test_summary_list", params={"payload": {"metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}], "timeFrame": {"windowSize": 1800000}}}
     resource_type="test_playback", operation="get_synthetic_result_metadata", params={"testid": "abc123", "testresultid": "res456"}
     resource_type="test_playback", operation="get_synthetic_result_detail_data", params={"testid": "abc123", "testresultid": "res456", "detail_type": "HAR"}
     # alert
@@ -324,7 +321,7 @@ Examples:
     resource_type="alert", operation="delete", params={"id": "alert-123"}
     resource_type="alert", operation="enable", params={"id": "alert-123"}
     resource_type="alert", operation="disable", params={"id": "alert-123"}
-    resource_type="alert", operation="restore", params={"id": "alert-123", "created": 1710658800000}"""
+    resource_type="alert", operation="restore", params={"id": "alert-123", "created": <unix_timestamp_milliseconds>}"""
     )
     async def manage_synthetics(
         self,
@@ -376,6 +373,17 @@ Examples:
                         "message": f"Invalid operation '{operation}' for resource_type 'metrics'. Valid operations: {METRICS_VALID_OPERATIONS}"
                     }
                 payload = params.get("payload")
+                # Convert datetime string in payload.timeFrame.to to a Unix ms timestamp if needed
+                if isinstance(payload, dict):
+                    conversion_result = convert_nested_datetime_param(payload, "timeFrame", "to")
+                    if "error" in conversion_result:
+                        return {
+                            "elicitation_needed": True,
+                            "reason": "invalid_time_params",
+                            "api_error": [{"field": "payload.timeFrame.to", "issue": conversion_result["error"]}],
+                            "message": conversion_result["error"],
+                        }
+                    payload = conversion_result["params"]
                 logger.debug("[manage_synthetics] Routing to Synthetic Metrics get_metrics_result | payload=%s", payload)
                 result = await self.synthetic_metrics_client.get_metrics_result(
                     payload=payload,
@@ -500,12 +508,6 @@ Examples:
     ) -> Dict[str, Any]:
         """Handle Synthetic settings operations."""
 
-        # Pagination navigation (shared, stateless - src/core/pagination.py):
-        # page_N / next / previous / go_to_page re-run get_synthetic_tests on that page.
-        operation, params, _nav_error = apply_navigation(operation, params, "get_synthetic_tests")
-        if _nav_error:
-            return _nav_error
-
         if operation not in SETTINGS_VALID_OPERATIONS:
             return {
                 "elicitation_needed": True,
@@ -542,8 +544,6 @@ Examples:
                     offset=params.get("offset"),
                     limit=params.get("limit"),
                     filter_param=params.get("filter"),
-                    page=params.get("page"),
-                    page_size=params.get("page_size"),
                     ctx=ctx,
                     resource_type="settings", tool_name="manage_synthetics",
                 )
@@ -618,6 +618,19 @@ Examples:
             }
 
         try:
+            # Convert datetime string in payload.timeFrame.to to a Unix ms timestamp if needed
+            payload = params.get("payload")
+            if isinstance(payload, dict):
+                conversion_result = convert_nested_datetime_param(payload, "timeFrame", "to")
+                if "error" in conversion_result:
+                    return {
+                        "elicitation_needed": True,
+                        "reason": "invalid_time_params",
+                        "api_error": [{"field": "payload.timeFrame.to", "issue": conversion_result["error"]}],
+                        "message": conversion_result["error"],
+                    }
+                params = {**params, "payload": conversion_result["params"]}
+
             logger.debug("[_handle_test_playback] Routing to execute_playback_operation | operation=%s, params=%s", operation, params)
             result = await self.synthetic_test_playback_client.execute_playback_operation(
                 operation=operation,
@@ -720,12 +733,6 @@ Examples:
         ctx,
     ) -> Dict[str, Any]:
         """Handle Synthetic smart alert configuration operations."""
-
-        # Pagination navigation (shared, stateless - src/core/pagination.py):
-        # page_N / next / previous / go_to_page re-run find_active on that page.
-        operation, params, _nav_error = apply_navigation(operation, params, "find_active")
-        if _nav_error:
-            return _nav_error
 
         if operation not in ALERT_VALID_OPERATIONS:
             return {

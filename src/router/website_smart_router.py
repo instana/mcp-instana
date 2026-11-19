@@ -11,17 +11,9 @@ from typing import Any, Dict, List, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from src.core.timestamp_utils import convert_nested_datetime_param
-from src.core.utils import (
-    WEBSITE_BEACON_TYPE_MAP,
-    BaseInstanaClient,
-    normalize_beacon_type,
-    register_as_tool,
-)
-from src.core.validation import (
-    VALID_WEBSITE_BEACON_TYPES,
-    StructureValidator,
-)
+from src.core.timestamp_utils import DEFAULT_TIMEZONE, convert_nested_datetime_param
+from src.core.utils import BaseInstanaClient, WEBSITE_BEACON_TYPE_MAP, normalize_beacon_type, register_as_tool
+from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_WEBSITE_BEACON_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +54,10 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
-        from src.website.website_alert import WebsiteAlertMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
+        from src.website.website_alert import WebsiteAlertMCPTools
 
         # Initialize the website clients
         self.website_analyze_client = WebsiteAnalyzeMCPTools(read_token, base_url)
@@ -100,7 +92,7 @@ ANALYZE (resource_type="analyze"):
 
     tag_filter_expression: CRITICAL - Entity field REQUIRED for ALL tag filters. ALWAYS set "entity": "NOT_APPLICABLE" for website beacon tags.
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>} - Default: 3600000 (1 hour)
-        to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
+        to: Unix timestamp (ms) OR datetime string — see "Time parameters" section below for format rules.
 
     Examples:
         metrics: [{"metric": "beaconCount", "aggregation": "SUM"}, {"metric": "onLoadTime", "aggregation": "P95"}]
@@ -150,11 +142,18 @@ ALERT (resource_type="alert"):
     find_active_website_alert_configs - Get all alert configurations for a website
         - website_id: Website ID to get alert configs for (required)
         - alert_ids: Optional list of specific alert IDs to filter (optional)
-
+    
     find_website_alert_config - Get a specific alert configuration by ID
         - id: Specific alert configuration ID to retrieve (required)
         - valid_on: Unix timestamp (ms) to retrieve the configuration active at that time (optional, default is latest active version)
 
+
+Time parameters:
+    - Relative window (preferred): pass only time_frame {"windowSize": <milliseconds>} and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
 
 Args:
     resource_type: "analyze", "catalog", "configuration", "advanced_config", or "alert"
@@ -166,14 +165,14 @@ Returns:
 
 Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"beacon_type": "PAGELOAD", "use_case": "GROUPING"}
-    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
-    resource_type="analyze", operation="get_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
+    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "YYYY-MM-DD HH:mm:ss|UTC", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
+    resource_type="analyze", operation="get_beacons", params={"time_frame": {"windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
     resource_type="catalog", operation="get_metrics"
     resource_type="configuration", operation="get_all"
     resource_type="configuration", operation="get", params={"website_name": "robot-shop"}
     resource_type="advanced_config", operation="get_geo_config", params={"website_name": "robot-shop"}
     resource_type="alert", operation="find_active_website_alert_configs", params={"website_id": "website-abc123"}
-    resource_type="alert", operation="find_website_alert_config", params={"id": "alert-123", "valid_on": 1234567890000}"""
+    resource_type="alert", operation="find_website_alert_config", params={"id": "alert-123", "valid_on": <unix_timestamp_milliseconds>}"""
     )
     async def manage_websites(
         self,
@@ -282,7 +281,7 @@ Examples:
             params,
             PARAM_TIME_FRAME,
             "to",
-            default_timezone="UTC"
+            default_timezone=DEFAULT_TIMEZONE
         )
 
         if "error" in conversion_result:
@@ -293,7 +292,7 @@ Examples:
                     {
                         "field": "time_frame.to",
                         "issue": conversion_result["error"],
-                        "expected": "Unix timestamp (ms) or datetime string with timezone (e.g., '10 March 2026, 2:00 PM|IST')"
+                        "expected": "Unix timestamp (ms) or datetime string (e.g., 'YYYY-MM-DD HH:mm:ss|UTC'; the zone defaults to UTC if omitted)"
                     }
                 ],
                 "message": conversion_result["error"]
@@ -311,7 +310,7 @@ Examples:
             (StructureValidator.validate_beacon_type, beacon_type,
                 {"valid_types": VALID_WEBSITE_BEACON_TYPES}),
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_time_frame, time_frame, {}),
             (StructureValidator.validate_order, order, {}),
@@ -568,7 +567,7 @@ Examples:
             "website_id": website_id if website_id else None,
             "results": result
         }
-
+    
     async def _handle_alert(
         self,
         operation: str,

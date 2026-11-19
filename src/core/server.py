@@ -9,12 +9,13 @@ import argparse
 import functools
 import logging
 import os
-import select as _select
 import signal
+import select as _select
 import sys
 import threading as _threading
+import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -38,9 +39,12 @@ log_level_map = {
 }
 log_level = log_level_map.get(log_level_name, logging.INFO)
 
+# Log timestamps are always UTC (ISO-8601 with milliseconds, trailing Z), independent of the host timezone.
+logging.Formatter.converter = time.gmtime
 logging.basicConfig(
     level=log_level,  # Default level from config, can be overridden by --log-level flag
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s.%(msecs)03dZ - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%dT%H:%M:%S',
     handlers=[
         logging.StreamHandler(sys.stderr)
     ]
@@ -70,13 +74,7 @@ if project_root not in sys.path:
 
 # Import the necessary modules
 try:
-    from src.core.utils import (
-        MCP_TOOLS,
-        _resolve_stream_chunk_size,
-        _ssl_verify_from_env,
-        parse_buffer_size,
-        register_as_tool,
-    )
+    from src.core.utils import MCP_TOOLS, register_as_tool, _ssl_verify_from_env, parse_buffer_size, _resolve_stream_chunk_size
 except ImportError:
     logger.error("Failed to import required modules", exc_info=True)
     sys.exit(1)
@@ -85,6 +83,7 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.prompts.base import Prompt
 from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
+
 
 # ---------------------------------------------------------------------------
 # Category → tool-name mapping
@@ -98,16 +97,17 @@ from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 _CATEGORY_TO_TOOLS: dict[str, frozenset[str]] = {
     "alert_channels":    frozenset({"manage_alert_channels"}),
     "app":               frozenset({"manage_applications"}),
-    "infra":             frozenset({"manage_infrastructure"}),
     "automation":        frozenset({"manage_automation"}),
-    "website":           frozenset({"manage_websites"}),
-    "mobile_app":        frozenset({"manage_mobile_apps"}),
-    "events":            frozenset({"manage_events"}),
     "custom_dashboards": frozenset({"manage_custom_dashboards"}),
+    "events":            frozenset({"manage_events"}),
+    "infra":             frozenset({"manage_infrastructure"}),
+    "maintenance_windows": frozenset({"manage_maintenance_windows"}),
+    "mobile_app":        frozenset({"manage_mobile_apps"}),
+    "releases":          frozenset({"manage_releases"}),
+    "skills":            frozenset({"load_instana_skills"}),
     "slo":               frozenset({"manage_slo"}),
     "synthetic":         frozenset({"manage_synthetics"}),
-    "releases":          frozenset({"manage_releases"}),
-    "maintenance_windows": frozenset({"manage_maintenance_windows"}),
+    "website":           frozenset({"manage_websites"}),
 }
 
 
@@ -270,6 +270,7 @@ class MCPState:
     smart_router_synthetic_client: Any = None
     smart_router_releases_client: Any = None
     smart_router_maintenance_window_client: Any = None
+    smart_router_skills_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     smart_router_infrastructure_client: Any = None
@@ -340,7 +341,7 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
         clients_state = create_clients(token, base_url, enabled_categories)
 
         tools_registered = 0
-        for tool_name, _tool_func in MCP_TOOLS.items():
+        for tool_name, _tool_func in sorted(MCP_TOOLS.items()):
             try:
                 client_attr_names = [field.name for field in fields(MCPState)]
                 for attr_name in client_attr_names:
@@ -353,11 +354,11 @@ def create_app(token: str, base_url: str, port: int = int(os.getenv("PORT", "808
                             'title': bound_method._mcp_title,
                             'annotations': bound_method._mcp_annotations
                         }
-
+                        
                         # Add description if available
                         if hasattr(bound_method, '_mcp_description') and bound_method._mcp_description:
                             tool_kwargs['description'] = bound_method._mcp_description
-
+                        
                         server.tool(**tool_kwargs)(bound_method)
 
                         tools_registered += 1
@@ -457,6 +458,7 @@ def get_client_categories():
         from src.router.releases_smart_router_tool import ReleasesSmartRouterMCPTool
         from src.router.slo_smart_router_tool import SLOSmartRouterMCPTool
         from src.router.synthetic_smart_router_tool import SyntheticSmartRouterMCPTool
+        from src.skills.skills_tool import SkillsMCPTool
         from src.router.website_smart_router import WebsiteSmartRouterMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
@@ -490,6 +492,9 @@ def get_client_categories():
         "releases": [
             ('smart_router_releases_client', ReleasesSmartRouterMCPTool),
         ],
+        "skills": [
+            ('smart_router_skills_client', SkillsMCPTool),
+        ],
         "slo": [
             ('smart_router_slo_client', SLOSmartRouterMCPTool),
         ],
@@ -503,12 +508,14 @@ def get_client_categories():
 
 def get_prompt_categories():
     """Get prompt categories organized by functionality"""
-    # Import the class-based prompts
+    # Import the class-based prompts (alphabetical by class name)
     try:
-        from src.prompts.alert_channels.alert_channels_prompts import (
-            AlertChannelsPrompts,
-        )
+        from src.prompts.alert_channels.alert_channels_prompts import AlertChannelsPrompts
+        from src.prompts.automation.action_catalog import ActionCatalogPrompts
+        from src.prompts.automation.action_history import ActionHistoryPrompts
         from src.prompts.application.application_alerts import ApplicationAlertsPrompts
+        from src.prompts.application.application_analyze import ApplicationAnalyzePrompts
+        from src.prompts.application.application_catalog import ApplicationCatalogPrompts
         from src.prompts.application.application_metrics import (
             ApplicationMetricsPrompts,
         )
@@ -521,6 +528,7 @@ def get_prompt_categories():
         from src.prompts.application.application_topology import (
             ApplicationTopologyPrompts,
         )
+        from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
         from src.prompts.events.events_tools import EventsPrompts
         from src.prompts.infrastructure.infrastructure_analyze import (
             InfrastructureAnalyzePrompts,
@@ -528,23 +536,27 @@ def get_prompt_categories():
         from src.prompts.infrastructure.infrastructure_catalog import (
             InfrastructureCatalogPrompts,
         )
+        from src.prompts.infrastructure.infrastructure_metrics import (
+            InfrastructureMetricsPrompts,
+        )
+        from src.prompts.infrastructure.infrastructure_resources import (
+            InfrastructureResourcesPrompts,
+        )
+        from src.prompts.infrastructure.infrastructure_topology import (
+            InfrastructureTopologyPrompts,
+        )
         from src.prompts.maintenance_window.maintenance_window_prompts import (
             MaintenanceWindowPrompts,
         )
         from src.prompts.mobile_app.mobile_app_alert import MobileAppAlertPrompts
         from src.prompts.mobile_app.mobile_app_analyze import MobileAppAnalyzePrompts
         from src.prompts.mobile_app.mobile_app_catalog import MobileAppCatalogPrompts
-        from src.prompts.mobile_app.mobile_app_configuration import (
-            MobileAppConfigurationPrompts,
-        )
-        from src.prompts.settings.custom_dashboard import CustomDashboardPrompts
-        from src.prompts.slo.slo_prompts import SLOPrompts
+        from src.prompts.mobile_app.mobile_app_configuration import MobileAppConfigurationPrompts
+        from src.prompts.releases.releases_prompts import ReleasesPrompts
         from src.prompts.synthetic.synthetic_catalog import SyntheticCatalogPrompts
         from src.prompts.synthetic.synthetic_metrics import SyntheticMetricsPrompts
         from src.prompts.synthetic.synthetic_settings import SyntheticSettingsPrompts
-        from src.prompts.synthetic.synthetic_test_playback_results import (
-            SyntheticTestPlaybackResultsPrompts,
-        )
+        from src.prompts.synthetic.synthetic_test_playback_results import SyntheticTestPlaybackResultsPrompts
         from src.prompts.website.website_alert import WebsiteAlertPrompts
         from src.prompts.website.website_analyze import WebsiteAnalyzePrompts
         from src.prompts.website.website_catalog import WebsiteCatalogPrompts
@@ -552,13 +564,18 @@ def get_prompt_categories():
             WebsiteConfigurationPrompts,
         )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
+        from src.prompts.slo.slo_prompts import SLOPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
 
     # Get prompts from each class (alphabetical by class name)
     alert_channels_prompts = AlertChannelsPrompts.get_prompts()
+    action_catalog_prompts = ActionCatalogPrompts.get_prompts()
+    action_history_prompts = ActionHistoryPrompts.get_prompts()
     app_alerts_prompts = ApplicationAlertsPrompts.get_prompts()
+    app_analyze_prompts = ApplicationAnalyzePrompts.get_prompts()
+    app_catalog_prompts = ApplicationCatalogPrompts.get_prompts()
     app_metrics_prompts = ApplicationMetricsPrompts.get_prompts()
     app_resources_prompts = ApplicationResourcesPrompts.get_prompts()
     app_settings_prompts = ApplicationSettingsPrompts.get_prompts()
@@ -567,12 +584,15 @@ def get_prompt_categories():
     events_prompts = EventsPrompts.get_prompts()
     infra_analyze_prompts = InfrastructureAnalyzePrompts.get_prompts()
     infra_catalog_prompts = InfrastructureCatalogPrompts.get_prompts()
+    infra_metrics_prompts = InfrastructureMetricsPrompts.get_prompts()
+    infra_resources_prompts = InfrastructureResourcesPrompts.get_prompts()
+    infra_topology_prompts = InfrastructureTopologyPrompts.get_prompts()
     maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
     mobile_app_alert_prompts = MobileAppAlertPrompts.get_prompts()
     mobile_app_analyze_prompts = MobileAppAnalyzePrompts.get_prompts()
     mobile_app_catalog_prompts = MobileAppCatalogPrompts.get_prompts()
-    slo_prompts = SLOPrompts.get_prompts()
     mobile_app_configuration_prompts = MobileAppConfigurationPrompts.get_prompts()
+    releases_prompts = ReleasesPrompts.get_prompts()
     synthetic_catalog_prompts: list[Any] = SyntheticCatalogPrompts.get_prompts()
     synthetic_metrics_prompts: list[Any] = SyntheticMetricsPrompts.get_prompts()
     synthetic_settings_prompts: list[Any] = SyntheticSettingsPrompts.get_prompts()
@@ -582,6 +602,7 @@ def get_prompt_categories():
     website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
+    slo_prompts = SLOPrompts.get_prompts()
 
     return {
         "alert_channels": [
@@ -589,10 +610,16 @@ def get_prompt_categories():
         ],
         "app": [
             ("Application Alerts", app_alerts_prompts),
+            ("Application Analyze", app_analyze_prompts),
+            ("Application Catalog", app_catalog_prompts),
             ("Application Metrics", app_metrics_prompts),
             ("Application Resources", app_resources_prompts),
             ("Application Settings", app_settings_prompts),
             ("Application Topology", app_topology_prompts),
+        ],
+        "automation": [
+            ("Action Catalog", action_catalog_prompts),
+            ("Action History", action_history_prompts),
         ],
         "custom_dashboards": [
             ("Custom Dashboard", custom_dashboard_prompts),
@@ -603,6 +630,9 @@ def get_prompt_categories():
         "infra": [
             ("Infrastructure Analyze", infra_analyze_prompts),
             ("Infrastructure Catalog", infra_catalog_prompts),
+            ("Infrastructure Metrics", infra_metrics_prompts),
+            ("Infrastructure Resources", infra_resources_prompts),
+            ("Infrastructure Topology", infra_topology_prompts),
         ],
         "maintenance_windows": [
             ("Maintenance Window", maintenance_window_prompts),
@@ -613,7 +643,10 @@ def get_prompt_categories():
             ("Mobile App Catalog", mobile_app_catalog_prompts),
             ("Mobile App Configuration", mobile_app_configuration_prompts),
         ],
-        "slo": [
+        "releases": [
+            ("Releases", releases_prompts),
+        ],
+         "slo": [
             ("SLO", slo_prompts),
         ],
         "synthetic": [
@@ -672,8 +705,10 @@ def main():
                 if w != -1:
                     _pipe_w[0] = -1
             if w != -1:
-                with suppress(OSError):
+                try:
                     os.close(w)
+                except OSError:
+                    pass
 
         def _handle_sigterm(signum, frame):
             _shutdown_reason[0] = "SIGTERM (Kubernetes asked the pod to stop — rolling restart, scale-down, or node pressure)"
@@ -725,7 +760,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, custom_dashboards, slo, releases, maintenance_windows, synthetic, alert_channels). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools infra, app, events, automation, mobile_app, website, custom_dashboards, slo, releases, maintenance_windows, synthetic, skills, alert_channels). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
         )
         parser.add_argument(
             "--omit-tools",
@@ -812,7 +847,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "automation", "custom_dashboards", "events", "infra", "maintenance_windows", "mobile_app", "releases", "slo", "synthetic", "website"}
+        all_categories = set(_CATEGORY_TO_TOOLS)
 
         # Handle --list-tools option
         if args.list_tools:
@@ -1009,8 +1044,10 @@ def main():
                         except OSError:
                             pass
                         finally:
-                            with suppress(OSError):
+                            try:
                                 os.close(in_fd)
+                            except OSError:
+                                pass
                             # Real stdin EOF → also close write end so anyio exits
                             _close_pipe_write_end()
 
@@ -1043,8 +1080,10 @@ def main():
                 if _fwd is not None:
                     _fwd.join(timeout=0.5)  # give the forwarder time to exit cleanly
                 if r_fd != -1:
-                    with suppress(OSError):
+                    try:
                         os.close(r_fd)
+                    except OSError:
+                        pass
 
     except KeyboardInterrupt:
         sys.exit(0)

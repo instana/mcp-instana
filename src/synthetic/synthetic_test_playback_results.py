@@ -12,28 +12,18 @@ logger = logging.getLogger(__name__)
 
 # Import the necessary classes from the SDK
 try:
-    from instana_client.api.synthetic_test_playback_results_api import (
-        SyntheticTestPlaybackResultsApi,
-    )
+    from instana_client.api.synthetic_test_playback_results_api import SyntheticTestPlaybackResultsApi
     from instana_client.models.get_test_result import GetTestResult
     from instana_client.models.get_test_result_analytic import GetTestResultAnalytic
-    from instana_client.models.get_test_result_base import GetTestResultBase
     from instana_client.models.get_test_result_list import GetTestResultList
+    from instana_client.models.get_test_result_base import GetTestResultBase
     from instana_client.models.get_test_summary_result import GetTestSummaryResult
 except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    parse_payload,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, sdk_call_with_keepalive, with_header_auth, parse_payload
 from src.core.validation import StructureValidator
-
 
 class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
     """Tools for synthetic test playback results in Instana MCP."""
@@ -171,7 +161,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "direction": "DESC"
                         },
                         "timeFrame": {
-                            "to": 0,
                             "windowSize": 144000000
                         }
                     }
@@ -255,7 +244,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "direction": "DESC"
                         },
                         "timeFrame": {
-                            "to": 0,
                             "windowSize": 144000000
                         },
                         "TagFilterExpression": {
@@ -358,7 +346,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "direction": "DESC"
                         },
                         "timeFrame": {
-                            "to": 0,
                             "windowSize": 144000000
                         },
                         "TagFilterExpression": {
@@ -447,7 +434,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 Example:
                     {
                         "timeFrame": {
-                            "to": null,
                             "windowSize": 300000
                         },
                         "pagination": {
@@ -540,7 +526,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "logicalOperator": "AND"
                         },
                         "timeFrame": {
-                            "to": 0,
                             "windowSize": 1800000
                         },
                         "pagination": {
@@ -671,7 +656,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
             testresultid: ID of the specific test result record
             detail_type: Type of the detail file to retrieve. Valid values: "HAR", "IMAGES", "LOGS", "SUBTRANSACTIONS", "VIDEOS"
             name: Name of a specific detail file when multiple files exist for the same
-                type (optional, most relevant when detail_type="LOGS")
+                type (optional, most relevant when detial_type="LOGS")
             start_time: Start timestamp in milliseconds (optional)
             ctx: The MCP context (optional)
 

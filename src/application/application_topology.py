@@ -5,7 +5,7 @@ This module provides application topology-specific MCP tools for Instana monitor
 """
 
 import logging
-from datetime import datetime
+
 from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
@@ -84,8 +84,8 @@ class ApplicationTopologyMCPTools(BaseInstanaClient):
 
     #         # Set default values if not provided
     #         if not to_timestamp:
-    #             to_timestamp = int(datetime.now().timestamp() * 1000)
-
+    #             to_timestamp = utc_now_ms()
+    
     #         if not window_size:
     #             window_size = 3600000  # Default to 1 hour in milliseconds
 

@@ -6,7 +6,6 @@ This module provides infrastructure analysis-specific MCP tools for Instana moni
 
 import json
 import logging
-import sys
 from typing import Any, Dict, List, Optional, Union
 
 # Configure logger for this module (before imports that might fail)
@@ -44,11 +43,6 @@ from src.core.utils import (
 )
 from src.core.validation import StructureValidator
 
-
-# Helper function for debug printing
-def debug_print(*args, **kwargs):
-    """Print debug information to stderr instead of stdout"""
-    print(*args, file=sys.stderr, **kwargs)
 
 class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
     """Tools for infrastructure analysis in Instana MCP."""
@@ -88,8 +82,6 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
         Sample payload:
         {
             "timeFrame": {
-                "from": 1743920395000,
-                "to": 1743923995000,
                 "windowSize": 3600000
             },
             "tagFilterExpression": {
@@ -197,7 +189,6 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                 "value": "custom-metrics.jar"
             },
             "timeFrame": {
-                "to": 1743923995000,
                 "windowSize": 3600000
             },
             "pagination": {
@@ -318,7 +309,6 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
         Sample payload:
         {
             "timeFrame": {
-                "to": 1743923995000,
                 "windowSize": 3600000
             },
             "tagFilterExpression": {
@@ -517,7 +507,6 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
         Sample payload:
         {
             "timeFrame": {
-                "to": 1743923995000,
                 "windowSize": 3600000
             },
             "tagFilterExpression": {

@@ -5,7 +5,6 @@ This module provides website metrics-specific MCP tools for Instana monitoring.
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 # Import the necessary classes from the SDK
@@ -20,13 +19,7 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -135,7 +128,6 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
                         ]
                     },
                     "timeFrame": {
-                        "to": null,
                         "windowSize": 3600000
                     },
                     "type": "PAGELOAD"

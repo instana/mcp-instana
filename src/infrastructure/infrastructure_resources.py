@@ -8,7 +8,6 @@ import ast
 import json
 import logging
 import sys
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 # Import the necessary classes from the SDK
@@ -29,14 +28,8 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.timestamp_utils import utc_now_ms
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -244,7 +237,7 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
             # Set default time range if not provided
             if not to_time:
-                to_time = int(datetime.now().timestamp() * 1000)
+                to_time = utc_now_ms()
 
             if not from_time:
                 from_time = to_time - (60 * 60 * 1000)  # Default to 1 hour
@@ -419,13 +412,11 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             if not snapshot_ids:
                 return {"error": "snapshot_ids parameter is required"}
 
-            to_time = to_time or 1745389956000
+            to_time = to_time or utc_now_ms()
             window_size = window_size or 3600000
             logger.debug(f"Using to_time={to_time}, window_size={window_size}")
 
-            from instana_client.models.get_snapshots_query import (
-                GetSnapshotsQuery,  # type: ignore
-            )
+            from instana_client.models.get_snapshots_query import GetSnapshotsQuery  # type: ignore
             from instana_client.models.time_frame import TimeFrame  # type: ignore
 
             query_obj = GetSnapshotsQuery(
@@ -612,4 +603,3 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error in software_versions: {e}", exc_info=True)
             return {"error": f"Failed to get software versions: {e!s}"}
-

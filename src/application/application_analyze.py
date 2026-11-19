@@ -7,7 +7,6 @@ This module provides application analyze tool functionality for Instana monitori
 import ast
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from fastmcp import Context
@@ -335,7 +334,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         "includeSynthetic": false,
         "pagination": {
             "retrievalSize": 200,
-            "ingestionTime": 1234567890,
+            "ingestionTime": <unix_timestamp_seconds>,
             "offset": 10
         },
         "tagFilterExpression": {

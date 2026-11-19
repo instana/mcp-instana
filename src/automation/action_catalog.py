@@ -20,13 +20,7 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -45,7 +39,7 @@ class ActionCatalogMCPTools(BaseInstanaClient):
         """
         Parse and validate the raw payload for get_action_matches.
 
-        Returns the parsed dictionary on success, or a one-element tuple containing an elicitation dictionary on failure.
+        Returns the parsed dictionary on success or a one-element tuple containing an elicitation dictionary on failure.
         so callers can distinguish a parse error from a valid empty dict.
         """
         if not payload:
@@ -517,7 +511,7 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             elif to < 1_000_000_000_000 or to > 9_999_999_999_999:
                 errors.append(
                     f"to: {to} is not a valid 13-digit millisecond timestamp. "
-                    "Example: 1710658800000"
+                    "Example: <unix_timestamp_milliseconds>"
                 )
 
         if window_size is not None:
@@ -620,7 +614,7 @@ class ActionCatalogMCPTools(BaseInstanaClient):
             application_id="app-123", window_size=3600000
 
             # Get actions matching a snapshot at specific time
-            snapshot_id="snap-456", to=1234567890000, window_size=600000
+            snapshot_id="snap-456", to=<unix_timestamp_milliseconds>, window_size=600000
         """
         try:
             logger.debug(f"[get_action_matches_by_id_and_time_window] Called with application_id={application_id}, snapshot_id={snapshot_id}, to={to}, window_size={window_size}")

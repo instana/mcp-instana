@@ -8,12 +8,12 @@ import json
 import logging
 import sys
 import traceback
-from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 
 from src.core.catalog_cache import ttl_cached
+from src.core.timestamp_utils import utc_now_ms
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -35,6 +35,10 @@ except ImportError as e:
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
+
+# Tag catalog lookback used when the caller does not supply var_from (1 hour)
+DEFAULT_TAG_CATALOG_WINDOW_MS = 3_600_000
+
 
 class ApplicationCatalogMCPTools(BaseInstanaClient):
     """Tools for application catalog in Instana MCP."""
@@ -70,8 +74,9 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"get_application_tag_catalog called with use_case={use_case}, data_source={data_source}, var_from={var_from}")
 
+            # None and 0 both mean "not supplied": 0 would be 1970-01-01, so use the default lookback.
             if not var_from:
-                var_from = int((datetime.now() - timedelta(hours=1)).timestamp() * 1000)
+                var_from = utc_now_ms() - DEFAULT_TAG_CATALOG_WINDOW_MS
 
             raw_response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_application_tag_catalog_without_preload_content, use_case=use_case, data_source=data_source, var_from=var_from), ctx=ctx, operation_name="get_application_tag_catalog_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 

@@ -10,7 +10,6 @@ import functools
 import json
 import logging
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import anyio
@@ -27,14 +26,13 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    stream_filter_events,
-    with_header_auth,
+from src.core.timestamp_utils import (
+    build_time_params,
+    convert_time_range_to_window_size,
+    epoch_ms_to_utc,
+    utc_now_ms,
 )
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, stream_filter_events, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -99,41 +97,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 "to_time": Y     # For display
             }
         """
-        api_params: Dict[str, Any] = {}
-
-        if from_time is not None or to_time is not None:
-            # Use explicit timestamps
-            from_time, to_time = self._process_time_range(time_range, from_time, to_time)
-            api_params[API_PARAM_FROM] = from_time
-            api_params[API_PARAM_TO] = to_time
-            logger.debug(
-                f"[_build_time_params] Using explicit timestamps - "
-                f"from_time: {from_time}, to_time: {to_time}"
-            )
-        elif time_range:
-            # Convert time_range to window_size
-            window_size_param = self._convert_time_range_to_window_size(time_range)
-            api_params[API_PARAM_WINDOW_SIZE] = window_size_param
-            logger.debug(
-                f"[_build_time_params] Using window_size from time_range '{time_range}' - "
-                f"window_size: {window_size_param}ms ({window_size_param/MS_PER_MINUTE:.1f} minutes)"
-            )
-            # For display purposes, calculate from/to times
-            current_time_ms = int(datetime.now().timestamp() * 1000)
-            to_time = current_time_ms
-            from_time = current_time_ms - window_size_param
-        else:
-            # No time parameters provided, use defaults
-            logger.debug(f"[_build_time_params] No time parameters provided, using default {DEFAULT_TIME_WINDOW_MINUTES} minutes")
-            from_time, to_time = self._process_time_range(None, None, None)
-            api_params[API_PARAM_FROM] = from_time
-            api_params[API_PARAM_TO] = to_time
-
-        return {
-            "api_params": api_params,
-            "from_time": from_time,
-            "to_time": to_time
-        }
+        return build_time_params(
+            time_range=time_range,
+            from_time=from_time,
+            to_time=to_time,
+            now_ms=utc_now_ms(),
+        )
 
     def _convert_time_range_to_window_size(self, time_range: str) -> Optional[int]:
         """
@@ -147,69 +116,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         """
         if not time_range:
             return None
-
-        time_range_lower = time_range.lower().strip()
-        logger.debug(f"[_convert_time_range_to_window_size] Converting time range: '{time_range}'")
-
-        # Extract minutes
-        if "minute" in time_range_lower:
-            minute_match = re.search(r'(\d+)\s?minute', time_range_lower)  # NOSONAR - \s? is safe, matches 0-1 whitespace
-            if minute_match:
-                minutes = int(minute_match.group(1))
-                window_size = minutes * MS_PER_MINUTE
-                logger.debug(f"[_convert_time_range_to_window_size] Parsed {minutes} minutes = {window_size}ms")
-                return window_size
-
-        # Extract hours
-        elif "hour" in time_range_lower:
-            hour_match = re.search(r'(\d+)\s?hour', time_range_lower)  # NOSONAR - \s? is safe, matches 0-1 whitespace
-            if hour_match:
-                hours = int(hour_match.group(1))
-                window_size = hours * MS_PER_HOUR
-                logger.debug(f"[_convert_time_range_to_window_size] Parsed {hours} hours = {window_size}ms")
-                return window_size
-            elif time_range_lower in ["last few hours", "last hours", "few hours"]:
-                window_size = DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
-                logger.debug(f"[_convert_time_range_to_window_size] Using default {DEFAULT_TIME_WINDOW_MINUTES} minutes = {window_size}ms")
-                return window_size
-
-        # Extract days
-        elif "day" in time_range_lower:
-            day_match = re.search(r'(\d+)\s?day', time_range_lower)  # NOSONAR - \s? is safe, matches 0-1 whitespace
-            if day_match:
-                days = int(day_match.group(1))
-                window_size = days * MS_PER_DAY
-                logger.debug(f"[_convert_time_range_to_window_size] Parsed {days} days = {window_size}ms")
-                return window_size
-
-        # Extract weeks
-        elif "week" in time_range_lower:
-            week_match = re.search(r'(\d+)\s?week', time_range_lower)  # NOSONAR - \s? is safe, matches 0-1 whitespace
-            if week_match:
-                weeks = int(week_match.group(1))
-                window_size = weeks * MS_PER_WEEK
-                logger.debug(f"[_convert_time_range_to_window_size] Parsed {weeks} weeks = {window_size}ms")
-                return window_size
-
-        # Extract months
-        elif "month" in time_range_lower:
-            month_match = re.search(r'(\d+)\s?month', time_range_lower)  # NOSONAR - \s? is safe, matches 0-1 whitespace
-            if month_match:
-                months = int(month_match.group(1))
-                window_size = months * MS_PER_MONTH
-                logger.debug(f"[_convert_time_range_to_window_size] Parsed {months} months = {window_size}ms")
-                return window_size
-
-        # Default to 10 minutes
-        window_size = DEFAULT_TIME_WINDOW_MINUTES * MS_PER_MINUTE
-        logger.debug(f"[_convert_time_range_to_window_size] No match found, using default {DEFAULT_TIME_WINDOW_MINUTES} minutes = {window_size}ms")
-        return window_size
+        return convert_time_range_to_window_size(time_range)
 
     def _process_time_range(self, time_range=None, from_time=None, to_time=None):
         """
         Process time range parameters to get standardized from_time and to_time values.
 
-        DEPRECATED: This method is retained for backward compatibility and should be replaced
+        Deprecated: This method is retained for backward compatibility and should be replaced
         with _convert_time_range_to_window_size for API calls.
 
         Args:
@@ -221,7 +134,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             Tuple of (from_time, to_time) in milliseconds
         """
         # Current time in milliseconds
-        current_time_ms = int(datetime.now().timestamp() * 1000)
+        current_time_ms = utc_now_ms()
 
         # Process natural language time range if provided
         if time_range:
@@ -290,7 +203,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
     def _calculate_age(self, start_ms: int) -> str:
         """Calculate human-readable age from start timestamp to now."""
-        current_time_ms = int(datetime.now().timestamp() * 1000)
+        current_time_ms = utc_now_ms()
         age_ms = current_time_ms - start_ms
         age_seconds = age_ms / 1000
 
@@ -413,9 +326,6 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         state = event.get("state", "")
         problem = event.get("problem", "")
 
-        # Check if this is an agent monitoring event (always has "Monitoring issue:" prefix)
-        is_agent_monitoring = problem.startswith("Monitoring issue:")
-
         # Base optimized structure with age
         optimized = {
             "eventId": event.get("eventId"),
@@ -433,11 +343,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         # Add severity and duration only for incidents and issues
         if event_type in ["incident", "issue"]:
             optimized["end"] = end
-
-            # For agent monitoring events, severity is always 5, so we can omit it
-            # For other events, include severity
-            if not is_agent_monitoring:
-                optimized["severity"] = event.get("severity")
+            optimized["severity"] = event.get("severity")
 
             # Add duration
             if start and end:
@@ -456,25 +362,20 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             entity_label = event.get("entityLabel") or "Unknown"
             entity_type = event.get("entityType")
 
-            # For agent monitoring events, entityType is always "INFRASTRUCTURE" and entityName is always "Process"
-            # So we can simplify to just the label
-            if is_agent_monitoring:
-                optimized["entity"] = entity_label
-            else:
-                optimized["entity"] = {
-                    "type": entity_type,
-                    "label": entity_label,
-                }
+            optimized["entity"] = {
+                "type": entity_type,
+                "label": entity_label,
+            }
 
-                # Add entity-specific IDs if present (only for non-agent-monitoring events)
-                if event.get("serviceId"):
-                    optimized["entity"]["serviceId"] = event.get("serviceId")
-                if event.get("applicationId"):
-                    optimized["entity"]["applicationId"] = event.get("applicationId")
-                if event.get("endpointId"):
-                    optimized["entity"]["endpointId"] = event.get("endpointId")
-                if event.get("mobileAppId"):
-                    optimized["entity"]["mobileAppId"] = event.get("mobileAppId")
+            # Add entity-specific IDs if present
+            if event.get("serviceId"):
+                optimized["entity"]["serviceId"] = event.get("serviceId")
+            if event.get("applicationId"):
+                optimized["entity"]["applicationId"] = event.get("applicationId")
+            if event.get("endpointId"):
+                optimized["entity"]["endpointId"] = event.get("endpointId")
+            if event.get("mobileAppId"):
+                optimized["entity"]["mobileAppId"] = event.get("mobileAppId")
 
             # Simplify metrics to just names (skip if empty, which is common for agent monitoring).
             # The API may return metrics as plain strings or as {"metricName": ...} dicts.
@@ -563,7 +464,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
     @with_header_auth(EventsApi)
     async def get_event(self, event_id: str, ctx=None, api_client=None,
-                        resource_type: Optional[str] = None,
+                        resource_type: Optional[str] = None, 
                         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get a specific event by ID.
@@ -653,6 +554,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                                          to_time: Optional[int] = None,
                                          time_range: Optional[str] = None,
                                          max_events: Optional[int] = 50,
+                                         entity_label: Optional[str] = None,
                                          ctx=None, api_client=None,
                                          resource_type: Optional[str] = None,
                                          tool_name: Optional[str] = None) -> Dict[str, Any]:
@@ -667,11 +569,17 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         Get Kubernetes events from the last 24 hours:
            - time_range: "last 24 hours"
 
+        Get Kubernetes events scoped to a specific service or namespace:
+           - entity_label: "payment-service"
+
         Args:
             from_time: Start timestamp in milliseconds since epoch (optional)
             to_time: End timestamp in milliseconds since epoch (optional)
             time_range: Natural language time range like "last 24 hours", "last 2 days", "last week" (optional)
             max_events: Maximum number of events to process (default: 50)
+            entity_label: Filter events by entity label — case-insensitive substring match against the
+                event's entityLabel field (optional). Use a service name, namespace, or pod label to
+                scope results. Applied after the API call; unmatched events are excluded from analysis.
             ctx: The MCP context (optional)
             api_client: API client for testing (optional)
 
@@ -681,7 +589,8 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         try:
             logger.debug(
                 f"[get_kubernetes_info_events] Called with time_range: {time_range}, "
-                f"from_time: {from_time}, to_time: {to_time}, max_events: {max_events}"
+                f"from_time: {from_time}, to_time: {to_time}, max_events: {max_events}, "
+                f"entity_label: {entity_label!r}"
             )
 
             # Build time parameters
@@ -689,8 +598,8 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             from_time = time_params["from_time"]
             to_time = time_params["to_time"]
 
-            from_date = datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')
-            to_date = datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')
+            from_date = epoch_ms_to_utc(from_time).strftime('%Y-%m-%d %H:%M:%S UTC')
+            to_date = epoch_ms_to_utc(to_time).strftime('%Y-%m-%d %H:%M:%S UTC')
 
             logger.debug(
                 f"[get_kubernetes_info_events] Time range: {from_date} to {to_date}, "
@@ -727,24 +636,53 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
             events = result if isinstance(result, list) else ([result] if result else [])
             total_events_count = len(events)
-            events = events[:max_events]
 
-            logger.debug(
-                f"[get_kubernetes_info_events] Processing {len(events)} events "
-                f"(total available: {total_events_count}, max_events: {max_events})"
-            )
+            # Convert to dicts first so entity filtering operates on plain dicts
             event_dicts = []
             for event in events:
                 if hasattr(event, 'to_dict'):
                     event_dicts.append(event.to_dict())
                 else:
                     event_dicts.append(event)
+
+            # Apply entity_label filter before the max_events cap so in-scope events
+            # are not silently discarded by the cap ahead of filtering
+            events_filtered_out = 0
+            if entity_label:
+                pre_filter_count = len(event_dicts)
+                event_dicts = [e for e in event_dicts if self._matches_entity_label(e, entity_label)]
+                events_filtered_out = pre_filter_count - len(event_dicts)
+                logger.debug(
+                    f"[get_kubernetes_info_events] entity_label filter {entity_label!r}: "
+                    f"kept {len(event_dicts)}, dropped {events_filtered_out}"
+                )
+
+            # Apply max_events cap after filtering
+            event_dicts = event_dicts[:max_events]
+
+            logger.debug(
+                f"[get_kubernetes_info_events] Processing {len(event_dicts)} events "
+                f"(total available: {total_events_count}, after filter: {total_events_count - events_filtered_out}, "
+                f"max_events: {max_events})"
+            )
+
             if not event_dicts:
+                message = f"No Kubernetes events found between {from_date} and {to_date}."
+                if events_filtered_out:
+                    message += (
+                        f" {events_filtered_out} of {total_events_count} events were excluded "
+                        f"by the entity_label filter {entity_label!r}."
+                    )
                 return {
-                    "events": [],
-                    "events_count": 0,
+                    "summary": f"Analysis based on 0 of {total_events_count} Kubernetes events between {from_date} and {to_date}.",
                     "time_range": f"{from_date} to {to_date}",
-                    "analysis": f"No Kubernetes events found between {from_date} and {to_date}."
+                    "events_count": total_events_count,
+                    "events_analyzed": 0,
+                    "events_filtered_out": events_filtered_out,
+                    "problem_analyses": [],
+                    "markdown_summary": f"# Kubernetes Events Analysis\n\n{message}\n",
+                    "events": [],
+                    "analysis": message,
                 }
             problem_groups = {}
             for event in event_dicts:
@@ -759,22 +697,22 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                         "sample_events": []
                     }
                 problem_groups[problem]["count"] += 1
-                entity_label = event.get("entityLabel", "")
-                if "/" in entity_label:
-                    namespace, entity = entity_label.split("/", 1)
+                event_entity_label = event.get("entityLabel") or ""
+                if "/" in event_entity_label:
+                    namespace, entity = event_entity_label.split("/", 1)
                     problem_groups[problem]["affected_namespaces"].add(namespace)
                     problem_groups[problem]["affected_entities"].add(entity)
-                detail = event.get("detail", "")
+                detail = event.get("detail") or ""
                 if detail:
                     problem_groups[problem]["details"].add(detail)
-                fix_suggestion = event.get("fixSuggestion", "")
+                fix_suggestion = event.get("fixSuggestion") or ""
                 if fix_suggestion:
                     problem_groups[problem]["fix_suggestions"].add(fix_suggestion)
                 if len(problem_groups[problem]["sample_events"]) < 3:
                     simple_event = {
                         "eventId": event.get("eventId", ""),
                         "start": event.get("start", 0),
-                        "entityLabel": event.get("entityLabel", ""),
+                        "entityLabel": event.get("entityLabel") or "",
                         "detail": detail
                     }
                     problem_groups[problem]["sample_events"].append(simple_event)
@@ -791,14 +729,15 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 }
                 problem_analyses.append(problem_analysis)
             analysis_result = {
-                "summary": f"Analysis based on {len(events)} of {total_events_count} Kubernetes events between {from_date} and {to_date}.",
+                "summary": f"Analysis based on {len(event_dicts)} of {total_events_count} Kubernetes events between {from_date} and {to_date}.",
                 "time_range": f"{from_date} to {to_date}",
                 "events_count": total_events_count,
-                "events_analyzed": len(events),
+                "events_analyzed": len(event_dicts),
+                "events_filtered_out": events_filtered_out,
                 "problem_analyses": problem_analyses[:10]
             }
             markdown_summary = "# Kubernetes Events Analysis\n\n"
-            markdown_summary += f"Analysis based on {len(events)} of {total_events_count} Kubernetes events between {from_date} and {to_date}.\n\n"
+            markdown_summary += f"Analysis based on {len(event_dicts)} of {total_events_count} Kubernetes events between {from_date} and {to_date}.\n\n"
             markdown_summary += "## Top Problems\n\n"
             for problem_analysis in problem_analyses[:5]:
                 problem_name = problem_analysis["problem"]
@@ -867,8 +806,8 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
             from_time = time_params["from_time"]
             to_time = time_params["to_time"]
 
-            from_date = datetime.fromtimestamp(from_time/1000).strftime('%Y-%m-%d %H:%M:%S')
-            to_date = datetime.fromtimestamp(to_time/1000).strftime('%Y-%m-%d %H:%M:%S')
+            from_date = epoch_ms_to_utc(from_time).strftime('%Y-%m-%d %H:%M:%S UTC')
+            to_date = epoch_ms_to_utc(to_time).strftime('%Y-%m-%d %H:%M:%S UTC')
 
             try:
                 result = await sdk_call_with_keepalive(
@@ -1050,7 +989,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
             # Stream-parse the response one object at a time, applying post-API
             # filters per object and discarding non-matching items immediately.
-            # Peak memory is O(chunk_size + max_events x avg_item_size) rather
+            # Peak memory is O(chunk_size + max_events × avg_item_size) rather
             # than O(full_response_body).
             #
             # The work is CPU-bound synchronous I/O (urllib3 .read calls +
@@ -1153,7 +1092,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 + "\n".join(f"  - {e}" for e in errors)
             ),
         }
-
+    
     def _has_active_filters(self, f):
         """Return True if any post-API filter is active."""
         return any([
@@ -1192,17 +1131,17 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
 
     def _matches_entity_type(self, event, entity_type):
         """Check if event matches entity type filter."""
-        return event.get("entityType", "").lower() == entity_type.lower()
+        return (event.get("entityType") or "").lower() == entity_type.lower()
 
     def _matches_state(self, event, state):
         """Check if event matches state filter."""
-        return event.get("state", "").lower() == state.lower()
+        return (event.get("state") or "").lower() == state.lower()
 
     def _matches_problem(self, event, problem):
         """Check if event matches problem filter."""
         p = problem.lower()
-        return (p in event.get("problem", "").lower() or
-                p in event.get("detail", "").lower())
+        return (p in (event.get("problem") or "").lower() or
+                p in (event.get("detail") or "").lower())
 
     def _matches_severity(self, event, severity):
         """Check if event matches severity filter."""
@@ -1213,12 +1152,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
     def _matches_entity_name(self, event, entity_name):
         """Check if event matches entity name filter (category/type)."""
         n = entity_name.lower()
-        return n in event.get("entityName", "").lower()
+        return n in (event.get("entityName") or "").lower()
 
     def _matches_entity_label(self, event, entity_label):
         """Check if event matches entity label filter (specific instance identifier)."""
         label = entity_label.lower()
-        return label in event.get("entityLabel", "").lower()
+        return label in (event.get("entityLabel") or "").lower()
 
     def _matches_event_specification_id(self, event, event_specification_id):
         """Check if event matches event specification ID filter."""
@@ -1253,7 +1192,7 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
         self,
         event_ids: list[str] | str,
         ctx=None, api_client=None,
-        resource_type: Optional[str] = None,
+        resource_type: Optional[str] = None, 
         tool_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get events by their IDs.

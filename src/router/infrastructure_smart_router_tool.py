@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
+from src.core.timestamp_utils import check_time_order, convert_datetime_param, convert_nested_datetime_param
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -63,18 +64,10 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
-        from src.infrastructure.infrastructure_alert_config import (
-            InfrastructureAlertConfigMCPTools,
-        )
-        from src.infrastructure.infrastructure_analyze import (
-            InfrastructureAnalyzeMCPTools,
-        )
-        from src.infrastructure.infrastructure_catalog import (
-            InfrastructureCatalogMCPTools,
-        )
-        from src.infrastructure.infrastructure_resources import (
-            InfrastructureResourcesMCPTools,
-        )
+        from src.infrastructure.infrastructure_alert_config import InfrastructureAlertConfigMCPTools
+        from src.infrastructure.infrastructure_analyze import InfrastructureAnalyzeMCPTools
+        from src.infrastructure.infrastructure_catalog import InfrastructureCatalogMCPTools
+        from src.infrastructure.infrastructure_resources import InfrastructureResourcesMCPTools
 
         # Initialize the infrastructure clients
         self.infrastructure_analyze_client = InfrastructureAnalyzeMCPTools(read_token, base_url)
@@ -89,8 +82,10 @@ class InfrastructureSmartRouterMCPTool(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana infrastructure resource manager for comprehensive infrastructure monitoring.
 
-Also the home for aggregated LLM/GenAI entity metrics (token usage, cost, throughput,
-GenAI app listings). Percentile latency (P95/P99) and trace/span data → manage_applications.
+Also the home for gen AI service(s) and aggregated LLM/GenAI entity metrics: LLM call count,
+input/output token usage, cost by model, throughput, and GenAI app/service listings. LLM calls
+are oTelLLM entity metrics, not application `calls`. Percentile latency (P95/P99) and
+trace/span data → manage_applications.
 Use plugin="oTelLLM" for catalog/resources and type="oTelLLM" in analyze payloads.
 Agent names vary. A filter on the `label` tag can match the entity but return NO metric
 values (empty `metrics`); that is not zero usage. Match by `label` in the results of an
@@ -106,21 +101,21 @@ RECOMMENDED WORKFLOW FOR ANALYZE:
     1. FIRST: Call get_plugins to discover available entity types
        - Returns list of plugins with their IDs - these IDs are required for subsequent calls
        - Example: [{"id": "plugin_name1", ...}, {"id": "plugin_name2", ...}]
-
+    
     2. SECOND: Call get_plugin_schema with a VALID plugin ID from step 1
        - Combines get_metrics + get_tag_catalog into ONE efficient call
        - IMPORTANT: Plugin ID must be from get_plugins - invalid IDs return HTTP 400
        - Returns: {"metrics": ["memory.usage", ...], "tags": ["tag.name", ...]}
        - tagFilterExpression is REQUIRED by the Instana API — omitting it causes HTTP 422. Always provide one; use an empty EXPRESSION to match all entities
-
+    
     3. THIRD: Use the discovered entity types, metrics, and tags in analyze operations
        - Build queries with proper type, metrics, and tagFilterExpression
        - The router auto-normalizes tagFilterExpression format to prevent HTTP 422 errors
-
+    
 ANALYZE (resource_type="analyze"):
     operations: get_entities, get_entity_groups
     params: {payload}
-
+    
     IMPORTANT AUTO-ROUTING: The router automatically detects the correct endpoint based on payload:
     - If payload contains "groupBy" → automatically routes to get_entity_groups endpoint
     - If payload does NOT contain "groupBy" → automatically routes to get_entities endpoint
@@ -137,7 +132,7 @@ ANALYZE (resource_type="analyze"):
             - aggregation (required): Aggregation type (MAX, MEAN, MIN, SUM)
         - timeFrame (required): Time range for query
             - windowSize (required): Duration in milliseconds (e.g., 3600000 for 1 hour)
-            - to (optional): End timestamp in milliseconds (default: now)
+            - to (optional): End timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules. (default: now)
         - tagFilterExpression (REQUIRED): Filter expression for entities — API returns HTTP 422 if omitted. Use {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []} to match all entities
             - type: "TAG_FILTER" for single filter, "EXPRESSION" for multiple
             - entity: "NOT_APPLICABLE" (required for TAG_FILTER)
@@ -163,7 +158,7 @@ CATALOG (resource_type="catalog"):
     get_plugins - Get all available entity types (plugins) in your Instana installation
         Returns: List of plugin IDs that can be used as entity types
         This is the FIRST step - discover what entity types are available in your environment
-
+    
     get_plugin_schema - Get complete schema (metrics + tags) for a plugin in ONE call (RECOMMENDED)
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - filter (optional): "builtin" or "custom" to filter metric types
@@ -175,13 +170,13 @@ CATALOG (resource_type="catalog"):
             "summary": {"total_metrics": 50, "total_tags": 25}
         }
         This COMBINES get_metrics and get_tag_catalog into a single call
-
+    
     get_metrics - Get infrastructure metrics catalog for a specific plugin
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - filter (optional): "builtin" or "custom" to filter metric types
         Returns: List of metric names available for the plugin
         Use returned metric names exactly in analyze operations
-
+    
     get_tag_catalog - Get valid tag names for a specific plugin
         - plugin (required): Plugin ID from get_plugins (e.g., "host", "kubernetesPod", "oTelLLM")
         Returns: Available tag names for filtering and grouping
@@ -190,18 +185,18 @@ CATALOG (resource_type="catalog"):
 RESOURCES (resource_type="resources"):
     operations: get_snapshot, get_snapshots
     params: {snapshot_id, to_time, window_size, query, from_time, size, plugin, offline, detailed}
-
+    
     get_snapshot - Get detailed information for a specific snapshot ID
         - snapshot_id (required): The snapshot ID to retrieve details for
-        - to_time (optional): End timestamp in milliseconds
+        - to_time (optional): End timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules.
         - window_size (optional): Window size in milliseconds
         Returns: Complete snapshot details including configuration, metrics, and state
         Use this when you have a specific snapshot ID and need its full details
-
+    
     get_snapshots - Search and discover multiple snapshots matching criteria
         - query (optional): Search query string to filter snapshots
-        - from_time (optional): Start timestamp in milliseconds (default: 1 hour ago)
-        - to_time (optional): End timestamp in milliseconds (default: now)
+        - from_time (optional): Start timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules. (default: 1 hour ago)
+        - to_time (optional): End timestamp — milliseconds OR datetime string — see "Time parameters" section below for format rules. (default: now)
         - size (optional): Maximum number of results to return (default: 100)
         - plugin (optional): Entity type to filter by (e.g., "host", "jvmRuntimePlatform", "oTelLLM")
         - offline (optional): Include offline snapshots (default: false)
@@ -249,19 +244,9 @@ ALERT_CONFIG (resource_type="alert_config"):
             OPTIONAL fields:
               severity (int): 5 (Warning) or 10 (Critical)
               evaluationType (string): "PER_ENTITY" or "CUSTOM"
-              rule (dict): Single alert rule — shape:
-                  alertType (string): "genericRule"
-                  metricName (string): Metric name from get_metrics (e.g. "cpu.used")
-                  entityType (string): Plugin ID from get_plugins (e.g. "host")
-                  aggregation (string): "MEAN", "MAX", "MIN", or "SUM"
-                  crossSeriesAggregation (string): Same values as aggregation
-                  NOTE: metricGroupBy is auto-defaulted to [] — you may omit it
-              rules (list): Multiple rules (up to 5) — each entry shape:
-                  thresholdOperator (string): e.g. ">="
-                  rule (dict): Same shape as the top-level rule dict above
-                  thresholds (dict): e.g. {"WARNING": {"type": "staticThreshold", "value": 0.8}}
-                  NOTE: rule.metricGroupBy is auto-defaulted to [] in every entry
-              threshold (dict): Threshold for single-rule configs — e.g. {"type": "staticThreshold", "operator": ">=", "value": 0.8}
+              rule (dict): Single alert rule with metric and threshold
+              rules (list): Multiple rules (up to 5), each with thresholds per severity
+              threshold (dict): Threshold definition (for single-rule configs)
               triggering (bool): Whether to also trigger an Incident
               alertChannelIds (list): Alert channel IDs (defaults to [])
               customPayloadFields (list): Extra notification fields (defaults to [])
@@ -287,6 +272,13 @@ ALERT_CONFIG (resource_type="alert_config"):
         - id (required): The configuration ID
         - created (required): Unix timestamp (ms) of the version to restore (from find_versions)
 
+Time parameters:
+    - Relative window (preferred): pass only timeFrame {"windowSize": <milliseconds>} and omit "to"; the server uses the current time.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
+
 Args:
     resource_type: "analyze", "catalog", "resources", or "alert_config"
     operation: Specific operation for the resource type
@@ -302,22 +294,22 @@ Examples:
     resource_type="catalog", operation="get_metrics", params={"plugin": "jvmRuntimePlatform", "filter": "builtin"}
     resource_type="catalog", operation="get_tag_catalog", params={"plugin": "host"}
     resource_type="analyze", operation="get_entities", params={"payload": {"type": "host", "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}}}
-    resource_type="analyze", operation="get_entities", params={"payload": {"type": "jvmRuntimePlatform", "metrics": [{"metric": "memory.used", "granularity": 3600000, "aggregation": "MAX"}, {"metric": "threads.blocked", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"to": 1743923995000, "windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "EQUALS", "value": "server1"}, "pagination": {"retrievalSize": 200}}}
+    resource_type="analyze", operation="get_entities", params={"payload": {"type": "jvmRuntimePlatform", "metrics": [{"metric": "memory.used", "granularity": 3600000, "aggregation": "MAX"}, {"metric": "threads.blocked", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "EQUALS", "value": "server1"}, "pagination": {"retrievalSize": 200}}}
     resource_type="analyze", operation="get_entity_groups", params={"payload": {"type": "host", "groupBy": ["host.name"], "metrics": [{"metric": "cpu.used", "granularity": 3600000, "aggregation": "MEAN"}], "timeFrame": {"windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "entity": "NOT_APPLICABLE", "name": "host.name", "operator": "CONTAINS", "value": "prod"}, "pagination": {"retrievalSize": 20}}}
     resource_type="resources", operation="get_snapshot", params={"snapshot_id": "abc123xyz"}
     resource_type="resources", operation="get_snapshots", params={"plugin": "host", "size": 50}
-    resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": 1617994800000, "to_time": 1618081200000, "detailed": true}
+    resource_type="resources", operation="get_snapshots", params={"query": "high cpu", "from_time": <unix_timestamp_milliseconds>, "to_time": <unix_timestamp_milliseconds>, "detailed": true}
     resource_type="alert_config", operation="find_active"
     resource_type="alert_config", operation="find_active", params={"alert_ids": ["H5PW_lINTV6yGN8ad5jG49", "pkPW_lINTV6yGN8ad8jG49"]}
     resource_type="alert_config", operation="find_active", params={"page": 2, "page_size": 25}
     resource_type="alert_config", operation="find", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="find_versions", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
-    resource_type="alert_config", operation="create", params={"payload": {"name": "High CPU Alert", "description": "CPU exceeded threshold", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}, "severity": 10, "rule": {"alertType": "genericRule", "metricName": "cpu.used", "entityType": "host", "aggregation": "MEAN", "crossSeriesAggregation": "MEAN"}, "threshold": {"type": "staticThreshold", "operator": ">=", "value": 0.9}}}
+    resource_type="alert_config", operation="create", params={"payload": {"name": "High CPU Alert", "description": "CPU exceeded threshold", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}, "severity": 10}}
     resource_type="alert_config", operation="update", params={"id": "H5PW_lINTV6yGN8ad5jG49", "payload": {"name": "Updated Alert", "description": "Updated", "granularity": 600000, "groupBy": [], "tagFilterExpression": {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}, "timeThreshold": {"type": "violationsInSequence", "timeWindow": 600000}}}
     resource_type="alert_config", operation="delete", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="enable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
     resource_type="alert_config", operation="disable", params={"id": "H5PW_lINTV6yGN8ad5jG49"}
-    resource_type="alert_config", operation="restore", params={"id": "H5PW_lINTV6yGN8ad5jG49", "created": 1710658800000}
+    resource_type="alert_config", operation="restore", params={"id": "H5PW_lINTV6yGN8ad5jG49", "created": <unix_timestamp_milliseconds>}
 
     # GENAI / LLM examples —
     # "For recommendation-agent, shipping-agent, and payment-agent — total tokens and max response duration in last 24h"
@@ -435,11 +427,23 @@ Examples:
                 "message": "Missing required parameter 'payload'. Call get_plugins first to discover entity types."
             }
 
+        # Convert datetime string in payload.timeFrame.to to a Unix ms timestamp if needed
+        if isinstance(payload, dict):
+            conversion_result = convert_nested_datetime_param(payload, "timeFrame", "to")
+            if "error" in conversion_result:
+                return {
+                    "elicitation_needed": True,
+                    "reason": "invalid_time_params",
+                    "api_error": [{"field": "payload.timeFrame.to", "issue": conversion_result["error"]}],
+                    "message": conversion_result["error"],
+                }
+            payload = conversion_result["params"]
+
         # Auto-detect the correct operation based on payload content
         # If groupBy is present, use get_entity_groups, otherwise use get_entities
         has_group_by = bool(payload.get("groupBy"))
         actual_operation = "get_entity_groups" if has_group_by else "get_entities"
-
+        
         # Warn if user specified wrong operation
         if operation != actual_operation:
             logger.warning(
@@ -571,7 +575,7 @@ Examples:
         elif operation == "get_metrics":
             plugin = params.get(PARAM_PLUGIN)
             filter_type = params.get(PARAM_FILTER)
-
+            
             if not plugin:
                 return {
                     "elicitation_needed": True,
@@ -585,7 +589,7 @@ Examples:
                     ],
                     "message": f"Missing required parameter 'plugin' for get_metrics. {HINT_GET_PLUGINS_FIRST}"
                 }
-
+            
             logger.debug(f"Routing to Infrastructure Catalog Metrics | plugin={plugin}, filter={filter_type}")
             result = await self.infrastructure_catalog_client.get_infrastructure_catalog_metrics(
                 plugin=plugin,
@@ -595,7 +599,7 @@ Examples:
 
         elif operation == "get_tag_catalog":
             plugin = params.get(PARAM_PLUGIN)
-
+            
             if not plugin:
                 return {
                     "elicitation_needed": True,
@@ -609,7 +613,7 @@ Examples:
                     ],
                     "message": f"Missing required parameter 'plugin' for get_tag_catalog. {HINT_GET_PLUGINS_FIRST}"
                 }
-
+            
             logger.debug(f"Routing to Infrastructure Tag Catalog | plugin={plugin}")
             result = await self.infrastructure_catalog_client.get_tag_catalog(
                 plugin=plugin,
@@ -619,7 +623,7 @@ Examples:
         elif operation == "get_plugin_schema":
             plugin = params.get(PARAM_PLUGIN)
             filter_type = params.get(PARAM_FILTER)
-
+            
             if not plugin:
                 return {
                     "elicitation_needed": True,
@@ -633,7 +637,7 @@ Examples:
                     ],
                     "message": f"Missing required parameter 'plugin' for get_plugin_schema. {HINT_GET_PLUGINS_FIRST}"
                 }
-
+            
             logger.debug(f"Routing to Infrastructure Plugin Schema | plugin={plugin}, filter={filter_type}")
             result = await self.infrastructure_catalog_client.get_plugin_schema(
                 plugin=plugin,
@@ -677,7 +681,7 @@ Examples:
             snapshot_id = params.get(PARAM_SNAPSHOT_ID)
             to_time = params.get(PARAM_TO_TIME)
             window_size = params.get(PARAM_WINDOW_SIZE)
-
+            
             if not snapshot_id:
                 return {
                     "elicitation_needed": True,
@@ -691,6 +695,14 @@ Examples:
                     ],
                     "message": "Missing required parameter 'snapshot_id' for get_snapshot. Use get_snapshots to discover available IDs."
                 }
+
+            # Convert datetime string to timestamp if needed
+            to_time_result = convert_datetime_param(to_time, "to_time")
+            if "error" in to_time_result:
+                return {"elicitation_needed": True, "reason": "invalid_time_params",
+                        "api_error": [{"field": "to_time", "issue": to_time_result["error"]}],
+                        "message": to_time_result["error"]}
+            to_time = to_time_result["value"]
 
             logger.debug(f"Routing to Infrastructure Get Snapshot | snapshot_id={snapshot_id}")
             result = await self.infrastructure_resources_client.get_snapshot(
@@ -708,6 +720,27 @@ Examples:
             plugin = params.get(PARAM_PLUGIN)
             offline = params.get(PARAM_OFFLINE, False)
             detailed = params.get(PARAM_DETAILED, False)
+            
+            # Convert datetime strings to timestamps if needed
+            from_time_result = convert_datetime_param(from_time, "from_time")
+            if "error" in from_time_result:
+                return {"elicitation_needed": True, "reason": "invalid_time_params",
+                        "api_error": [{"field": "from_time", "issue": from_time_result["error"]}],
+                        "message": from_time_result["error"]}
+            from_time = from_time_result["value"]
+
+            to_time_result = convert_datetime_param(to_time, "to_time")
+            if "error" in to_time_result:
+                return {"elicitation_needed": True, "reason": "invalid_time_params",
+                        "api_error": [{"field": "to_time", "issue": to_time_result["error"]}],
+                        "message": to_time_result["error"]}
+            to_time = to_time_result["value"]
+
+            order_error = check_time_order(from_time, to_time, "from_time", "to_time")
+            if order_error:
+                return {"elicitation_needed": True, "reason": "invalid_time_params",
+                        "api_error": [{"field": "from_time", "issue": order_error}],
+                        "message": order_error}
 
             logger.debug(f"Routing to Infrastructure Get Snapshots | query={query}, plugin={plugin}, size={size}")
             result = await self.infrastructure_resources_client.get_snapshots(

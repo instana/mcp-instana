@@ -8,11 +8,15 @@ to the appropriate specialized tools.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastmcp import Context
 from mcp.types import ToolAnnotations
+from fastmcp import Context
 
-from src.core.pagination import apply_navigation
-from src.core.timestamp_utils import convert_datetime_param, convert_datetime_params
+from src.core.timestamp_utils import (
+    DEFAULT_TIMEZONE,
+    check_time_order,
+    convert_datetime_param,
+    convert_datetime_params,
+)
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
@@ -32,7 +36,7 @@ RELEASES_VALID_OPERATIONS = [
     OPERATION_DELETE_RELEASE
 ]
 RELEASE_ID_HINT = "Use get_all_releases to find available release IDs"
-RELEASE_START_EXPECTED_FORMAT = "Unix timestamp (ms) or datetime string (e.g., '19 March 2026, 2:47 PM|IST')"
+RELEASE_START_EXPECTED_FORMAT = "Unix timestamp (ms) or datetime string (e.g., 'YYYY-MM-DD HH:mm:ss|UTC')"
 
 
 class ReleasesSmartRouterMCPTool(BaseInstanaClient):
@@ -62,15 +66,10 @@ Operations: get_all_releases, get_release, create_release, update_release, delet
 
 GET_ALL_RELEASES - List releases in time range with pagination and filtering
     params: from_time, to_time, name_filter, page_number, page_size
-    Without page_number/page_size all matching releases are returned. With either one the response
-    is paged and carries a pagination envelope
-    ({page, page_size, total_items, total_pages, has_more, has_previous, next_operation, previous_operation}).
-    To change page, call operation=<next_operation or previous_operation> (e.g. "page_2") with the
-    same params; the page number is inside the operation string.
-    Time params support: milliseconds (1742369820000) OR "datetime|timezone" ("19 March 2026, 2:47 PM|IST")
+    Time params support: milliseconds (<unix_timestamp_milliseconds>) OR datetime string — see "Time parameters" section below for format rules.
     name_filter: Filter releases by name (case-insensitive substring match)
-    page_number: Page number (1-based, optional; "page" is accepted as an alias)
-    page_size: Results per page (optional, default: 50 when paging)
+    page_number: Page number (1-based, use with page_size)
+    page_size: Results per page (default: 50)
 
 GET_RELEASE - Get release by ID
     params: release_id (required)
@@ -80,23 +79,31 @@ GET_RELEASE - Get release by ID
 CREATE_RELEASE - Create new release
     params: name (required), start (required), applications, services
     name: Release identifier (e.g., "frontend/release-2000")
-    start: Deployment timestamp - milliseconds OR "datetime|timezone"
+    start: Deployment timestamp - milliseconds OR "datetime|timezone" OR "now"
     applications: [{"name": "app_name"}]
     services: [{"name": "service_name", "scopedTo": {...}}]
 
 UPDATE_RELEASE - Update existing release
     params: release_id (required), name (required), start (required), applications, services
-    Same format as create_release
+    Same format as create_release (start also accepts "now")
 
 DELETE_RELEASE - Delete release
     params: release_id (required)
+
+Time parameters:
+    - Relative window (preferred): omit from_time/to_time to use the default range; the server uses the current time.
+    - "now" (for start only): resolved to the current server UTC time at the moment of the call.
+    - Relative to now (for any absolute-time parameter): "now", "yesterday", "<N> seconds|minutes|hours|days|weeks ago" or "in <N> seconds|minutes|hours|days|weeks" (for example "2 days ago", "in 2 hours"). The server resolves these from its own UTC clock, so use them instead of computing a timestamp yourself.
+    - Absolute time (only when the user gave one): <unix_timestamp_milliseconds>, "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD HH:mm:ss|UTC". A datetime string without a zone is read as UTC. If the user named a timezone (e.g. IST), keep their local time and append that zone after "|" (e.g. "YYYY-MM-DD HH:mm:ss|IST") instead of converting to UTC yourself.
+    - Never guess or invent the current date or time.
+    - If the user provides a date without a year (e.g. "26 Oct 9 am IST"), pass it as-is without adding a year (e.g. "26 October, 9:00 AM|IST"). The server will automatically substitute the current year.
 
 Examples:
     # List all
     operation="get_all_releases"
 
     # List with time range
-    operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST"}
+    operation="get_all_releases", params={"from_time": "YYYY-MM-DD HH:mm:ss|UTC", "to_time": "YYYY-MM-DD HH:mm:ss|UTC"}
 
     # List with name filter
     operation="get_all_releases", params={"name_filter": "frontend"}
@@ -105,16 +112,17 @@ Examples:
     operation="get_all_releases", params={"page_number": 1, "page_size": 50}
 
     # List with all filters
-    operation="get_all_releases", params={"from_time": "19 March 2026, 2:00 PM|IST", "to_time": "19 March 2026, 5:00 PM|IST", "name_filter": "release", "page_number": 1, "page_size": 20}
+    operation="get_all_releases", params={"from_time": "YYYY-MM-DD HH:mm:ss|UTC", "to_time": "YYYY-MM-DD HH:mm:ss|UTC", "name_filter": "release", "page_number": 1, "page_size": 20}
 
     # Get by ID
     operation="get_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}
 
     # Create
-    operation="create_release", params={"name": "frontend/release-2000", "start": "19 March 2026, 2:47 PM|IST", "applications": [{"name": "My App"}]}
+    operation="create_release", params={"name": "frontend/release-2000", "start": "now", "applications": [{"name": "My App"}]}
+    operation="create_release", params={"name": "frontend/release-2000", "start": "YYYY-MM-DD HH:mm:ss|UTC", "applications": [{"name": "My App"}]}
 
     # Update
-    operation="update_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg", "name": "frontend/release-2001", "start": 1742349976000}
+    operation="update_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg", "name": "frontend/release-2001", "start": <unix_timestamp_milliseconds>}
 
     # Delete
     operation="delete_release", params={"release_id": "l1wgr3DsQkGLf8u18JiGsg"}"""
@@ -132,19 +140,6 @@ Examples:
             # Initialize params if not provided
             if params is None:
                 params = {}
-
-            # Pagination navigation (shared, stateless - src/core/pagination.py):
-            # page_N / next / previous / go_to_page re-run get_all_releases on that page.
-            operation, params, _nav_error = apply_navigation(
-                operation, params, OPERATION_GET_ALL_RELEASES, page_key="page_number"
-            )
-            if _nav_error:
-                return _nav_error
-
-            # "page" and "page_number" are interchangeable
-            if operation == OPERATION_GET_ALL_RELEASES and params.get("page_number") is None \
-                    and params.get("page") is not None:
-                params = {**params, "page_number": params["page"]}
 
             # Validate operation
             if operation not in RELEASES_VALID_OPERATIONS:
@@ -173,12 +168,14 @@ Examples:
                 page_size = params.get("page_size")
 
                 # Convert datetime strings to timestamps for from_time and to_time
+                # Releases can be scheduled slightly ahead, so an end time in the future is valid
                 conversion_result = convert_datetime_params(
                     {"from_time": from_time, "to_time": to_time},
                     ["from_time", "to_time"],
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE,
+                    allow_future=True,
                 )
-
+                
                 if "error" in conversion_result:
                     return {
                         "elicitation_needed": True,
@@ -187,15 +184,24 @@ Examples:
                             {
                                 "field": "from_time/to_time",
                                 "issue": conversion_result["error"],
-                                "expected": "Unix timestamp (ms) or datetime string with timezone (e.g., '19 March 2026, 2:47 PM|IST')"
+                                "expected": "Unix timestamp (ms) or datetime string (e.g., 'YYYY-MM-DD HH:mm:ss|UTC'; the zone defaults to UTC if omitted)"
                             }
                         ],
                         "message": conversion_result["error"]
                     }
-
+                
                 # Update the converted values
                 from_time = conversion_result["params"]["from_time"]
                 to_time = conversion_result["params"]["to_time"]
+
+                order_error = check_time_order(from_time, to_time, "from_time", "to_time")
+                if order_error:
+                    return {
+                        "elicitation_needed": True,
+                        "reason": "invalid_time_params",
+                        "api_error": [{"field": "from_time/to_time", "issue": order_error}],
+                        "message": order_error
+                    }
 
                 result = await self.releases_client.get_all_releases(
                     from_time=from_time,
@@ -251,11 +257,11 @@ Examples:
                         "message": f"Missing required parameters for create_release: {[e['field'] for e in errors]}"
                     }
 
-                # Convert datetime string to timestamp for start time
+                # Convert datetime string (including "now") to timestamp for start time
                 conversion_result = convert_datetime_param(
                     start,
                     "start",
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE
                 )
 
                 if "error" in conversion_result:
@@ -307,11 +313,11 @@ Examples:
                         "message": f"Missing required parameters for update_release: {[e['field'] for e in errors]}"
                     }
 
-                # Convert datetime string to timestamp for start time
+                # Convert datetime string (including "now") to timestamp for start time
                 conversion_result = convert_datetime_param(
                     start,
                     "start",
-                    default_timezone="UTC"
+                    default_timezone=DEFAULT_TIMEZONE
                 )
 
                 if "error" in conversion_result:

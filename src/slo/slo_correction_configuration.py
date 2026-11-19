@@ -7,7 +7,6 @@ This module provides SLO Correction Window configuration tools for Instana.
 import ast
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from instana_client.models.correction_configuration import CorrectionConfiguration
@@ -22,12 +21,8 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.timestamp_utils import epoch_ms_to_utc
+from src.core.utils import BaseInstanaClient, call_sdk_fn, sdk_call_with_keepalive, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +54,12 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
                 example={
                     "duration": 2,
                     "durationUnit": "hour",
-                    "startTime": "2026-03-10 14:00:00|IST"
+                    "startTime": "YYYY-MM-DD HH:mm:ss|UTC"
                 },
                 nested_fields={
                     "duration": "Duration value (e.g., 2)",
                     "durationUnit": f"One of: {', '.join(VALID_DURATION_UNITS)}",
-                    "startTime": "Start time with timezone (e.g., '2026-03-10 14:00:00|IST')"
+                    "startTime": "Start time with timezone (e.g., 'YYYY-MM-DD HH:mm:ss|UTC')"
                 }
             ))
             return
@@ -124,7 +119,7 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
         message_parts = ["To create an SLO correction window, I need the following information:\n"]
         self._append_message_section(message_parts, "\n**Top-level fields:**", top_level)
         self._append_message_section(message_parts, "\n**Scheduling fields:**", scheduling_fields, include_validation=True)
-        message_parts.append("\n**Note:** The startTime field should include timezone (e.g., '2026-03-10 14:00:00|IST') for accurate correction window scheduling.")
+        message_parts.append("\n**Note:** The startTime field should include timezone (e.g., 'YYYY-MM-DD HH:mm:ss|UTC') for accurate correction window scheduling.")
         return {
             "elicitation_needed": True,
             "message": "\n".join(message_parts),
@@ -284,8 +279,7 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
             if "startTime" in scheduling_data and isinstance(scheduling_data["startTime"], (int, float)):
                 # Convert milliseconds to UTC datetime
                 # CRITICAL: Must use timezone.utc to ensure the timestamp is interpreted correctly
-                from datetime import timezone
-                scheduling_data["startTime"] = datetime.fromtimestamp(scheduling_data["startTime"] / 1000.0, tz=timezone.utc)
+                scheduling_data["startTime"] = epoch_ms_to_utc(scheduling_data["startTime"])
 
             # Create scheduling object
             scheduling_object = CorrectionScheduling(**scheduling_data)
@@ -361,8 +355,7 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
             if "startTime" in scheduling_data and isinstance(scheduling_data["startTime"], (int, float)):
                 # Convert milliseconds to UTC datetime
                 # CRITICAL: Must use timezone.utc to ensure the timestamp is interpreted correctly
-                from datetime import timezone
-                scheduling_data["startTime"] = datetime.fromtimestamp(scheduling_data["startTime"] / 1000.0, tz=timezone.utc)
+                scheduling_data["startTime"] = epoch_ms_to_utc(scheduling_data["startTime"])
 
             # Create scheduling object
             scheduling_object = CorrectionScheduling(**scheduling_data)
