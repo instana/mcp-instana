@@ -6,12 +6,12 @@ This module provides infrastructure metrics-specific MCP tools for Instana monit
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
 from pydantic import StrictBool
 
+from src.core.timestamp_utils import default_window
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -66,7 +66,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
             metrics: List of metrics to retrieve with their aggregations
             snapshot_ids: Snapshot ID or IDs for which to retrieve metrics
             time_frame: Dictionary with 'from' and 'to' timestamps in milliseconds
-                Example: {"from": 1617994800000, "to": 1618081200000}
+                Example: {"from": <unix_timestamp_milliseconds>, "to": <unix_timestamp_milliseconds>}
             offline: Whether to include offline snapshots.
             plugin: Plugin to use for retrieving metrics
             limit: Maximum number of items to return (default: 3)
@@ -88,8 +88,7 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
 
 
             if not time_frame:
-                to_time = int(datetime.now().timestamp() * 1000)
-                from_time = to_time - (60 * 60 * 1000)  # Default to 1 hour
+                from_time, to_time = default_window(60 * 60 * 1000)  # Default to 1 hour
                 time_frame = {
                     "from": from_time,
                     "to": to_time

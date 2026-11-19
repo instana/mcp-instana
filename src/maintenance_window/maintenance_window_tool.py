@@ -71,7 +71,7 @@ Examples:
     await maintenance_client.execute_maintenance_operation(
         operation="bulk_create",
         imap_codes=["EAL-012471", "ORZ-000012", "MUR-123456"],
-        start_time="2026-06-01T02:00:00Z",
+        start_time="YYYY-MM-DDTHH:mm:ssZ",
         duration_minutes="120",
         reason="Infrastructure upgrade",
         ctx=ctx
@@ -89,25 +89,32 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from instana_client.api.maintenance_configuration_api import MaintenanceConfigurationApi
 from instana_client.models.maintenance_config_v2 import MaintenanceConfigV2
 
-from src.core.timestamp_utils import get_current_timestamp
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
+from src.core.timestamp_utils import (
+    DEFAULT_TIMEZONE,
+    convert_datetime_param,
+    epoch_ms_to_utc,
+    get_current_timestamp,
+    parse_relative_offset_ms,
+    utc_now_iso,
 )
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 logger = logging.getLogger(__name__)
 
 # Validation hint constants
-_TS_HINT_MS = "Unix timestamp in milliseconds (e.g., 1748786400000)"
+_TIME_HINT = (
+    "Unix timestamp in milliseconds (<unix_timestamp_milliseconds>), "
+    "ISO-8601 'YYYY-MM-DDTHH:mm:ssZ', 'YYYY-MM-DD HH:mm:ss|UTC' / 'YYYY-MM-DD HH:mm:ss|IST', "
+    "or relative 'now' / 'in <N> minutes|hours|days' (for example 'now', 'in 2 hours'), "
+    "which the server resolves from its own clock."
+)
+_START_TIME_GRACE_MS = 60_000  # tolerate request latency when start_time == "now"
 
 
 class MaintenanceWindowMCPTools(BaseInstanaClient):
@@ -168,7 +175,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
     # Date format constant for UTC timestamps
     DATETIME_FORMAT_UTC = "%Y-%m-%d %H:%M:%S UTC"
-
+    
     # Error message constants
     ERROR_START_TIME_REQUIRED = "start_time is required"
 
@@ -270,7 +277,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 params={
                     "imap_code": "EAL-012471",
                     "template": "deployment",
-                    "start_time": 1709020800000,
+                    "start_time": "in 2 hours",
                     "reason": "v2.0 deployment"
                 },
                 ctx=ctx
@@ -280,7 +287,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             result = await execute_maintenance_operation(
                 operation="modify",
                 window_id="mw-789",
-                end_time=1709027400000,
+                end_time="in 4 hours",
                 reason="Extended due to issues",
                 ctx=ctx
             )
@@ -296,9 +303,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             else:
                 # New style: params dictionary
                 merged_params = params or {}
-
+            
             extracted = self._extract_maintenance_params(merged_params)
-
+            
             # Extract individual parameters for easier access
             application_id = extracted["application_id"]
             application_ids = extracted["application_ids"]
@@ -329,7 +336,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             )
             if "elicitation_needed" in conversion_result or "error" in conversion_result:
                 return conversion_result
-
+            
             start_time, end_time, duration_minutes, duration_hours, duration_days = conversion_result["values"]
 
             # Validate operation
@@ -360,7 +367,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "rrule": rrule,
                 "until_date": until_date
             }
-
+            
             # Route to appropriate handler
             return await self._route_operation(
                 operation=operation,
@@ -380,13 +387,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
     def _extract_maintenance_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extract maintenance window parameters from params dictionary with defaults.
-
+        
         This method follows the same pattern as events_tools._extract_event_filters
         to reduce parameter count and improve maintainability.
-
+        
         Args:
             params: Dictionary containing maintenance window parameters
-
+            
         Returns:
             Dictionary with all parameters, using defaults where not provided
         """
@@ -412,7 +419,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             "rrule": None,
             "until_date": None,
         }
-
+        
         return {k: params.get(k, v) for k, v in ALLOWED_PARAMS.items()}
 
     def _log_operation_start(self, operation: str, window_id: Optional[str],
@@ -445,10 +452,16 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
     def _convert_string_parameters(self, start_time: Optional[Any], end_time: Optional[Any],
                                    duration_minutes: Optional[Any], duration_hours: Optional[Any],
                                    duration_days: Optional[Any]) -> Dict[str, Any]:
-        """Convert string parameters to integers and validate."""
+        """
+        Convert string parameters to integers and validate.
+
+        start_time and end_time accept epoch milliseconds (int or digit string), ISO-8601
+        ('YYYY-MM-DDTHH:mm:ssZ') or 'YYYY-MM-DD HH:mm:ss|<timezone>'. Both also accept 'now' and
+        'in <N> minutes|hours|days'. All are converted to epoch milliseconds. Duration values must be integers.
+        """
         conversions = [
-            ("start_time", start_time, "Unix timestamp in milliseconds (integer)", "1745020800000"),
-            ("end_time", end_time, "Unix timestamp in milliseconds", None),
+            ("start_time", start_time, _TIME_HINT, None),
+            ("end_time", end_time, _TIME_HINT, None),
             ("duration_minutes", duration_minutes, "integer", "120 for 2 hours"),
             ("duration_hours", duration_hours, "integer", "2"),
             ("duration_days", duration_days, "integer", "1")
@@ -456,27 +469,89 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
         converted_values = []
         for param_name, param_value, description, example in conversions:
-            if param_value is not None and isinstance(param_value, str):
+            is_time_param = param_name in ("start_time", "end_time")
+            value = param_value
+            if isinstance(param_value, str):
                 try:
-                    converted_values.append(int(param_value))
+                    value = int(param_value)
                 except ValueError:
-                    expected = description + (f" (e.g., {example})" if example else "")
-                    return {
-                        "elicitation_needed": True,
-                        "reason": "invalid_param_type",
-                        "api_error": [
-                            {
-                                "field": param_name,
-                                "issue": f"'{param_value}' cannot be converted to an integer",
-                                "expected": expected
-                            }
-                        ],
-                        "message": f"Parameter '{param_name}' must be {expected}, got: '{param_value}'"
-                    }
-            else:
-                converted_values.append(param_value)
+                    value = self._resolve_time_string(param_value, param_name) if is_time_param else None
+                    if value is None:
+                        return self._invalid_param_response(param_name, param_value, description, example)
+
+            # Reject 0, negative, second-resolution and otherwise implausible epoch values up front,
+            # so they never reach the API (or epoch_ms_to_utc) as 1970-01-xx dates.
+            if is_time_param and value is not None and not self._is_plausible_epoch_ms(value):
+                return self._invalid_param_response(
+                    param_name, param_value, description, example,
+                    issue=(
+                        f"'{param_value}' is not a plausible Unix timestamp in milliseconds "
+                        "(0, negative and second-resolution values are rejected)"
+                    ),
+                )
+            converted_values.append(value)
 
         return {"values": tuple(converted_values)}
+
+    @staticmethod
+    def _is_plausible_epoch_ms(value: Any) -> bool:
+        """Return True if value is a plausible 13-digit Unix millisecond timestamp."""
+        try:
+            epoch_ms_to_utc(value)
+        except ValueError:
+            return False
+        return True
+
+    def _resolve_time_string(self, value: str, param_name: str) -> Optional[int]:
+        """Resolve 'now', 'in <N> <unit>' or a datetime string to epoch milliseconds, or None if invalid."""
+        relative_ms = self._parse_relative_start(value)
+        if relative_ms is not None:
+            return relative_ms
+        result = convert_datetime_param(value, param_name)
+        return None if "error" in result else result["value"]
+
+    @staticmethod
+    def _invalid_param_response(
+        param_name: str,
+        param_value: Any,
+        description: str,
+        example: Optional[str],
+        issue: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build the elicitation response for an invalid parameter value (includes the current UTC time)."""
+        expected = description + (f" (e.g., {example})" if example else "")
+        current_time = utc_now_iso()
+        return {
+            "elicitation_needed": True,
+            "reason": "invalid_param_type",
+            "current_time_utc": current_time,
+            "api_error": [
+                {
+                    "field": param_name,
+                    "issue": issue or f"'{param_value}' is not a valid value",
+                    "expected": expected
+                }
+            ],
+            "message": f"Parameter '{param_name}' must be {expected}, got: '{param_value}'. Current UTC time: {current_time}"
+        }
+
+    @staticmethod
+    def _parse_relative_start(value: str) -> Optional[int]:
+        """
+        Resolve 'now' or a relative expression ('in 2 hours', '30 minutes ago') to epoch milliseconds.
+
+        Uses the server's UTC clock and the same parser as every other tool
+        (core.timestamp_utils.parse_relative_offset_ms). Returns None if the value is not in that form.
+        """
+        now_ms = get_current_timestamp(timezone=DEFAULT_TIMEZONE, output_unit="milliseconds")["timestamp"]
+        if value.strip().lower() == "now":
+            return now_ms
+
+        try:
+            offset_ms = parse_relative_offset_ms(value)
+        except ValueError:
+            return None  # absurdly large amount: reported as an invalid value by the caller
+        return None if offset_ms is None else now_ms + offset_ms
 
     def _validate_operation(self, operation: str) -> Optional[Dict[str, Any]]:
         """Validate that the operation is supported."""
@@ -519,9 +594,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         duration_hours = params.get("duration_hours")
         duration_days = params.get("duration_days")
         reason = params.get("reason")
+        template = params.get("template")
+        change_request_id = params.get("change_request_id")
+        use_tag_filter_expression = params.get("use_tag_filter_expression")
+        tag_name = params.get("tag_name")
         rrule = params.get("rrule")
         until_date = params.get("until_date")
         completion_notes = params.get("completion_notes")
+        application_ids = params.get("application_ids")
+        imap_codes = params.get("imap_codes")
 
         logger.info(f"[{tool_name}] _route_operation: {operation} [resource_type={resource_type}]")
 
@@ -562,7 +643,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             if hasattr(result, '__await__'):
                 return await result
             return result
-
+        
         return {"error": f"Operation '{operation}' not implemented"}
 
     async def _handle_modify_operation(self, window_id: Optional[str], end_time: Optional[int],
@@ -665,20 +746,20 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             tag_name = params.get("tag_name")
             rrule = params.get("rrule")
             until_date = params.get("until_date")
-
+            
             # Validate and get target code
             validation_result = self._validate_create_params(
                 imap_code, application_id, start_time, template
             )
             if "elicitation_needed" in validation_result:
                 return validation_result
-
+            
             target_code = validation_result["target_code"]
             template_config = validation_result["template_config"]
 
             # Type assertion: start_time is validated in _validate_create_params
             assert start_time is not None, "start_time should be validated"
-
+            
             # Calculate duration and end time
             duration_result = self._calculate_duration_and_end_time(
                 start_time, end_time, duration_minutes, duration_hours,
@@ -687,7 +768,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             end_time = duration_result["end_time"]
             duration_amount = duration_result["duration_amount"]
             duration_unit = duration_result["duration_unit"]
-
+            
             # Type assertion: end_time is calculated and guaranteed to be not None
             assert end_time is not None, "end_time should be calculated"
 
@@ -697,7 +778,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 return time_validation_error
 
             # Generate maintenance window name
-            date_str = datetime.fromtimestamp(start_time / 1000).strftime("%Y_%m_%d")
+            date_str = epoch_ms_to_utc(start_time).strftime("%Y_%m_%d")
             reason_sanitized = (reason or template_config.get("description", "Maintenance")).replace(" ", "_")
             window_name = f"{target_code}_{reason_sanitized}_{date_str}"
 
@@ -727,7 +808,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.info(f"Scheduling Type: {scheduling_obj.get('type')}")
             if scheduling_obj.get('type') == 'RECURRENT':
                 logger.info(f"RRULE in payload: {scheduling_obj.get('rrule')}")
-            logger.info(f"Start Time: {start_time} ({datetime.fromtimestamp(start_time/1000).strftime('%Y-%m-%d %H:%M:%S UTC')})")
+            logger.info(f"Start Time: {start_time} ({epoch_ms_to_utc(start_time).strftime(self.DATETIME_FORMAT_UTC)})")
             logger.info(f"Duration: {duration_amount} {duration_unit}")
             logger.info(f"Window ID: {window_id}")
 
@@ -813,7 +894,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             errors.append({
                 "field": "start_time",
                 "issue": self.ERROR_START_TIME_REQUIRED,
-                "expected": _TS_HINT_MS
+                "expected": _TIME_HINT
             })
         if template and template not in self.TEMPLATES:
             errors.append({
@@ -853,7 +934,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """Calculate duration and end time for maintenance window."""
         if start_time is None:
             raise ValueError(self.ERROR_START_TIME_REQUIRED)
-
+        
         if not end_time:
             duration_result = self._calculate_duration_from_inputs(
                 duration_minutes, duration_hours, duration_days, rrule, template_config
@@ -866,7 +947,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             }
         else:
             return self._calculate_duration_from_times(start_time, end_time)
-
+    
     def _calculate_duration_from_inputs(
         self,
         duration_minutes: Optional[int],
@@ -890,7 +971,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             }
         else:
             return self._calculate_duration_from_minutes(duration_minutes, rrule, template_config)
-
+    
     def _calculate_duration_from_minutes(
         self,
         duration_minutes: Optional[int],
@@ -899,16 +980,16 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
     ) -> Dict[str, Any]:
         """Calculate duration from minutes, adjusting for recurring windows."""
         duration_min = duration_minutes or template_config.get("default_duration", 60)
-
+        
         if rrule:
             duration_min = self._adjust_duration_for_recurring(duration_min)
-
+        
         return {
             "duration_ms": duration_min * 60 * 1000,
             "duration_amount": duration_min // 60 if duration_min >= 60 else 1,
             "duration_unit": "HOURS"
         }
-
+    
     def _adjust_duration_for_recurring(self, duration_min: int) -> int:
         """Adjust duration for recurring windows (must be whole hours)."""
         if duration_min < 60:
@@ -921,12 +1002,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.warning(f"Rounding {duration_min} minutes up to {duration_hours_rounded} hour(s)")
             return duration_hours_rounded * 60
         return duration_min
-
+    
     def _calculate_duration_from_times(self, start_time: int, end_time: int) -> Dict[str, Any]:
         """Calculate duration from start and end times."""
         duration_ms = end_time - start_time
         duration_hours_calc = duration_ms // (60 * 60 * 1000)
-
+        
         if duration_hours_calc >= 24:
             return {
                 "end_time": end_time,
@@ -946,15 +1027,17 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         end_time: int
     ) -> Optional[Dict[str, Any]]:
         """Validate time range for maintenance window."""
-        current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
+        current_time_result = get_current_timestamp(timezone=DEFAULT_TIMEZONE, output_unit="milliseconds")
         current_time = current_time_result["timestamp"]
 
-        if start_time < current_time:
-            start_dt = datetime.fromtimestamp(start_time / 1000)
-            current_dt = datetime.fromtimestamp(current_time / 1000)
+        # Allow a 60-second grace window to account for network/execution latency when start_time is "now"
+        if start_time < current_time - _START_TIME_GRACE_MS:
+            start_dt = epoch_ms_to_utc(start_time)
+            current_dt = epoch_ms_to_utc(current_time)
             return {
                 "elicitation_needed": True,
                 "reason": "invalid_time_params",
+                "current_time_utc": utc_now_iso(),
                 "api_error": [
                     {
                         "field": "start_time",
@@ -965,7 +1048,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                         "expected": f"A timestamp after {current_dt.strftime(self.DATETIME_FORMAT_UTC)}"
                     }
                 ],
-                "message": f"start_time is in the past ({start_dt.strftime(self.DATETIME_FORMAT_UTC)}). Provide a future timestamp."
+                "message": f"start_time is in the past ({start_dt.strftime(self.DATETIME_FORMAT_UTC)}). Current UTC time: {current_dt.strftime(self.DATETIME_FORMAT_UTC)}. Provide a future timestamp."
             }
 
         if end_time <= start_time:
@@ -1028,6 +1111,15 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
 
         return scheduling_obj
 
+    @staticmethod
+    def _format_rrule_until(dt: datetime) -> str:
+        """Format a datetime as an RRULE UNTIL value (YYYYMMDDTHHMMSSZ) in true UTC.
+
+        Offset-aware values are converted to UTC; naive values are assumed to already be UTC.
+        """
+        dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+        return dt.strftime("%Y%m%dT%H%M%SZ")
+
     def _process_rrule_with_until(
         self,
         rrule: str,
@@ -1036,11 +1128,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """Process RRULE and add UNTIL if provided."""
         if until_date:
             logger.info("Processing until_date for RRULE...")
-            try:
-                # Try parsing ISO format
-                until_dt = datetime.fromisoformat(until_date.replace('Z', '+00:00'))
-                # Format as YYYYMMDDTHHMMSSZ for RRULE
-                until_formatted = until_dt.strftime('%Y%m%dT%H%M%SZ')
+            # Single parser shared with the modify path: handles offsets, naive values and date-only
+            # values (a date-only until_date means the end of that day, 23:59:59 UTC).
+            until_formatted, parse_error = self._parse_until_date(until_date)
+            if parse_error or until_formatted is None:
+                logger.warning(f"Could not parse until_date '{until_date}': {parse_error}, using rrule as-is")
+                rrule_with_until = rrule
+            else:
                 logger.info(f"Converted until_date: {until_date} -> {until_formatted}")
 
                 # Add UNTIL to rrule if not already present
@@ -1050,9 +1144,6 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 else:
                     rrule_with_until = rrule
                     logger.info("RRULE already contains UNTIL, using as-is")
-            except Exception as e:
-                logger.warning(f"Could not parse until_date '{until_date}': {e}, using rrule as-is")
-                rrule_with_until = rrule
         else:
             logger.info("No until_date provided, using RRULE without UNTIL")
             rrule_with_until = rrule
@@ -1112,8 +1203,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         template_config: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Format success response for window creation."""
-        start_dt = datetime.fromtimestamp(start_time / 1000)
-        end_dt = datetime.fromtimestamp(end_time / 1000)
+        start_dt = epoch_ms_to_utc(start_time)
+        end_dt = epoch_ms_to_utc(end_time)
 
         return {
             "operation": "create",
@@ -1179,13 +1270,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             status_error = self._check_response_status(response, "fetch maintenance window")
             if status_error:
                 return None, status_error
-
+            
             response_data = response.data
             existing_window = json.loads(response_data) if response_data else None
-
+            
             if not existing_window:
                 return None, {"error": f"Maintenance window not found: {window_id}"}
-
+            
             return existing_window, None
         except Exception as e:
             return None, {"error": f"Failed to fetch window: {e!s}"}
@@ -1201,13 +1292,13 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             "tagFilterExpressionEnabled": existing_window.get("tagFilterExpressionEnabled", False),
             "retriggerOpenAlertsEnabled": existing_window.get("retriggerOpenAlertsEnabled", False)
         }
-
+        
         # Preserve optional fields if they exist
         optional_fields = ["tagFilterExpression", "applicationNames", "validVersion", "description"]
         for field in optional_fields:
             if field in existing_window:
                 payload[field] = existing_window[field]
-
+        
         return payload
 
     def _update_duration_in_payload(self, payload: Dict[str, Any], duration_minutes: int) -> None:
@@ -1222,7 +1313,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         else:
             duration_amount = duration_minutes
             duration_unit = "MINUTES"
-
+        
         # Update only the duration within the scheduling object
         if "scheduling" not in payload:
             payload["scheduling"] = {}
@@ -1240,12 +1331,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 else:
                     dt = datetime.fromisoformat(until_date + "T23:59:59+00:00")
             else:
-                dt = datetime.fromtimestamp(until_date / 1000)
-
-            return dt.strftime("%Y%m%dT%H%M%SZ"), None
+                dt = epoch_ms_to_utc(until_date)
+            
+            return self._format_rrule_until(dt), None
         except Exception as e:
             logger.error(f"Error parsing until_date: {e}")
-            return None, f"Invalid until_date format: {until_date}. Use ISO format like '2026-03-18T23:59:59Z'"
+            return None, f"Invalid until_date format: {until_date}. Use ISO format like 'YYYY-MM-DDTHH:mm:ssZ'"
 
     def _update_rrule_with_until(self, existing_rrule: str, until_rrule: str) -> str:
         """Update existing RRULE with new UNTIL value."""
@@ -1266,25 +1357,25 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """Update RRULE in payload. Returns error message if parsing fails, None on success."""
         if not (rrule or until_date):
             return None
-
+        
         if "scheduling" not in payload:
             payload["scheduling"] = {}
-
+        
         # Handle until_date
         if until_date:
             until_rrule, error = self._parse_until_date(until_date)
             if error:
                 return error
-
+            
             # Type guard: until_rrule is guaranteed to be str here (error would have returned)
             if until_rrule is not None:
                 existing_rrule = payload["scheduling"].get("rrule", "")
                 payload["scheduling"]["rrule"] = self._update_rrule_with_until(existing_rrule, until_rrule)
-
+        
         # If explicit rrule is provided, use it directly (overrides until_date processing)
         if rrule:
             payload["scheduling"]["rrule"] = rrule
-
+        
         return None
 
     def _update_window_name_with_reason(self, payload: Dict[str, Any], reason: str, existing_window: Dict[str, Any]) -> None:
@@ -1300,14 +1391,14 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         duration = payload["scheduling"]["duration"]
         duration_amount = duration.get("amount", 0)
         duration_unit = duration.get("unit", "HOURS")
-
+        
         if duration_unit == "DAYS":
             duration_ms = duration_amount * 24 * 60 * 60 * 1000
         elif duration_unit == "HOURS":
             duration_ms = duration_amount * 60 * 60 * 1000
         else:  # MINUTES
             duration_ms = duration_amount * 60 * 1000
-
+        
         return start_time + duration_ms
 
     def _build_modification_summary(
@@ -1327,7 +1418,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             modifications.append("recurrence rule updated")
         if reason:
             modifications.append(f"name updated with reason: {reason}")
-
+        
         return ", ".join(modifications) if modifications else "window updated"
 
     def _build_modify_response(
@@ -1344,11 +1435,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         scheduling = updated_window.get("scheduling", {})
         rrule_after = scheduling.get("rrule", "")
         recurrence_type = scheduling.get("type", "ONE_TIME")
-
+        
         duration = payload["scheduling"]["duration"]
         duration_amount = duration.get("amount", 0)
         duration_unit = duration.get("unit", "HOURS")
-
+        
         return {
             "operation": "modify",
             "status": "success",
@@ -1392,8 +1483,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             end_time: New end time in Unix timestamp milliseconds (not used - duration is used instead)
             duration_minutes: New duration in minutes
             reason: Reason for modification (used to update window name)
-            rrule: New recurrence rule (e.g., "FREQ=DAILY;INTERVAL=1;UNTIL=20260318T235959Z")
-            until_date: New end date for recurrence in ISO format (e.g., "2026-03-18T23:59:59Z")
+            rrule: New recurrence rule (e.g., "FREQ=DAILY;INTERVAL=1;UNTIL=YYYYMMDDTHHMMSSZ")
+            until_date: New end date for recurrence in ISO format (e.g., "YYYY-MM-DDTHH:mm:ssZ")
             ctx: MCP context
 
         Returns:
@@ -1529,7 +1620,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             # Read the response (delete typically returns empty response)
             _ = response.data
 
-            closed_at = get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]
+            closed_at = get_current_timestamp(timezone=DEFAULT_TIMEZONE, output_unit="milliseconds")["timestamp"]
 
             logger.info(f"Maintenance window closed successfully: {window_id}")
 
@@ -1578,14 +1669,14 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             if application_id:
                 return self._matches_application_filter(window, application_id)
             return True
-
+        
         # Fallback: check occurrence times if state not available
         if not window.get("state", ""):
             if self._is_window_active_by_time(window, current_time):
                 if application_id:
                     return self._matches_application_filter(window, application_id)
                 return True
-
+        
         return False
 
     def _build_empty_active_response(
@@ -1655,7 +1746,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.info(f"Number of windows in all_windows: {len(all_windows)}")
 
             # Get current time for time-based filtering
-            current_time_result = get_current_timestamp(timezone="UTC", output_unit="milliseconds")
+            current_time_result = get_current_timestamp(timezone=DEFAULT_TIMEZONE, output_unit="milliseconds")
             current_time = current_time_result["timestamp"]
 
             # Filter for active windows using helper method
@@ -1692,10 +1783,10 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """Determine if scheduled window should be included in list."""
         if not self._is_window_scheduled(window):
             return False
-
+        
         if application_id:
             return self._matches_application_filter(window, application_id)
-
+        
         return True
 
     @with_header_auth(MaintenanceConfigurationApi)
@@ -1773,7 +1864,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             "scheduled": [],
             "expired": []
         }
-
+        
         for window in windows:
             state = window.get("state", "").upper()
             if state == "ACTIVE":
@@ -1782,7 +1873,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 windows_by_state["scheduled"].append(window)
             elif state == "EXPIRED":
                 windows_by_state["expired"].append(window)
-
+        
         return windows_by_state
 
     def _build_windows_summary(self, windows_by_state: Dict[str, List[Dict[str, Any]]], total_count: int) -> str:
@@ -1794,7 +1885,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             summary_parts.append(f"{len(windows_by_state['scheduled'])} scheduled")
         if windows_by_state["expired"]:
             summary_parts.append(f"{len(windows_by_state['expired'])} expired")
-
+        
         return f"Found {total_count} total maintenance window(s): {', '.join(summary_parts) if summary_parts else 'none'}"
 
     @with_header_auth(MaintenanceConfigurationApi)
@@ -1872,10 +1963,10 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         """Determine if expired window should be included in list."""
         if not self._is_window_expired(window):
             return False
-
+        
         if application_id:
             return self._matches_application_filter(window, application_id)
-
+        
         return True
 
     @with_header_auth(MaintenanceConfigurationApi)
@@ -1983,7 +2074,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 errors.append({
                     "field": "start_time",
                     "issue": self.ERROR_START_TIME_REQUIRED,
-                    "expected": _TS_HINT_MS
+                    "expected": _TIME_HINT
                 })
             if errors:
                 return {
@@ -2068,9 +2159,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             errors.append({
                 "field": "start_time",
                 "issue": "start_time is required",
-                "expected": _TS_HINT_MS
+                "expected": _TIME_HINT
             })
-        elif start_time < get_current_timestamp(timezone="UTC", output_unit="milliseconds")["timestamp"]:
+        elif start_time < get_current_timestamp(timezone=DEFAULT_TIMEZONE, output_unit="milliseconds")["timestamp"] - _START_TIME_GRACE_MS:
             errors.append({
                 "field": "start_time",
                 "issue": "start_time cannot be in the past",
@@ -2138,6 +2229,3 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"ServiceNow update failed: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
-
-
-

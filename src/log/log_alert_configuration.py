@@ -6,7 +6,6 @@ This module provides log alert configuration-specific MCP tools for Instana moni
 
 import logging
 import sys
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # Configure logger for this module
@@ -24,13 +23,8 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.timestamp_utils import epoch_ms_to_utc
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 
 class LogAlertConfigurationMCPTools(BaseInstanaClient):
@@ -344,9 +338,14 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             try:
                 await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_log_alert_config, id=id, created=created), ctx=ctx, operation_name="restore_log_alert_config")
                 logger.debug(f"Successfully restored log alert configuration with ID {id}")
+                # The restore already succeeded; formatting the timestamp must never turn that into an error.
+                try:
+                    version_time = epoch_ms_to_utc(created).isoformat()
+                except ValueError:
+                    version_time = str(created)
                 return {
                     "success": True,
-                    "message": f"Log alert configuration with ID {id} restored to version from {datetime.fromtimestamp(created/1000).isoformat()}"
+                    "message": f"Log alert configuration with ID {id} restored to version from {version_time}"
                 }
             except Exception as e:
                 logger.error(f"Error calling restore_log_alert_config API: {e}", exc_info=True)

@@ -6,7 +6,6 @@ This module provides application resources-specific MCP tools for Instana monito
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations

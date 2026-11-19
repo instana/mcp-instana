@@ -6,7 +6,6 @@ This module provides website analyze-specific MCP tools for Instana monitoring.
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 # Constants
@@ -55,10 +54,7 @@ from src.core.utils import (
     sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.core.validation import (
-    VALID_WEBSITE_BEACON_TYPES,
-    StructureValidator,
-)
+from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_WEBSITE_BEACON_TYPES
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -117,13 +113,12 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         if not user_provided_metrics:
             return None
 
-        from instana_client.api.website_catalog_api import WebsiteCatalogApi
-
         from src.core.metric_validation import (
             fetch_metric_catalog_internal,
             validate_beacon_type_known,
             validate_metric_compatibility,
         )
+        from instana_client.api.website_catalog_api import WebsiteCatalogApi
         from src.core.utils import WEBSITE_BEACON_TYPE_MAP
 
         beacon_type_error = validate_beacon_type_known(
@@ -170,9 +165,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
     def _convert_group_tag_filter(self, tag_filter_expression: Dict[str, Any]) -> tuple[Optional[Any], Optional[Dict[str, Any]]]:
         try:
-            from instana_client.models.tag_filter_expression_element import (
-                TagFilterExpressionElement,
-            )
+            from instana_client.models.tag_filter_expression_element import TagFilterExpressionElement
             tag_filter_obj = TagFilterExpressionElement.from_dict(tag_filter_expression)
             return tag_filter_obj, None
         except Exception as e:
@@ -311,7 +304,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                     "value": "robot-shop"
                 }
             time_frame: Time range for metrics
-                Example: {"to": null, "windowSize": 3600000}
+                Example: {"windowSize": 3600000}  (omit "to" for "now")
             beacon_type: Type of beacon (PAGELOAD, ERROR, RESOURCE, etc.)
             fill_time_series: Whether to fill missing data points with timestamp and value 0
             order: Ordering configuration
@@ -338,7 +331,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
             validation_errors = self._collect_structure_validation_errors([
                 (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-                (StructureValidator.validate_group, group, {"required": False}),
+                (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
                 (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
                 (StructureValidator.validate_time_frame, time_frame, {}),
                 (StructureValidator.validate_order, order, {}),
@@ -388,9 +381,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 return query_params
 
             try:
-                from instana_client.models.get_website_beacon_groups import (
-                    GetWebsiteBeaconGroups,
-                )
+                from instana_client.models.get_website_beacon_groups import GetWebsiteBeaconGroups
                 config_object = GetWebsiteBeaconGroups(**query_params)
             except Exception as e:
                 logger.error(f"[get_website_beacon_groups] Error creating GetWebsiteBeaconGroups object: {e!s}")

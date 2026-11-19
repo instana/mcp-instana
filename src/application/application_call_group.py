@@ -5,10 +5,10 @@ This module provides application call group metrics-specific MCP tools for Insta
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from mcp.types import ToolAnnotations
+
 
 # Import the necessary classes from the SDK
 try:
@@ -20,14 +20,10 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.timestamp_utils import utc_now_ms
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 from src.core.validation import (
+    ENTITY_GUIDANCE_CALL_SEMANTICS,
     BooleanCoercer,
     StructureValidator,
 )
@@ -42,11 +38,6 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """Initialize the Application Call Group MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    # @register_as_tool decorator commented out - not exposed as MCP tool
-    # @register_as_tool(
-    #     title="Get Grouped Calls Metrics",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
     @staticmethod
     def _validate_call_group_structure(
         metrics: Optional[List[Dict[str, Any]]],
@@ -60,7 +51,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         all_errors: List[str] = []
         for validator_fn, field_val, kwargs in [
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_CALL_SEMANTICS}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_order, order, {}),
             (StructureValidator.validate_pagination, pagination, {}),
@@ -95,7 +86,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """Return (metrics, time_frame, group) with defaults applied where None/empty."""
         if not time_frame:
             time_frame = {
-                "to": int(datetime.now().timestamp() * 1000),
+                "to": utc_now_ms(),
                 "windowSize": 3600000,
             }
         if not metrics:
@@ -189,7 +180,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                     {"metric": "latency", "aggregation": "P75", "granularity": 360}
                 ]
             time_frame: Time range for metrics
-                Example: {"to": 1688366990000, "windowSize": 600000}
+                Example: {"to": <unix_timestamp_milliseconds>, "windowSize": 600000}
             group: Grouping configuration
                 Example: {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
             tag_filter_expression: Filter expression for tags
@@ -561,7 +552,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 "examples": [
                     {"windowSize": 3600000},  # Last hour
                     {"windowSize": 86400000},  # Last 24 hours
-                    {"to": 1688366990000, "windowSize": 600000}  # Specific time
+                    {"to": utc_now_ms(), "windowSize": 600000}  # Specific time
                 ],
                 "type": "dict",
                 "note": "If not provided, defaults to last hour"
@@ -623,4 +614,3 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
             "parameter_details": missing_params,
             "instructions": "Call get_grouped_calls_metrics again with these parameters filled in."
         }
-
