@@ -58,7 +58,7 @@ Add the `select-tools` header to limit which tool categories this client sees (s
 }
 ```
 
-Available categories: `app`, `infra`, `events`, `automation`, `website`, `mobile_app`, `custom_dashboards`, `slo`, `synthetic`, `releases`, `maintenance_windows`.
+Available categories: `app`, `infra`, `events`, `automation`, `website`, `mobile_app`, `custom_dashboards`, `slo`, `synthetic`, `releases`, `maintenance_windows`, `alert_channels`.
 
 **Remote Configuration:**
 

@@ -96,6 +96,11 @@
     - [Listing Maintenance Windows](#listing-maintenance-windows)
     - [Creating and Managing Windows](#creating-and-managing-windows)
     - [Bulk Operations and Templates](#bulk-operations-and-templates)
+- [12. Alert Channels](#12-alert-channels)
+    - [Capabilities](#capabilities-11)
+    - [Example Prompts](#example-prompts-11)
+      - [Listing Alert Channels](#listing-alert-channels)
+      - [Inspecting Channel Details](#inspecting-channel-details)
 - [Advanced Usage Tips](#advanced-usage-tips)
   - [Time Range Specifications](#time-range-specifications)
   - [Error Handling and Troubleshooting](#error-handling-and-troubleshooting)
@@ -223,9 +228,9 @@ This document provides comprehensive examples of how to interact with the Instan
 
 ## Tool Categories and Configuration Identifiers
 
-When starting the MCP server with the `--categories` option (e.g. `python -m src.core.server --categories app,infra`), use the corresponding category identifier:
+When starting the MCP server with the `--tools` option (e.g. `python -m src.core.server --tools app,infra`), use the corresponding category identifier:
 
-| Section | Category Name | Category Identifier (`--categories`) | Unified Tool Name |
+| Section | Category Name | Category Identifier (`--tools`) | Unified Tool Name |
 |---|---|---|---|
 | 1 | Application Resources | `app` | `manage_applications` |
 | 2 | Infrastructure Analysis | `infra` | `manage_infrastructure` |
@@ -238,6 +243,7 @@ When starting the MCP server with the `--categories` option (e.g. `python -m src
 | 9 | Mobile App Monitoring | `mobile_app` | `manage_mobile_apps` |
 | 10 | Synthetic Monitoring | `synthetic` | `manage_synthetics` |
 | 11 | Maintenance Windows | `maintenance_windows` | `manage_maintenance_windows` |
+| 12 | Alert Channels | `alert_channels` | `manage_alert_channels` |
 
 ---
 
@@ -1463,6 +1469,60 @@ What maintenance window templates are available?
 
 ```
 Create a deployment maintenance window for EAL-012471 with change request ID CHG0012345
+```
+
+---
+
+## 12. Alert Channels
+
+**Tool Name:** `manage_alert_channels`
+
+### Capabilities
+
+Manage and inspect Instana outbound alert notification channels and integrations (Webhooks, Slack, Teams, Email, PagerDuty, Opsgenie, ServiceNow, etc.) with automatic secret masking.
+
+**Key Features:**
+- **Automatic Secret Masking (fail-closed)**: All sensitive tokens, client secrets, passwords, routing keys, and auth headers are automatically masked (`***`) before returning to the LLM. Unknown fields, unknown integration kinds, and non-object values are masked rather than passed through.
+- **URL Path Stripping**: Webhook and integration URLs (Slack, Splunk, ServiceNow, etc.) are reduced to `scheme://host/***` because their paths commonly embed credentials. Only explicitly non-sensitive URL fields (such as `iconUrl` and `instanaUrl`) keep their path.
+- **Client-Side Filtering & Pagination**: Filter channel overviews by integration kind (case-insensitive) or name substring. Results are sorted by name then ID, and `page_size` is capped at 100.
+- **Direct Name Resolution**: Query full channel configurations directly by channel name or unique ID. If no exact name match exists and a single substring match is used instead, the response includes a `name_resolution` block so the fallback is explicit.
+- **Safe Error Reporting**: Upstream error bodies are redacted and truncated; non-JSON error bodies are omitted.
+
+#### Operations
+
+| Operation | Description |
+|---|---|
+| `get_overview` | List lightweight summaries of all alert channels with pagination and filtering |
+| `get` | Get detailed configuration of a specific alert channel by ID or name |
+
+### Example Prompts
+
+#### Listing Alert Channels
+
+```
+List all alert channels in the system
+```
+
+```
+Show me all Webhook alert channels
+```
+
+```
+Find alert channels with "Slack" in the name
+```
+
+```
+List the first 10 alert channels
+```
+
+#### Inspecting Channel Details
+
+```
+Get full details for alert channel ID "chan-123"
+```
+
+```
+Show the configuration for the "Production Alerts Webhook" channel
 ```
 
 ---

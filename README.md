@@ -690,6 +690,7 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 | `manage_maintenance_windows`                                  | Maintenance Windows            | Unified smart router for maintenance window lifecycle management: create, modify, close, and list maintenance windows with template support and ServiceNow integration |
 | `manage_mobile_apps`                                          | Mobile App Monitoring          | Unified smart router for mobile app monitoring: analyze beacons, performance metrics, session replay, configuration, and alert management |
 | `manage_synthetics`                                           | Synthetic Monitoring           | Unified smart router for synthetic monitoring: catalog, metrics, settings (read-only), and test playback results |
+`manage_alert_channels`                                       | Alert Channels                 | Unified smart router for alert channels: inspect and list outbound notification integrations (Webhooks, Slack, Teams, Email, PagerDuty, etc.) with automatic secret masking |
 
 **For detailed tool documentation, capabilities, and technical reference, see [Tools & Examples](docs/TOOLS_AND_EXAMPLES.md)**
 
