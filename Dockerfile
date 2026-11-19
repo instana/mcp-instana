@@ -41,12 +41,12 @@ RUN chown -R mcpuser:mcpuser /app
 USER mcpuser
 
 # Expose the default port (configurable via PORT env var)
-EXPOSE 8080
+EXPOSE 8000
 
 # Set environment variables (no hardcoded secrets)
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
+ENV PORT=8000
 
 # Health check: send a real MCP initialize request and confirm a valid JSON-RPC
 # result comes back. This exercises the full stack (uvicorn → fastmcp → app)
@@ -55,7 +55,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "\
 import urllib.request, json, sys; \
 req = urllib.request.Request( \
-    'http://127.0.0.1:8080/mcp', \
+    'http://127.0.0.1:8000/mcp', \
     data=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'healthcheck','version':'1.0'}}}).encode(), \
     headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}, \
     method='POST'); \
