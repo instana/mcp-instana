@@ -32,7 +32,7 @@ StructureValidator
     * ``validate_metrics_array`` — non-empty list, each entry has non-empty
       ``metric`` string and valid ``aggregation`` enum, list length ≤ max_items.
     * ``validate_order`` — ``by`` non-empty, ``direction`` in {ASC, DESC}.
-    * ``validate_time_frame`` — ``windowSize`` within SDK bounds (0-2 678 400 000 ms).
+    * ``validate_time_frame`` — ``windowSize`` within SDK bounds (0–2 678 400 000 ms).
     * ``validate_granularity_ratio`` — cross-field check that ``windowSize /
       granularity_ms`` does not exceed ``MAX_GRANULARITY_DATA_POINTS`` (1 000) and
       that the granularity value itself does not overflow a 32-bit integer when the
@@ -41,7 +41,7 @@ StructureValidator
       ``granularity_in_ms=True`` for infrastructure (granularity already in ms);
       ``granularity_in_ms=False`` (default) for all other domains (granularity in
       seconds).
-    * ``validate_pagination`` — cursor-based ``retrievalSize`` within 1-200;
+    * ``validate_pagination`` — cursor-based ``retrievalSize`` within 1–200;
       or page-based ``page`` / ``pageSize`` when ``page_based=True``
       (synthetic playback endpoints use ``Pagination`` SDK model).
     * ``validate_synthetic_playback_structure`` — combined preflight for all
@@ -51,7 +51,7 @@ StructureValidator
     * ``validate_group`` — ``groupbyTag`` non-empty, ``groupbyTagEntity`` enum.
 
     All methods collect *every* failing field before returning so the LLM receives
-    the full error list in one shot (Vipin's requirement).
+    the full error list in one shot.
 
 BooleanCoercer
     Silently normalises LLM-generated boolean-like values (string ``"true"``/
@@ -60,8 +60,9 @@ BooleanCoercer
 """
 
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from src.core.timestamp_utils import utc_now_ms
 
 
 class ValidationError:
@@ -163,7 +164,7 @@ class TimeValidator:
             return ValidationError(
                 field=field_name,
                 message=f"{field_name} is required",
-                example="1770429420000"
+                example=str(utc_now_ms())
             )
 
         # If not required and not provided, it's valid
@@ -176,11 +177,11 @@ class TimeValidator:
                 field=field_name,
                 message=f"{field_name} must be an integer (milliseconds since epoch)",
                 provided_value=value,
-                example="1770429420000"
+                example=str(utc_now_ms())
             )
 
         # Check if timestamp is reasonable (not too old)
-        current_time_ms = int(datetime.now().timestamp() * 1000)
+        current_time_ms = utc_now_ms()
 
         if value < TimeValidator.MIN_TIMESTAMP_MS:
             return ValidationError(
@@ -607,8 +608,7 @@ class StructureValidator:
                   ``api_error`` (list of strings, one per problem found).
 
     All errors are **collected in a single pass** before returning so the LLM
-    receives the complete list in one response (Vipin's requirement: no round-trip
-    retries per field).
+    receives the complete list in one response
 
     The dict format mirrors the pattern established in PR #129
     (metric_validation.py / website_analyze.py / application_call_group.py).
@@ -962,7 +962,7 @@ class StructureValidator:
                 "message": (
                     f"{field_name} must be a dict, e.g.:\n"
                     f'  {{"windowSize": 3600000}}\n'
-                    f'  {{"to": 1710658800000, "windowSize": 3600000}}'
+                    f'  {{"to": {utc_now_ms()}, "windowSize": 3600000}}'
                 ),
             }
 
@@ -978,7 +978,7 @@ class StructureValidator:
             elif window_size < 0 or window_size > WINDOW_SIZE_MAX_MS:
                 errors.append(
                     f"{field_name}.windowSize: {window_size} is out of range. "
-                    f"Must be 0-{WINDOW_SIZE_MAX_MS} ms (~31 days maximum). "
+                    f"Must be 0–{WINDOW_SIZE_MAX_MS} ms (~31 days maximum). "
                     f"Example: 3600000 (1 hour)"
                 )
 
@@ -1192,7 +1192,7 @@ class StructureValidator:
                 elif page_size < 1 or page_size > 200:
                     errors.append(
                         f"{field_name}.pageSize: {page_size} is out of range. "
-                        f"Must be 1-200"
+                        f"Must be 1–200"
                     )
         else:
             retrieval_size = pagination.get("retrievalSize")
@@ -1205,7 +1205,7 @@ class StructureValidator:
                 elif retrieval_size < min_retrieval_size or retrieval_size > max_retrieval_size:
                     errors.append(
                         f"{field_name}.retrievalSize: {retrieval_size} is out of range. "
-                        f"Must be {min_retrieval_size}-{max_retrieval_size}"
+                        f"Must be {min_retrieval_size}–{max_retrieval_size}"
                     )
 
         if not errors:
