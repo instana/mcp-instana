@@ -14,13 +14,13 @@ authors = [
     {name = "Sachin Govind", email = "Sachin.Govind@ibm.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.15"
 license = {text = "Apache-2.0"}
 
 # ONLY dependencies that are actually imported/used in the code
 dependencies = [
     # Core MCP framework - imported in src/prompts/__init__.py and src/core/server.py
-    "fastmcp==4.1.0",
+    "fastmcp>=4.1.6",
     # MCP SDK for types and annotations
     # Pinned to 1.26.x to match fastmcp 3.1.x compatibility
     "mcp",
@@ -74,7 +74,7 @@ include = [
 
 [tool.ruff]
 # Target Python 3.11
-target-version = "py310"
+target-version = "py311"
 
 # Same as Black
 line-length = 88
