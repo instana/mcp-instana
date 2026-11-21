@@ -16,7 +16,7 @@ from src.core.utils import (
 )
 
 
-class TestApiClass:
+class MockApiClass:
     """Mock API class for testing the with_header_auth decorator."""
     def __init__(self, api_client=None):
         self.api_client = api_client
@@ -258,10 +258,10 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 assert api_client is not None
-                assert isinstance(api_client, TestApiClass)
+                assert isinstance(api_client, MockApiClass)
                 return {"param1": param1, "param2": param2}
 
         mock_config = MagicMock()
@@ -296,7 +296,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
@@ -325,7 +325,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
@@ -354,7 +354,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
@@ -377,10 +377,10 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 assert api_client is not None
-                assert isinstance(api_client, TestApiClass)
+                assert isinstance(api_client, MockApiClass)
                 return {"param1": param1, "param2": param2}
 
         mock_config = MagicMock()
@@ -412,7 +412,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
@@ -445,7 +445,7 @@ class TestInstanaClientBaseE2E:
         """Test with_header_auth decorator in STDIO mode with existing API client."""
 
         # Create a mock API instance
-        mock_api_instance = TestApiClass()
+        mock_api_instance = MockApiClass()
 
         # Create a test class with a decorated method and existing API client
         class TestClient(BaseInstanaClient):
@@ -453,7 +453,7 @@ class TestInstanaClientBaseE2E:
                 super().__init__(read_token, base_url)
                 self.test_api = mock_api_instance  # Name must end with '_api'
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 assert api_client is not None
                 assert api_client is mock_api_instance
@@ -477,7 +477,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 raise Exception("Test exception")
 
@@ -509,7 +509,7 @@ class TestInstanaClientBaseE2E:
             def __init__(self, read_token, base_url):
                 super().__init__(read_token, base_url)
 
-            @with_header_auth(TestApiClass)
+            @with_header_auth(MockApiClass)
             async def test_method(self, param1, param2, ctx=None, api_client=None):
                 return {"param1": param1, "param2": param2}
 
