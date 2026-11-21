@@ -120,10 +120,10 @@ class TestSyntheticTestPlaybackE2E:
 
     @pytest.mark.asyncio
     async def test_get_location_summary_list_empty_payload(self):
-        """All payload fields are optional — empty payload should succeed."""
+        """An empty payload is rejected client-side; callers must pass a non-empty dict."""
         result = await self.client.get_location_summary_list(payload={})
 
-        assert "error" not in result, f"Unexpected error: {result.get('error')}"
+        assert result.get("error") == "payload is required"
 
     @pytest.mark.asyncio
     async def test_get_test_summary_list_returns_summary(self):
@@ -150,10 +150,11 @@ class TestSyntheticTestPlaybackE2E:
         )
 
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
-        # If items exist, verify locationStatusList presence
+        # If items exist, verify locationStatusList presence (nested under the test's common properties)
         items = result.get("items", [])
         for item in items:
-            assert "locationStatusList" in item, \
+            common = item.get("testResultCommonProperties", {}).get("testCommonProperties", {})
+            assert "locationStatusList" in common, \
                 f"Expected locationStatusList in test summary item: {item}"
 
 class TestSyntheticSmartRouterE2E:
