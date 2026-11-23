@@ -62,12 +62,13 @@ class TestSyntheticCatalogE2E:
 
     @pytest.mark.asyncio
     async def test_catalog_metrics_full_view_has_internal_fields(self):
-        """view='full' should include pathToValueInBeacon or tagName for at least one metric."""
+        """view='full' should include raw SDK fields that the planner view drops."""
         result = await self.client.get_synthetic_catalog_metrics(view="full")
 
         assert result["description"] == "Synthetic monitoring metrics catalog with full metadata"
-        # At least one metric should have internal SDK fields
-        has_internal = any("pathToValueInBeacon" in m or "tagName" in m for m in result["metrics"])
+        # At least one metric should have internal SDK fields (dropped by the planner view)
+        internal_fields = ("pathToValueInBeacon", "tagName", "defaultAggregation")
+        has_internal = any(f in m for m in result["metrics"] for f in internal_fields)
         assert has_internal, "view=full should expose at least one internal field"
 
     @pytest.mark.asyncio
