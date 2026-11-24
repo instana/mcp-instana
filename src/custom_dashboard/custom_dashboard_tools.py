@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 
+from src.core.pagination import build_pagination, normalize_page_args
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -323,9 +324,10 @@ class CustomDashboardMCPTools(BaseInstanaClient):
 
         Args:
             query: Search query to filter dashboards
-            page_size: Number of dashboards per page
-            page: Page number (1-indexed)
-            with_total_hits: Include total count in response
+            page_size: Number of dashboards per page (optional; API default when omitted)
+            page: Page number (1-indexed, optional)
+            with_total_hits: Include total count in response (defaults to True when page/page_size
+                is given, so the ``pagination`` envelope can be built)
             ctx: MCP context
             api_client: API client instance
             resource_type: Resource type identifier for logging
@@ -346,16 +348,27 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             #     send both pageSize AND page together for pagination to take effect.
             #   - withTotalHits=true changes the response shape from a flat list to
             #     {"totalHits": N, "items": [...]} — both shapes are handled below.
-            effective_page = page
-            if page_size is not None and page is None:
-                effective_page = 1  # page is required for pageSize to have effect
+            #   - Paging is opt-in: without page/page_size the API defaults apply unchanged.
+            #     When paging is requested, withTotalHits defaults to true (needed for the
+            #     pagination envelope) unless the caller explicitly passed False.
+            paging_requested = page is not None or page_size is not None
+            if paging_requested:
+                # Always send an explicit page AND size (coerced + clamped) so the
+                # envelope matches what the server actually used.
+                effective_page, effective_page_size = normalize_page_args(
+                    page, page_size, default_size=10, max_size=100
+                )
+                effective_with_total_hits = True if with_total_hits is None else with_total_hits
+            else:
+                effective_page = effective_page_size = None
+                effective_with_total_hits = with_total_hits
 
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_custom_dashboards_without_preload_content,
                     query=query,
-                    page_size=page_size,
+                    page_size=effective_page_size,
                     page=effective_page,
-                    with_total_hits=with_total_hits,
+                    with_total_hits=effective_with_total_hits,
                 ),
                 ctx=ctx, operation_name="get_custom_dashboards",
                 resource_type=resource_type, tool_name=tool_name,
@@ -391,8 +404,15 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             # Echo back the pagination params that were actually sent
             if effective_page is not None:
                 result_dict["page"] = effective_page
-            if page_size is not None:
-                result_dict["page_size"] = page_size
+            if effective_page_size is not None:
+                result_dict["page_size"] = effective_page_size
+
+            # Standard pagination envelope (needs the total, i.e. withTotalHits=true)
+            if paging_requested and isinstance(result_dict.get("total_hits"), int):
+                result_dict["pagination"] = build_pagination(
+                    effective_page or 1, effective_page_size, result_dict["total_hits"],
+                    list_id="custom_dashboards",
+                )
 
             try:
                 logger.debug(f"Result from get_custom_dashboards: {json.dumps(result_dict, indent=2)}")

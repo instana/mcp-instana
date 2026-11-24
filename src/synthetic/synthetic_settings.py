@@ -17,6 +17,8 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
+from src.core.pagination import paginate, stable_sort_key
+from src.core.ui_links import add_synthetic_test_link
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -117,7 +119,10 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                     "test_id": test_id,
                 }
 
-            return json.loads(decode_response(response))
+            test = json.loads(decode_response(response))
+            if isinstance(test, dict):
+                add_synthetic_test_link(self.base_url, test)
+            return test
 
         except Exception as e:
             logger.error("[get_synthetic_test] Error: %s", e, exc_info=True)
@@ -137,11 +142,19 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
         api_client=None,
         resource_type: Optional[str] = None,
         tool_name: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         List synthetic tests, optionally filtered and paginated.
 
         All parameters are optional — omitting all returns every test.
+
+        ``page`` / ``page_size`` (1-based page) switch to stateless client-side paging:
+        the full filtered list is fetched, sorted for stable page slices, sliced, and
+        returned with the standard ``pagination`` envelope (``next_operation`` /
+        ``previous_operation``). They cannot be combined with ``offset`` / ``limit``.
+        Without any of the four, every test is returned.
 
         Args:
             application_id: Filter by application ID
@@ -167,6 +180,9 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 application_id, location_id, credential_name, sort, offset, limit, filter_param,
             )
 
+            client_side_paging = page is not None or page_size is not None
+            if client_side_paging and (offset is not None or limit is not None):
+                return {"error": "page/page_size cannot be combined with offset/limit; use one paging style."}
             response = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.get_synthetic_tests_without_preload_content,
@@ -188,6 +204,25 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 return self.handle_api_error_response(response, "list synthetic tests", logger)
 
             items = json.loads(decode_response(response))
+            if isinstance(items, list):
+                for test in items:
+                    if isinstance(test, dict):
+                        add_synthetic_test_link(self.base_url, test)
+
+            if client_side_paging:
+                page_items, pagination = paginate(
+                    items, page, page_size, max_page_size=100,
+                    sort_key=None if sort else stable_sort_key,  # honour an explicit API sort
+                    list_id="synthetic_tests",
+                )
+                logger.debug("[get_synthetic_tests] Returning page %s (%d of %d tests)",
+                             pagination["page"], len(page_items), len(items))
+                return {
+                    "items": page_items,
+                    "count": len(page_items),
+                    "total": len(items),
+                    "pagination": pagination,
+                }
 
             logger.debug("[get_synthetic_tests] Returning %d tests", len(items))
             return {

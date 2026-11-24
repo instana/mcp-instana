@@ -1,4 +1,10 @@
 # Changelog
+### Unreleased
+- **New Feature:** Shared, stateless pagination for list operations (releases, synthetic tests, synthetic alert configs, application alert configs, global application alert configs, application settings, custom dashboards). Paged responses carry a `pagination` envelope (`page`, `page_size`, `total_items`, `total_pages`, `has_more`, `has_previous`, `next_operation`, `previous_operation`). Copy `next_operation` / `previous_operation` (`page_N`) into the next call with the same params; `next` / `previous` / `go_to_page` remain as aliases but need the current page / `target_page` and return an error instead of guessing.
+- **Behaviour:** Paging stays opt-in where it was before: `get_all_releases`, synthetic `get_synthetic_tests`, application settings `get_all` and custom dashboard `get_all` return the same data as before unless `page` / `page_size` (`page_number` for releases) is given. Application and global application alert config `find_active` (first 10) and synthetic alert `find_active` (page size 50) keep their existing default paging.
+- **Behaviour:** Out-of-range pages return an empty list with `has_more=false` everywhere (synthetic alert `find_active` no longer clamps to the last page). Its legacy `total_pages` now reports 1 (not 0) for an empty result, matching the envelope.
+- **Fix:** Custom dashboard `get_all` now always sends an explicit `page` and `page_size` (default 10, clamped to 1..100, strings coerced) when paging is requested, so the `pagination` envelope matches what the server used. `get_all_releases` accepts `page_number` / `page_size` sent as strings. Synthetic `get_synthetic_tests` rejects `page` / `page_size` combined with `offset` / `limit`.
+
 ### 1.0.4
 - **IMPORTANT:** Upgraded the FastMCP dependency to 4.1.0.
 - **Enhancement:** Tool selection is now configurable via `mcp.json`, allowing specific tools to be enabled or omitted.

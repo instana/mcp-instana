@@ -17,10 +17,10 @@
     - [Option 2: Development Installation](#option-2-development-installation)
       - [Installing uv](#installing-uv)
       - [Setting Up the Environment](#setting-up-the-environment)
-    - [Header-Based Authentication for Streamable HTTP Mode](#header-based-authentication-for-streamable-http-mode)
-      - [1. API Token Authentication (Direct API Calls)](#1-api-token-authentication-direct-api-calls)
-      - [2. Session Token Authentication (UI-Initiated Calls)](#2-session-token-authentication-ui-initiated-calls)
-      - [3. JWT Token Authentication (IBM Platform Integration)](#3-jwt-token-authentication-ibm-platform-integration)
+  - [Authentication](#authentication)
+    - [Streamable HTTP Mode](#streamable-http-mode)
+    - [Stdio Mode](#stdio-mode)
+    - [Security Recommendations](#security-recommendations)
   - [Starting the Local MCP Server](#starting-the-local-mcp-server)
     - [Server Command Options](#server-command-options)
       - [Using the CLI (PyPI Installation)](#using-the-cli-pypi-installation)
@@ -37,12 +37,10 @@
     - [SSL Certificate Verification](#ssl-certificate-verification)
       - [Using the CLI option](#using-the-cli-option)
       - [Using the environment variable](#using-the-environment-variable)
+      - [Using config.yaml (SaaS / Kubernetes deployments)](#using-configyaml-saas--kubernetes-deployments)
       - [Using a custom CA bundle](#using-a-custom-ca-bundle)
+  - [API Call Timeout](#api-call-timeout)
     - [Catalog Response Caching](#catalog-response-caching)
-      - [Cached catalog operations](#cached-catalog-operations)
-      - [Configuring caching (stdio mode)](#configuring-caching-stdio-mode)
-      - [Configuring caching (streamable-http mode)](#configuring-caching-streamable-http-mode)
-      - [Using .bob/mcp.json (stdio mode)](#using-bobmcpjson-stdio-mode)
     - [Verifying Server Status](#verifying-server-status)
     - [Common Startup Issues](#common-startup-issues)
   - [Setup and Usage](#setup-and-usage)
@@ -50,14 +48,12 @@
     - [Connecting to Multiple Instana MCP Servers](#connecting-to-multiple-instana-mcp-servers)
   - [Available Tools](#available-tools)
   - [Tool Filtering](#tool-filtering)
-    - [Usage Examples](#usage-examples)
-      - [Using CLI (PyPI Installation)](#using-cli-pypi-installation-3)
-      - [Using Development Installation](#using-development-installation-4)
-    - [Benefits of Tool Filtering](#benefits-of-tool-filtering)
   - [Docker Deployment](#docker-deployment)
     - [Building the Docker Image](#building-the-docker-image)
       - [**Prerequisites**](#prerequisites-1)
       - [**Build and Run**](#build-and-run)
+    - [Connecting to mcp-instana container in streamable mode](#connecting-to-mcp-instana-container-in-streamable-mode)
+    - [Connecting to mcp-instana in stdio mode](#connecting-to-mcp-instana-in-stdio-mode)
   - [General Issues](#general-issues)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -191,21 +187,29 @@ After installing `uv`, set up the project environment by running:
 uv sync
 ```
 
-### Header-Based Authentication for Streamable HTTP Mode
+## Authentication
 
-When using **Streamable HTTP mode**, you must pass Instana credentials via HTTP headers. This approach enhances security and flexibility by:
+The server authenticates to Instana with an **Instana API token**. How you supply the token depends on the transport mode.
 
-- Avoiding credential storage in environment variables
-- Enabling the use of different credentials for different requests
+| Transport mode | How credentials are provided |
+|---|---|
+| **Streamable HTTP** | HTTP headers sent with every request |
+| **Stdio** | Environment variables (`INSTANA_BASE_URL`, `INSTANA_API_TOKEN`) or the `--base-url` / `--api-token` CLI flags |
+
+### Streamable HTTP Mode
+
+In Streamable HTTP mode, pass the Instana credentials as HTTP headers on every request. This approach enhances security and flexibility by:
+
+- Avoiding credential storage in server-side environment variables
+- Enabling the use of different credentials (and different Instana instances) for different clients or requests
 - Supporting shared environments where environment variable modification is restricted
-- Supporting both API token and session-based authentication
 
-**Supported Authentication Modes:**
-
-#### 1. API Token Authentication (Direct API Calls)
 **Required Headers:**
-- `instana-base-url`: Your Instana instance URL
-- `instana-api-token`: Your Instana API token
+
+| Header | Description |
+|---|---|
+| `instana-base-url` | URL of your Instana instance. Must start with `https://` (or `http://` for local development and testing only). |
+| `instana-api-token` | Your Instana API token |
 
 **Example:**
 ```bash
@@ -213,63 +217,31 @@ When using **Streamable HTTP mode**, you must pass Instana credentials via HTTP 
 --header "instana-api-token: your-api-token"
 ```
 
-#### 2. Session Token Authentication (UI-Initiated Calls)
-**Required Headers:**
-- `instana-base-url`: Your Instana instance URL
-- `instana-auth-token`: Session authentication token from UI backend
-- `instana-csrf-token`: CSRF token from UI backend
-- `instana-cookie-name`: (Optional) Cookie name for session auth (default: `instanaAuthToken`)
-
-**Example:**
-```bash
---header "instana-base-url: https://your-instance.instana.io"
---header "instana-auth-token: your-session-token"
---header "instana-csrf-token: your-csrf-token"
---header "instana-cookie-name: in-token"
-```
-
-#### 3. JWT Token Authentication (IBM Platform Integration)
-**Required Headers:**
-- `instana-base-url`: Your Instana instance URL
-- `instana-jwt-token`: JWT token from IBM Platform
-- `instana-csrf-token`: CSRF token for request validation
-
-**Example Configuration:**
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://0.0.0.0:8080/mcp",
-        "--allow-http",
-        "--header",
-        "instana-base-url: https://your-instana-instance.instana.io",
-        "--header",
-        "instana-jwt-token: your_jwt_token_here",
-        "--header",
-        "instana-csrf-token: your_csrf_token_here"
-      ]
-    }
-  }
-}
-```
-
-**Authentication Priority:**
-1. **JWT Token** (if provided with CSRF token) - Takes precedence for IBM Platform integration
-2. **Session Tokens** (if both auth_token and csrf_token provided)
-3. **API Token** (if provided) - Standard authentication
-4. **Environment Variable** (`INSTANA_API_TOKEN`) - Fallback
+See the [MCP client guides](#supported-mcp-clients) for how to set these headers in your client's configuration.
 
 **Authentication Flow:**
-1. HTTP headers must be present in each request
-2. Server validates credentials based on priority order
-3. Requests without valid authentication will fail
+1. The client sends `instana-base-url` and `instana-api-token` headers with each request.
+2. The server validates that both headers are present and that the base URL is well formed.
+3. The server calls the Instana API on behalf of the client using the supplied token.
+4. Requests with missing or invalid credentials fail with an authentication error and no call is made to Instana.
 
-This design ensures secure credential transmission and supports multiple authentication flows including UI-initiated calls via WebSocket → Coordinator → MCP Server.
+### Stdio Mode
 
-Ensure that the token used has the necessary permissions to invoke MCP tools. Check [here](docs/PERMISSIONS.md) for more information.
+In Stdio mode there are no HTTP requests to carry headers, so credentials are read when the server starts. Set them as environment variables:
+
+```bash
+export INSTANA_BASE_URL="https://your-instana-instance.instana.io"
+export INSTANA_API_TOKEN="your_instana_api_token"
+```
+
+Alternatively, pass `--base-url` and `--api-token` on the command line. CLI flags take precedence over the environment variables. The server will not start in Stdio mode if either value is missing.
+
+### Security Recommendations
+
+- Use HTTPS for `instana-base-url` in any non-local environment. See [SSL Certificate Verification](#ssl-certificate-verification) for certificate options.
+- Do not commit API tokens to source control or share client configuration files that contain them.
+- Prefer environment variables or `env` blocks in your MCP client configuration over CLI flags in Stdio mode, because command-line arguments can be visible in process listings.
+- Create a dedicated API token for the MCP server, granting only the permissions it needs. Ensure the token has the permissions required to invoke the MCP tools you enable. Check [here](docs/PERMISSIONS.md) for more information.
 
 ## Starting the Local MCP Server
 
@@ -488,94 +460,7 @@ The server caches catalog API responses (metrics, tags, and plugins) in-process 
 
 **Default TTL: 30 minutes.** Each unique combination of tenant URL, method, and parameters gets its own independent cache slot. Error responses are never cached, so a transient network failure cannot poison the store.
 
-#### Cached catalog operations
-
-| Domain | Operation | Cache key discriminators |
-|---|---|---|
-| Application | Get metric catalog | — |
-| Application | Get tag catalog | `use_case`, `data_source` |
-| Website | Get metrics catalog | — |
-| Website | Get tag catalog | `beacon_type`, `use_case` |
-| Mobile App | Get metric catalog | — |
-| Mobile App | Get tag catalog | `beacon_type`, `use_case` |
-| Synthetic | Get metrics catalog | — |
-| Synthetic | Get tag catalog | `use_case` |
-| Infrastructure | Get metrics catalog | `plugin`, `filter` |
-| Infrastructure | Get tag catalog | `plugin` |
-
-#### Configuring caching (stdio mode)
-
-Set environment variables before starting the server. In stdio mode these are the only values used — no restart is required when using Bob, as the server reboots automatically.
-
-```bash
-# Disable caching entirely
-export INSTANA_CACHE_ENABLED=false
-# Override TTL to 5 minutes (default: 1800)
-export INSTANA_CACHE_TTL=300
-```
-
-`INSTANA_CACHE_ENABLED` is treated as disabled when set to `false`, `0`, or `no` (case-insensitive). Any other value keeps caching **enabled**.
-
-#### Configuring caching (streamable-http mode)
-
-In addition to the environment variables above, every HTTP request can override the cache settings via headers. Per-request headers take precedence over the process-level defaults, so caching can be toggled on or off without restarting the server.
-
-```
-instana-cache-enabled: false
-instana-cache-ttl: 300
-```
-To set cache headers persistently in your MCP client config (e.g. `.bob/mcp.json` for streamable-http mode), add them alongside the existing Instana headers:
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "instana-base-url": "https://your-instana-instance.example.com",
-        "instana-api-token": "YOUR_API_TOKEN",
-        "instana-cache-enabled": "true",
-        "instana-cache-ttl": "1800"
-      }
-    }
-  }
-}
-```
-
-To disable caching for a specific client connection:
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "instana-base-url": "https://your-instana-instance.example.com",
-        "instana-api-token": "YOUR_API_TOKEN",
-        "instana-cache-enabled": "false"
-      }
-    }
-  }
-}
-```
-
-#### Using .bob/mcp.json (stdio mode)
-
-To set cache configuration persistently for Bob, add the env vars to the `env` block in `.bob/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "instana": {
-      "env": {
-        "INSTANA_CACHE_ENABLED": "true",
-        "INSTANA_CACHE_TTL": "1800"
-      }
-    }
-  }
-}
-```
-
-> The server logs the effective cache state at DEBUG level on every catalog call, showing whether a response was a cache HIT or MISS.
+For more details, check [here](./docs/CACHING.md)
 
 ### Verifying Server Status
 
@@ -696,241 +581,30 @@ Note: If the requested server is down or unreachable, MCP behaves as expected an
 
 ## Tool Filtering
 
-The MCP server supports selective tool loading to optimize performance and reduce resource usage. You can enable only the tool categories you need for your specific use case.
+By default, the MCP server exposes all available tools. To reduce the number of tools presented to your MCP client, lower resource usage, and limit API exposure, you can select which tool categories are loaded or visible.
 
-### Usage Examples
+**Available categories:** `app`, `infra`, `events`, `website`, `mobile_app`, `slo`, `synthetic`, `releases`, `maintenance_windows`, `automation`, `custom_dashboards`, `alert_channels`
 
-#### Using CLI (PyPI Installation)
+| Method | Applies to | How it works |
+|---|---|---|
+| `--tools <categories>` | CLI (stdio and streamable HTTP) | **Allowlist**: load only the listed categories |
+| `--omit-tools <categories>` | CLI (stdio and streamable HTTP) | **Denylist**: load everything except the listed categories |
+| `select-tools` / `omit-tools` HTTP headers | Streamable HTTP only | Per-client filtering of the `tools/list` response, with no server restart and no effect on other clients |
+
+Both options accept comma-separated category names and can be combined: the allowlist is applied first, then the denylist removes from it.
 
 ```bash
-# Enable only application monitoring tools
-mcp-instana --tools app --transport streamable-http
-
-# Enable only infrastructure analysis tools
-mcp-instana --tools infra --transport streamable-http
-
-# Enable application and infrastructure tools
+# Load only application and infrastructure tools
 mcp-instana --tools app,infra --transport streamable-http
 
-# Enable events and website tools
-mcp-instana --tools events,website --transport streamable-http
+# Load everything except SLO and maintenance window tools
+mcp-instana --omit-tools slo,maintenance_windows --transport streamable-http
 
-# Enable settings (custom dashboards) and app tools
-mcp-instana --tools settings,app --transport streamable-http
-
-# Enable releases and events tools
-mcp-instana --tools releases,events --transport streamable-http
-
-# Enable maintenance window and events tools
-mcp-instana --tools maintenance,events --transport streamable-http
-
-# Enable automation and app tools
-mcp-instana --tools automation,app --transport streamable-http
-
-# Enable SLO management tools
-mcp-instana --tools slo --transport streamable-http
-
-# Enable synthetic monitoring tools
-mcp-instana --tools synthetic --transport streamable-http
-
-# Enable mobile app monitoring tools
-mcp-instana --tools mobile_app --transport streamable-http
-
-# Enable all tools (default behavior)
-mcp-instana --transport streamable-http
-
-# List all available tool categories and their tools
+# List all categories and their tools
 mcp-instana --list-tools
 ```
 
-#### Using Development Installation
-
-```bash
-# Enable only application monitoring tools
-uv run src/core/server.py --tools app --transport streamable-http
-
-# Enable only infrastructure analysis tools
-uv run src/core/server.py --tools infra --transport streamable-http
-
-# Enable application and infrastructure tools
-uv run src/core/server.py --tools app,infra --transport streamable-http
-
-# Enable events and website tools
-uv run src/core/server.py --tools events,website --transport streamable-http
-
-# Enable custom_dashboards and application tools
-uv run src/core/server.py --tools custom_dashboards,app --transport streamable-http
-
-# Enable releases and events tools
-uv run src/core/server.py --tools releases,events --transport streamable-http
-
-# Enable maintenance window and events tools
-uv run src/core/server.py --tools maintenance,events --transport streamable-http
-
-# Enable automation and app tools
-uv run src/core/server.py --tools automation,app --transport streamable-http
-
-# Enable SLO management tools
-uv run src/core/server.py --tools slo --transport streamable-http
-
-# Enable synthetic monitoring tools
-uv run src/core/server.py --tools synthetic --transport streamable-http
-
-# Enable mobile app monitoring tools
-uv run src/core/server.py --tools mobile_app --transport streamable-http
-
-# Enable all tools (default behavior)
-uv run src/core/server.py --transport streamable-http
-
-# Disable specific categories (all others remain enabled)
-uv run src/core/server.py --transport streamable-http --omit-tools maintenance_windows,slo
-
-# Combine --tools and --omit-tools
-uv run src/core/server.py --transport streamable-http --tools app,infra,events --omit-tools events
-
-
-# List all available tool categories and their tools
-uv run src/core/server.py --list-tools
-```
-
-### Tool Filtering in Stdio Mode
-
-In stdio mode the MCP client spawns the server as a child process, so flags are passed directly through the `args` array in `mcp.json`.
-
-**Using `--tools` (allowlist) — show only the listed categories:**
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": ["--transport", "stdio", "--tools", "infra,events"],
-      "env": {
-        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
-        "INSTANA_API_TOKEN": "your_instana_api_token"
-      }
-    }
-  }
-}
-```
-
-**Using `--omit-tools` (denylist) — show everything except the listed categories:**
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": ["--transport", "stdio", "--omit-tools", "maintenance_windows,slo"],
-      "env": {
-        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
-        "INSTANA_API_TOKEN": "your_instana_api_token"
-      }
-    }
-  }
-}
-```
-
-**Combining both — select a subset, then remove from it:**
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "command": "mcp-instana",
-      "args": ["--transport", "stdio", "--tools", "app,infra,events", "--omit-tools", "events"],
-      "env": {
-        "INSTANA_BASE_URL": "https://your-instana-instance.instana.io",
-        "INSTANA_API_TOKEN": "your_instana_api_token"
-      }
-    }
-  }
-}
-```
-
-### Tool Filtering via HTTP Header (Streamable HTTP Mode)
-
-When the server is running in **streamable HTTP mode**, each MCP client can control which tool categories it sees without restarting the server or running a separate instance. Two complementary headers are supported:
-
-| Header | Behaviour |
-|---|---|
-| `select-tools` | **Allowlist** — show only the listed categories |
-| `omit-tools` | **Denylist** — show everything *except* the listed categories |
-
-Both headers accept a comma-separated list of category names identical to those used by the `--tools` / `--omit-tools` CLI flags. They can be combined: `select-tools` is applied first to build the visible set, then `omit-tools` removes from it.
-
-#### Using `select-tools` (allowlist)
-
-Show only the specified categories:
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "httpURL": "http://localhost:8080/mcp/",
-      "headers": {
-        "instana-base-url": "https://your-instana-instance.example.com",
-        "instana-api-token": "YOUR_API_TOKEN",
-        "select-tools": "infra,events"
-      }
-    }
-  }
-}
-```
-
-#### Using `omit-tools` (denylist)
-
-Show everything except the specified categories — useful when you want most tools but need to hide one or two:
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "httpURL": "http://localhost:8080/mcp/",
-      "headers": {
-        "instana-base-url": "https://your-instana-instance.example.com",
-        "instana-api-token": "YOUR_API_TOKEN",
-        "omit-tools": "maintenance_windows,slo"
-      }
-    }
-  }
-}
-```
-
-#### Combining both headers
-
-Select a subset first, then remove from it:
-
-```json
-{
-  "mcpServers": {
-    "Instana MCP Server": {
-      "httpURL": "http://localhost:8080/mcp/",
-      "headers": {
-        "instana-base-url": "https://your-instana-instance.example.com",
-        "instana-api-token": "YOUR_API_TOKEN",
-        "select-tools": "app,infra,events,website",
-        "omit-tools": "website"
-      }
-    }
-  }
-}
-```
-
-The server filters the `tools/list` response for that client connection on every request — all other clients connecting to the same server process are unaffected.
-
-- Unknown category names are logged as warnings and silently ignored.
-- If neither header is present, all registered tools are returned (default behaviour).
-- These headers have no effect in **stdio mode** — use the `--tools` / `--omit-tools` CLI flags instead.
-
-### Benefits of Tool Filtering
-
-- **Performance**: Reduced startup time and memory usage
-- **Security**: Limit exposure to only necessary APIs
-- **Clarity**: Focus on specific use cases (e.g., only infrastructure monitoring)
-- **Resource Efficiency**: Lower CPU and network usage
-
-**For usage examples and prompts, see [Example Prompts](docs/TOOLS_AND_EXAMPLES.md)**
+For the full list of options, including stdio `mcp.json` configuration, per-client HTTP header examples, and usage with a development installation, see [Tool Filtering & Customizations](./docs/TOOLS_FILTERING_CUSTOMIZATIONS.md).
 
 ## Docker Deployment
 
