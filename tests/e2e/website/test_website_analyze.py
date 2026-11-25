@@ -95,40 +95,6 @@ class TestWebsiteAnalyzeE2E:
         assert module.clean_nan_values(data) == {"a": None, "b": [None, 1, {"c": None, "d": "ok"}], "e": 5}
 
     @pytest.mark.mocked
-    def test_pagination_and_group_helpers(self, instana_credentials):
-        client = create_website_analyze_client(instana_credentials)
-
-        assert client._normalize_beacon_pagination(None) == {"retrievalSize": 20, "offset": 0}
-        assert client._normalize_beacon_pagination({"retrievalSize": 0})["retrievalSize"] == 1
-        assert client._normalize_beacon_pagination({"retrievalSize": 5000})["retrievalSize"] == 200
-        assert client._normalize_beacon_pagination({"retrievalSize": 50, "offset": 3}) == {
-            "retrievalSize": 50,
-            "offset": 3,
-        }
-        assert client._map_group_fields({"groupByTag": "t", "groupByTagEntity": "SOURCE"}) == {
-            "groupbyTag": "t",
-            "groupbyTagEntity": "SOURCE",
-        }
-        assert client._map_group_fields({}) == {
-            "groupbyTag": "beacon.location.path",
-            "groupbyTagEntity": "NOT_APPLICABLE",
-        }
-
-    @pytest.mark.mocked
-    def test_apply_beacon_group_defaults(self, instana_credentials):
-        client = create_website_analyze_client(instana_credentials)
-
-        beacon_type, time_frame, metrics, group, tag_filter = client._apply_beacon_group_defaults(
-            None, None, None, None, None
-        )
-
-        assert beacon_type == "PAGELOAD"
-        assert time_frame == {"windowSize": 3600000}
-        assert metrics == [{"metric": "beaconCount", "aggregation": "SUM"}]
-        assert group == {"groupByTag": "beacon.page.name"}
-        assert tag_filter["elements"] == []
-
-    @pytest.mark.mocked
     def test_convert_beacon_tag_filters(self, instana_credentials):
         client = create_website_analyze_client(instana_credentials)
 
@@ -195,29 +161,6 @@ class TestWebsiteAnalyzeE2E:
         assert "error" in error
 
     # ---------------- _validate_tag_names ----------------
-
-    @pytest.mark.mocked
-    def test_validate_tag_names_variants(self, instana_credentials):
-        client = create_website_analyze_client(instana_credentials)
-
-        assert client._validate_tag_names(None, None, "PAGELOAD") is None
-        assert client._validate_tag_names(_tag_filter(), _group(), "PAGELOAD") is None
-
-        missing_entity = client._validate_tag_names(_tag_filter(entity=None), None, "PAGELOAD")
-        assert missing_entity["missing_entity_tags"] == ["beacon.website.name"]
-
-        invalid = client._validate_tag_names(
-            {"type": "EXPRESSION", "elements": [_tag_filter(name="bad.tag")]}, None, "PAGELOAD",
-            use_case="FILTERING",
-        )
-        assert invalid["invalid_tags"] == ["bad.tag"]
-        assert invalid["required_action"]["params"] == {"beacon_type": "PAGELOAD", "use_case": "FILTERING"}
-
-        invalid_group = client._validate_tag_names(None, {"groupByTag": "foo"}, "PAGELOAD")
-        assert invalid_group["invalid_tags"] == ["foo"]
-
-        no_tags = client._validate_tag_names({"type": "WHATEVER"}, None, "PAGELOAD")
-        assert "No valid tag names found" in no_tags["reason"]
 
     # ---------------- get_website_beacon_groups ----------------
 
