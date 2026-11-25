@@ -8,20 +8,21 @@ application-specific tools for Instana monitoring.
 import logging
 import re
 import time as _time
-
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from zoneinfo import ZoneInfo
-from typing import Any, Dict, List, Optional, Union, Tuple, cast
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.pagination import apply_navigation, page_kwargs, paginate, stable_sort_key
 from src.core.timestamp_utils import (
+    TIMEZONE_ALIASES,
     convert_datetime_param,
     convert_nested_datetime_param,
+    convert_to_timestamp,
+    parse_timezone,
 )
 from src.core.utils import BaseInstanaClient, register_as_tool
-from src.core.timestamp_utils import TIMEZONE_ALIASES, convert_to_timestamp, parse_timezone
 
 logger = logging.getLogger(__name__)
 _MS_MINUTE = 60 * 1000
@@ -1289,7 +1290,7 @@ Examples:
                 params["application_name"] = _nav_app.strip()
             if _nav_range.strip() and not params.get("time_range"):
                 params["time_range"] = _nav_range.strip()
-                
+
         valid_operations = [
             "get_application_endpoints",
             "get_application_services",

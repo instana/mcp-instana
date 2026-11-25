@@ -4,10 +4,11 @@ Application Call Group MCP Tools Module
 This module provides application call group metrics-specific MCP tools for Instana monitoring.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
-import json
+
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -406,7 +407,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error in query_call_groups: {e}", exc_info=True)
             return {"error": f"Failed to query call groups: {e!s}"}
-    
+
     @staticmethod
     def _extract_metric_entry(metric_key: str, metric_data: Any) -> tuple:
         """Return (extracted_entry, metric_name, value) for a single metric data array, or (None, None, None)."""
