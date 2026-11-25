@@ -1314,7 +1314,7 @@ Examples:
 
         try:
             if operation == "get_error_messages_by_application_name":
-                return await self._get_error_messages_by_application_name(params, ctx)    
+                return await self._get_error_messages_by_application_name(params, ctx)
 
             # Extract all parameters
             application_id = params.get("application_id")
