@@ -17,7 +17,7 @@ This guide documents everything Docker-related for MCP Instana. Use it when you 
 ## Overview
 
 - Two-stage image defined in `Dockerfile`: a builder installs only runtime dependencies, and the runtime stage copies the installed packages plus `src/`.
-- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8080`, and ships with a health check that sends a real MCP `initialize` request and verifies `serverInfo` is present in the response.
+- Runtime image is `python:3.11-slim`, runs as non-root `mcpuser`, exposes `8000`, and ships with a health check that sends a real MCP `initialize` request and verifies `serverInfo` is present in the response.
 - Entry point runs `python -m src.core.server --transport streamable-http`, so clients provide Instana credentials over HTTP headers rather than baking them into the container.
 - `.dockerignore` trims the build context to only the files the Dockerfile actually needs (`pyproject.toml`, `src/`, `README.md`), keeping build times fast and secrets out of image layers.
 - `build_multiplatform.sh` automates multi-architecture builds (amd64 + arm64) with Docker Buildx, QEMU, and optional pushes.
@@ -33,8 +33,8 @@ docker build -t mcp-instana .
 # Alternatively, to build with a specific tag
 docker build -t mcp-instana:<image_tag> .
 
-# Run it (streamable HTTP transport on port 8080)
-docker run --rm -p 8080:8080 mcp-instana
+# Run it (streamable HTTP transport on port 8000)
+docker run --rm -p 8000:8000 mcp-instana
 
 # Override the host port
 docker run --rm -e PORT=9090 -p 9090:9090 mcp-instana
@@ -50,14 +50,14 @@ docker run --rm -e PORT=9090 -p 9090:9090 mcp-instana
 | Runtime stage | Reuses `python:3.11-slim`, copies site-packages and binaries from builder, then copies `src/` only. |
 | User | Non-root `mcpuser` owns `/app`. |
 | Entry point | `python -m src.core.server --transport streamable-http`. Override CMD args with `docker run ... mcp-instana --transport stdio`; override the entrypoint with `docker run --entrypoint python mcp-instana ...`. |
-| Health check | Posts a JSON-RPC `initialize` to `http://127.0.0.1:8080/mcp` and checks that `serverInfo` appears in the response. Passes only if the full MCP stack is responsive. |
-| Exposed port | `8080` (override with `PORT`). |
+| Health check | Posts a JSON-RPC `initialize` to `http://127.0.0.1:8000/mcp` and checks that `serverInfo` appears in the response. Passes only if the full MCP stack is responsive. |
+| Exposed port | `8000` (override with `PORT`). |
 
 ### Configuration reference
 
 | Variable / flag | Default | Notes |
 | --- | --- | --- |
-| `PORT` | `8080` | Align host port mapping when overriding. |
+| `PORT` | `8000` | Align host port mapping when overriding. |
 | `PYTHONUNBUFFERED` | `1` | Keeps logs unbuffered. Usually leave as-is. |
 | `PYTHONPATH` | `/app` | Ensures `src/` is importable. |
 | `--transport` (CMD arg) | `streamable-http` | Change via `docker run ... mcp-instana --transport <mode>`. |
@@ -174,19 +174,19 @@ The script:
 docker logs <container_id>
 
 # Test container connectivity (expects 406 from a bare GET — means server is up)
-curl http://localhost:8080/mcp
+curl http://localhost:8000/mcp
 
 # Check port mapping
 docker port <container_id>
 
 # Hit MCP endpoint directly (expect 406 from a bare GET — means the server is up)
-curl http://localhost:8080/mcp
+curl http://localhost:8000/mcp
 
 # Inspect container status (health column)
 docker ps
 
 # Test using MCP Inspector
-npx @modelcontextprotocol/inspector http://localhost:8080/mcp/
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp/
 
 # Debug shell (container already has /bin/bash from python:slim)
 docker exec -it <container_id> /bin/bash
@@ -229,18 +229,18 @@ spec:
       - name: mcp-instana
         image: mcp-instana:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8000
         env:
         - name: PORT
-          value: "8080"
+          value: "8000"
         livenessProbe:
           tcpSocket:
-            port: 8080
+            port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           tcpSocket:
-            port: 8080
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
 ```

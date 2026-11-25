@@ -506,12 +506,13 @@ uv sync
 
 | Client | Transports |
 | :--- | :--- |
-| [Bob IDE](./docs/mcp-clients/bob-ide.md)| `streamable http`, `stdio` | 
+| [Amazon Bedrock](./docs/mcp-clients/amazon-bedrock.md) | `streamable http` |
+| [Bob IDE](./docs/mcp-clients/bob-ide.md)| `streamable http`, `stdio` |
 | [Bob CLI](./docs/mcp-clients/bob-cli.md) | `streamable http`, `stdio` |
-| [Claude Desktop](./docs/mcp-clients/claude-desktop.md) |  `streamable http`, `stdio` | 
-| [Cursor IDE](./docs/mcp-clients/cursor-ide.md) |  `streamable http`, `stdio` | 
+| [Claude Desktop](./docs/mcp-clients/claude-desktop.md) |  `streamable http`, `stdio` |
+| [Cursor IDE](./docs/mcp-clients/cursor-ide.md) |  `streamable http`, `stdio` |
 | [Kiro IDE](./docs/mcp-clients/kiro-ide.md)| `streamable http`, `stdio` |
-| [Kiro CLI](./docs/mcp-clients/kiro-cli.md)| `streamable http`, `stdio` |  
+| [Kiro CLI](./docs/mcp-clients/kiro-cli.md)| `streamable http`, `stdio` |
 | [Github Copilot](./docs/mcp-clients/github-copilot.md) | `streamable http`, `stdio` |
 | [Copilot CLI](./docs/mcp-clients/copilot-cli.md) | `streamable http`, `stdio` |
 | [Mistral AI](./docs/mcp-clients/mistral-ai.md) | `streamable http` |
@@ -623,25 +624,25 @@ The MCP Instana server can be deployed using Docker for production environments.
 docker build -t mcp-instana:latest .
 ```
 
-The above command would build the image using the instructions in the `Dockerfile`. The default port is `8080` and transport mode is `streamable-http`
+The above command would build the image using the instructions in the `Dockerfile`. The default port is `8000` and transport mode is `streamable-http`
 
 ```bash
 # Run the container (credentials are supplied via HTTP headers at request time)
-docker run -p 8080:8080 mcp-instana
+docker run -p 8000:8000 mcp-instana
 ```
 
 If you want to use a custom port on your host (ex: 9000)
 
 ```bash
 # Run with a custom host port
-docker run -p 9000:8080 mcp-instana
+docker run -p 9000:8000 mcp-instana
 ```
 
 ### Connecting to mcp-instana container in streamable mode
 
-Assuming your started your container using the command: `docker run -p 8080:8080 mcp-instana`
+Assuming your started your container using the command: `docker run -p 8000:8000 mcp-instana`
 
-Your MCP Client would connect to the Host port (8080). By default, the container runs in streamable mode.
+Your MCP Client would connect to the Host port (8000). By default, the container runs in streamable mode.
 
 Here is a sample configuration for your MCP client:
 
@@ -652,7 +653,7 @@ Here is a sample configuration for your MCP client:
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:8080/mcp",
+        "http://localhost:8000/mcp",
         "--allow-http",
         "--header",
         "instana-base-url: https://your-instana-instance.instana.io",
