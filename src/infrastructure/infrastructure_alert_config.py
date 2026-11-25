@@ -13,6 +13,7 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     sdk_call_with_keepalive,
     stream_json_array_page,
     with_header_auth,
@@ -339,8 +340,8 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "find_active_infra_alert_configs", logger)
+            if (err := self.check_response_status(response, "find_active_infra_alert_configs", logger)):
+                return err
 
             # Normalise and clamp pagination parameters before computing slice bounds.
             page = max(1, page if page is not None else 1)
@@ -482,10 +483,12 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status not in (200, 201):
-                return self.handle_api_error_response(response, "create_infra_alert_config", logger)
+            if (err := self.check_response_status(response, "create_infra_alert_config", logger)):
+                return err
 
             raw = decode_response(response)
+            if not raw.strip():
+                return {"success": True, "message": "Infra Smart Alert config created successfully."}
             return json.loads(raw)
         except Exception as e:
             logger.error(f"Error in _create: {e}", exc_info=True)
@@ -529,8 +532,8 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status not in (200, 204):
-                return self.handle_api_error_response(response, "update_infra_alert_config", logger)
+            if (err := self.check_response_status(response, "update_infra_alert_config", logger)):
+                return err
 
             raw = decode_response(response)
             return json.loads(raw) if raw.strip() else {"success": True, "message": f"Infra Smart Alert config '{id}' updated successfully."}
@@ -556,7 +559,12 @@ class InfrastructureAlertConfigMCPTools(BaseInstanaClient):
                 resource_type=resource_type,
                 tool_name=tool_name,
             )
-            if response is not None and response.status not in (200, 204):
+            # The high-level SDK delete returns None on success (204, no body), so
+            # None must not be treated as a failure; only a real response object
+            # (or the timeout error dict) needs checking.
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if response is not None and not is_success_status(response):
                 return self.handle_api_error_response(response, "delete_infra_alert_config", logger)
 
             return {

@@ -112,7 +112,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
             logger.debug(f"get_available_metrics called with payload={payload}")
 
             # Parse payload using shared utility
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 return request_body
 
@@ -223,7 +223,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
             logger.debug(f"get_entities called with payload={payload}")
 
             # Parse payload using shared utility
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 return request_body
 
@@ -288,8 +288,8 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                     resource_type=resource_type, tool_name=tool_name,
                 )
 
-                if response.status != 200:
-                    return self.handle_api_error_response(response, "get entities", logger)
+                if (err := self.check_response_status(response, "get entities", logger)):
+                    return err
 
                 response_text = decode_response(response)
                 result_dict = json.loads(response_text)
@@ -354,7 +354,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
             logger.debug(f"get_aggregated_entity_groups called with payload={payload}")
 
             # Parse payload using shared utility
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 return request_body
 
@@ -421,8 +421,8 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
                 )
 
                 # Check if the response was successful
-                if response.status != 200:
-                    return self.handle_api_error_response(response, "get entity groups", logger)
+                if (err := self.check_response_status(response, "get entity groups", logger)):
+                    return err
 
                 # Read the response content
                 response_text = decode_response(response)
@@ -540,7 +540,7 @@ class InfrastructureAnalyzeMCPTools(BaseInstanaClient):
             logger.debug(f"get_available_plugins called with payload={payload}")
 
             # Parse payload using shared utility
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 return request_body
 

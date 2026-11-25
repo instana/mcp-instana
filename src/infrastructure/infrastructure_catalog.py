@@ -20,14 +20,7 @@ except ImportError as e:
     raise
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    extract_tag_names_from_tree,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, extract_tag_names_from_tree, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -138,7 +131,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                     )
 
                     # Check if the response was successful
-                    if response_data.status != 200:
+                    if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+                        return response_data
+                    if not is_success_status(response_data):
                         error_message = f"Failed to get payload keys: HTTP {response_data.status}"
                         logger.debug(error_message)
                         return {"error": error_message}
@@ -272,7 +267,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get infrastructure catalog metrics: HTTP {response.status}"
                 logger.error(error_message)
                 return {"error": error_message}
@@ -450,7 +447,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get plugins with custom metrics: HTTP {response.status}"
                 logger.error(error_message)
                 return {"error": error_message}
@@ -504,7 +503,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             ctx=ctx, operation_name="get_tag_catalog_fallback",
             resource_type=resource_type, tool_name=tool_name,
         )
-        if response_data.status != 200:
+        if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+            return response_data
+        if not is_success_status(response_data):
             error_message = f"Failed to get tag catalog: HTTP {response_data.status}"
             logger.error(error_message)
             return {"error": error_message}
@@ -770,7 +771,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
                 )
 
                 # Check if the response was successful
-                if response_data.status != 200:
+                if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response_data
+                if not is_success_status(response_data):
                     error_message = f"Failed to get tag catalog: HTTP {response_data.status}"
                     logger.debug(error_message)
 
@@ -870,7 +873,9 @@ class InfrastructureCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get search fields: HTTP {response.status}"
                 logger.error(error_message)
                 return {"error": error_message}
