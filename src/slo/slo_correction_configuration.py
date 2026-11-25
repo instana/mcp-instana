@@ -22,12 +22,7 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, is_success_status, sdk_call_with_keepalive, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +201,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
         try:
             logger.debug(f"get_all_corrections called with page_size: {page_size}, page: {page}")
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_correction_window_configs_without_preload_content, page_size=page_size, page=page, order_by=order_by, order_direction=order_direction, query=query, tag=tag, id=id, slo_id=slo_id, refresh=refresh), ctx=ctx, operation_name="get_all_slo_correction_window_configs", resource_type=resource_type, tool_name=tool_name)
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -235,7 +232,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
                 return {"error": "ID is required"}
             logger.debug(f"get_correction_by_id called with id: {id}")
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_slo_correction_window_config_by_id_without_preload_content, id=id), ctx=ctx, operation_name="get_slo_correction_window_config_by_id", resource_type=resource_type, tool_name=tool_name)
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
             response_text = result.data.decode('utf-8')
@@ -302,7 +301,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_slo_correction_window_config_without_preload_content, correction_configuration=correction_object), ctx=ctx, operation_name="create_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -379,7 +380,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_slo_correction_window_config_without_preload_content, id=id, correction_configuration=correction_object), ctx=ctx, operation_name="update_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -406,7 +409,9 @@ class SLOCorrectionMCPTools(BaseInstanaClient):
             if not id:
                 return {"error": "id is required"}
 
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_correction_window_config, id=id), ctx=ctx, operation_name="delete_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_correction_window_config, id=id), ctx=ctx, operation_name="delete_slo_correction_window_config", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Correction window '{id}' deleted"}
 
         except Exception as e:

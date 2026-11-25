@@ -16,13 +16,7 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    parse_payload,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, is_success_status, parse_payload, sdk_call_with_keepalive, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -414,7 +408,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_active_service_levels_alert_configs_without_preload_content, slo_id=slo_id, alert_ids=alert_ids), ctx=ctx, operation_name="find_active_service_levels_alert_configs", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -452,7 +448,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_service_levels_alert_config_without_preload_content, id=id, valid_on=valid_on), ctx=ctx, operation_name="find_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -483,7 +481,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_service_levels_alert_config_versions_without_preload_content, id=id), ctx=ctx, operation_name="find_service_levels_alert_config_versions", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -528,7 +528,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_service_levels_alert_config_without_preload_content, service_levels_alert_config=config_object), ctx=ctx, operation_name="create_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
@@ -584,9 +586,15 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_service_levels_alert_config_without_preload_content, id=id, service_levels_alert_config=config_object), ctx=ctx, operation_name="update_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
+
+            # The SDK declares both 200 and 204 for this endpoint; 204 has no body.
+            if not result.data:
+                return {"success": True, "message": "Alert config updated"}
 
             response_text = result.data.decode('utf-8')
             result_dict = json.loads(response_text)
@@ -613,7 +621,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_service_levels_alert_config, id=id), ctx=ctx, operation_name="delete_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_service_levels_alert_config, id=id), ctx=ctx, operation_name="delete_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Alert config '{id}' deleted"}
 
         except Exception as e:
@@ -635,7 +645,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_service_levels_alert_config, id=id), ctx=ctx, operation_name="disable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_service_levels_alert_config, id=id), ctx=ctx, operation_name="disable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Alert config '{id}' disabled"}
 
         except Exception as e:
@@ -657,7 +669,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_service_levels_alert_config, id=id), ctx=ctx, operation_name="enable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_service_levels_alert_config, id=id), ctx=ctx, operation_name="enable_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Alert config '{id}' enabled"}
 
         except Exception as e:
@@ -687,7 +701,9 @@ class SLOAlertConfigMCPTools(BaseInstanaClient):
 
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_service_levels_alert_config_without_preload_content, id=id, created=created), ctx=ctx, operation_name="restore_service_levels_alert_config", resource_type=resource_type, tool_name=tool_name)
 
-            if result.status >= 400:
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details"
                 return {"error": f"API error (status {result.status}): {error_text}"}
 
