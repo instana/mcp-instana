@@ -100,6 +100,18 @@ class TestWebsiteMetricsMCPTools(unittest.TestCase):
 
         self.assertEqual(result, [{"id": "already-list"}])
 
+    def test_get_website_page_load_timeout_returns_list(self):
+        from src.core.utils import SdkCallTimeout
+
+        timeout = SdkCallTimeout({"error": "Instana API call timed out after 1s (get_website_page_load)."})
+        self.metrics_api.get_page_load.return_value = timeout
+
+        result = asyncio.run(self.client.get_website_page_load(page_id="page-1", timestamp=123))
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertIn("timed out", result[0]["error"])
+
     def test_get_website_page_load_exception(self):
         self.metrics_api.get_page_load.side_effect = Exception("API Error")
 
@@ -135,6 +147,27 @@ class TestWebsiteMetricsMCPTools(unittest.TestCase):
                 "time_frame": payload["timeFrame"],
             }
         )
+
+    def test_get_website_beacon_metrics_v2_capital_t_tag_filter_is_normalised(self):
+        """TagFilterExpression must reach the SDK model as tag_filter_expression."""
+        mock_result = Mock()
+        mock_result.to_dict.return_value = {"items": []}
+        self.metrics_api.get_beacon_metrics_v2.return_value = mock_result
+
+        tag_filter = {"type": "TAG_FILTER", "name": "beacon.website.name", "operator": "EQUALS",
+                      "entity": "NOT_APPLICABLE", "value": "site"}
+        payload = {
+            "metrics": [{"metric": "beaconCount", "aggregation": "SUM"}],
+            "type": "PAGELOAD",
+            "TagFilterExpression": tag_filter,
+        }
+
+        asyncio.run(self.client.get_website_beacon_metrics_v2(payload=payload))
+
+        config_object = self.metrics_api.get_beacon_metrics_v2.call_args.kwargs["get_website_metrics_v2"]
+        self.assertEqual(config_object.kwargs["tag_filter_expression"], tag_filter)
+
+
 
     def test_get_website_beacon_metrics_v2_with_json_string_payload(self):
         mock_result = {"success": True}

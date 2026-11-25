@@ -16,7 +16,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -103,6 +103,27 @@ class TestSyntheticMetricsMCPTools(unittest.TestCase):
 
         self.assertNotIn("error", result)
         self.assertEqual(result, expected)
+
+    def test_get_metrics_result_normalises_group_aliases(self):
+        """groupByTag-style keys in `groups` are renamed before GetMetricsResult.from_dict."""
+        asyncio.run(self.client.get_metrics_result(
+            payload={
+                "metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "MEAN"}],
+                "groups": [{
+                    "groupByTag": "synthetic.tags",
+                    "groupbyTagSecondLevelKey": "region",
+                    "groupByTagEntity": "NOT_APPLICABLE",
+                    "direction": "DESC",
+                }],
+            }
+        ))
+        sent = mock_get_metrics_result_class.from_dict.call_args[0][0]
+        self.assertEqual(sent["groups"], [{
+            "groupbyTag": "synthetic.tags",
+            "groupbyTagSecondLevelKey": "region",
+            "groupbyTagEntity": "NOT_APPLICABLE",
+            "direction": "DESC",
+        }])
 
     def test_get_metrics_result_with_json_string_payload(self):
         """Payload supplied as a JSON string should be parsed and accepted."""

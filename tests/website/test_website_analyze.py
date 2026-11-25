@@ -98,9 +98,12 @@ sys.modules['instana_client.api.website_catalog_api'] = MagicMock()
 # Patch the decorator and base class in the real src.core.utils module
 from src.core import utils as real_utils
 
-_original_with_header_auth = real_utils.with_header_auth
-_original_base_instana_client = real_utils.BaseInstanaClient
 real_utils.with_header_auth = mock_with_header_auth
+
+# Reuse the real status-check implementations so modules imported later by other
+# test files (which see this patched base class) can still call them.
+MockBaseInstanaClient.check_response_status = real_utils.BaseInstanaClient.check_response_status
+MockBaseInstanaClient.handle_api_error_response = real_utils.BaseInstanaClient.handle_api_error_response
 real_utils.BaseInstanaClient = MockBaseInstanaClient
 
 # Now import the module to test
@@ -112,10 +115,6 @@ from src.website.website_analyze import (
     WebsiteAnalyzeMCPTools,
     clean_nan_values,
 )
-
-# Restore the real objects so other test modules imported later are not affected
-real_utils.with_header_auth = _original_with_header_auth
-real_utils.BaseInstanaClient = _original_base_instana_client
 
 VALID_WEBSITE_CATALOG = [
     {
@@ -281,7 +280,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
     def test_get_beacon_groups_with_all_params(self, _mock_catalog):
         """Test get_website_beacon_groups with all parameters"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
-        group = {"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"}
+        group = {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
         tag_filter = {
             "type": "TAG_FILTER",
             "name": "beacon.website.name",
@@ -319,7 +318,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.tools_instance.get_website_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"},
+            group={"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"},
             beacon_type="PAGELOAD",
             api_client=self.mock_api_client
         ))
@@ -330,7 +329,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
     def test_get_beacon_groups_http_error(self, _mock_catalog):
         """Test get_website_beacon_groups with HTTP error"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
-        group = {"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"}
+        group = {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
 
         mock_response = Mock()
         mock_response.status = 500
@@ -352,7 +351,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         """Test get_website_beacon_groups with invalid metric — now caught
         by pre-flight catalog validation before reaching the API."""
         metrics = [{"metric": "invalidMetric", "aggregation": "SUM"}]
-        group = {"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"}
+        group = {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
 
         result = asyncio.run(self.tools_instance.get_website_beacon_groups(
             metrics=metrics,
@@ -368,7 +367,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
     def test_get_beacon_groups_api_exception(self, _mock_catalog):
         """Test get_website_beacon_groups when API raises exception"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
-        group = {"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"}
+        group = {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
 
         self.mock_api_client.get_beacon_groups_without_preload_content.side_effect = Exception("API Error")
 
@@ -385,7 +384,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
     def test_get_beacon_groups_invalid_tag_filter(self, _mock_catalog):
         """Test get_website_beacon_groups with structurally invalid tag filter"""
         metrics = [{"metric": "beaconCount", "aggregation": "SUM"}]
-        group = {"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"}
+        group = {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
         tag_filter = {"invalid": "structure"}
 
         result = asyncio.run(self.tools_instance.get_website_beacon_groups(
@@ -468,7 +467,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
     def test_check_elicitation_metrics_example_uses_current_page_load_metric(self):
         """Missing-parameter guidance should advertise the catalog-backed page load metric."""
-        result = self.tools_instance._check_elicitation_for_beacon_groups(None, {"groupByTag": "beacon.page.name"}, "PAGELOAD")
+        result = self.tools_instance._check_elicitation_for_beacon_groups(None, {"groupbyTag": "beacon.page.name"}, "PAGELOAD")
         metrics_param = next(param for param in result["missing_parameters"] if param["name"] == "metrics")
         stale_metric = "page" + "LoadTime"
 
@@ -484,7 +483,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
             "entity": "NOT_APPLICABLE",
             "value": "test"
         }
-        group = {"groupByTag": "beacon.page.name"}
+        group = {"groupbyTag": "beacon.page.name"}
 
         result = self.tools_instance._validate_tag_names(tag_filter, group, "PAGELOAD")
 
@@ -499,7 +498,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
             "entity": "NOT_APPLICABLE",
             "value": "test"
         }
-        group = {"groupByTag": "beacon.page.name"}
+        group = {"groupbyTag": "beacon.page.name"}
 
         result = self.tools_instance._validate_tag_names(tag_filter, group, "PAGELOAD")
 
@@ -521,7 +520,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
                 }
             ]
         }
-        group = {"groupByTag": "beacon.user.name"}
+        group = {"groupbyTag": "beacon.user.name"}
 
         result = self.tools_instance._validate_tag_names(tag_filter, group, "PAGELOAD")
 
@@ -721,10 +720,10 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
     @PATCH_CATALOG
     def test_get_beacon_groups_with_groupby_tag_entity(self, _mock_catalog):
-        """Test get_website_beacon_groups with groupByTagEntity"""
+        """Test get_website_beacon_groups with groupbyTagEntity"""
         group = {
-            "groupByTag": "beacon.page.name",
-            "groupByTagEntity": "DESTINATION"
+            "groupbyTag": "beacon.page.name",
+            "groupbyTagEntity": "DESTINATION"
         }
 
         mock_response = Mock()
@@ -742,6 +741,29 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
         self.assertIn("items", result)
 
     @PATCH_CATALOG
+    def test_get_beacon_groups_alias_group_is_normalised_before_sdk(self, _mock_catalog):
+        """groupByTag/groupByTagEntity must reach the SDK model as the canonical keys."""
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({"items": []}).encode('utf-8')
+        self.mock_api_client.get_beacon_groups_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.tools_instance.get_website_beacon_groups(
+            metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
+            group={"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"},
+            beacon_type="PAGELOAD",
+            api_client=self.mock_api_client
+        ))
+
+        self.assertNotIn("error", result)
+        self.assertNotIn("elicitation_needed", result)
+        sent = self.mock_api_client.get_beacon_groups_without_preload_content.call_args.kwargs
+        self.assertEqual(
+            sent["get_website_beacon_groups"].kwargs["group"],
+            {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"},
+        )
+
+    @PATCH_CATALOG
     def test_get_beacon_groups_nan_error(self, _mock_catalog):
         """Test get_website_beacon_groups with NaN error in response"""
         mock_response = Mock()
@@ -755,7 +777,7 @@ class TestWebsiteAnalyzeMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.tools_instance.get_website_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "beacon.page.name", "groupByTagEntity": "NOT_APPLICABLE"},
+            group={"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"},
             beacon_type="PAGELOAD",
             api_client=self.mock_api_client
         ))

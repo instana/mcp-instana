@@ -556,6 +556,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock API response
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [
                 {"traceId": "trace1", "cursor": {"ingestionTime": 123, "offset": 0}},
@@ -600,6 +601,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         # Mock API response
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
@@ -729,6 +731,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [{"traceId": "trace1"}],
             "canLoadMore": False,
@@ -763,6 +766,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
@@ -797,6 +801,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [],
             "canLoadMore": False,
@@ -858,6 +863,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [
                 {"traceId": "trace1", "cursor": {"ingestionTime": 1234567890, "offset": 99}}
@@ -948,6 +954,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         )
 
         mock_result = MagicMock()
+        mock_result.status = 200
         mock_result.data = json.dumps({
             "items": [
                 {
@@ -975,6 +982,63 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         self.assertEqual(result["ingestionTime"], 1710000000)
         self.assertEqual(result["offset"], 4)
 
+    def test_get_trace_groups_alias_group_is_normalised_before_sdk(self):
+        """groupByTag/groupByTagEntity must reach GetTraceGroups.from_dict as the
+        canonical keys; the SDK silently drops the aliases."""
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+        client = ApplicationAnalyzeMCPTools(read_token=self.read_token, base_url=self.base_url)
+
+        mock_result = MagicMock()
+        mock_result.status = 200
+        mock_result.data = json.dumps({"items": [], "canLoadMore": False}).encode("utf-8")
+        analyze_api_instance.get_trace_groups_without_preload_content = MagicMock(return_value=mock_result)
+
+        result = asyncio.run(client.get_trace_groups(
+            payload={
+                "group": {"groupByTag": "trace.service.name", "groupByTagEntity": "DESTINATION"},
+                "metrics": [{"metric": "traces", "aggregation": "SUM"}],
+            },
+            api_client=analyze_api_instance
+        ))
+
+        self.assertNotIn("error", result)
+        self.assertNotIn("elicitation_needed", result)
+        sent_group = mock_get_trace_groups.from_dict.call_args[0][0]["group"]
+        self.assertEqual(
+            sent_group,
+            {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},
+        )
+
+    def test_get_trace_groups_capital_t_tag_filter_is_normalised_before_sdk(self):
+        """TagFilterExpression must reach GetTraceGroups.from_dict as
+        tagFilterExpression; the SDK silently drops the capital-T key."""
+        analyze_api_instance = MagicMock()
+        mock_analyze_api.return_value = analyze_api_instance
+        client = ApplicationAnalyzeMCPTools(read_token=self.read_token, base_url=self.base_url)
+
+        mock_result = MagicMock()
+        mock_result.status = 200
+        mock_result.data = json.dumps({"items": [], "canLoadMore": False}).encode("utf-8")
+        analyze_api_instance.get_trace_groups_without_preload_content = MagicMock(return_value=mock_result)
+
+        tag_filter = {
+            "type": "TAG_FILTER", "name": "service.name", "operator": "EQUALS",
+            "entity": "DESTINATION", "value": "x",
+        }
+        asyncio.run(client.get_trace_groups(
+            payload={
+                "group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},
+                "metrics": [{"metric": "traces", "aggregation": "SUM"}],
+                "TagFilterExpression": tag_filter,
+            },
+            api_client=analyze_api_instance
+        ))
+
+        sent = mock_get_trace_groups.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"], tag_filter)
+        self.assertNotIn("TagFilterExpression", sent)
+    
     def test_get_trace_groups_invalid_payload_string(self):
         """Test get_trace_groups with invalid string payload"""
         configuration_instance = MagicMock()
@@ -997,6 +1061,38 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
         self.assertIn("Invalid payload format", result["error"])
+
+    def test_get_trace_groups_http_error_status(self):
+            """A non-2xx raw response must be returned as an error, not parsed as data"""
+            configuration_instance = MagicMock()
+            configuration_instance.api_key = {}
+            configuration_instance.api_key_prefix = {}
+            mock_configuration.return_value = configuration_instance
+            mock_api_client.return_value = MagicMock()
+            analyze_api_instance = MagicMock()
+            mock_analyze_api.return_value = analyze_api_instance
+
+            client = ApplicationAnalyzeMCPTools(
+                read_token=self.read_token,
+                base_url=self.base_url
+            )
+
+            mock_result = MagicMock()
+            mock_result.status = 500
+            mock_result.data = b'{"items": [{"group": "looks-like-data"}]}'
+            analyze_api_instance.get_trace_groups_without_preload_content = MagicMock(return_value=mock_result)
+
+            result = asyncio.run(client.get_trace_groups(
+                payload={
+                    "group": {"groupbyTag": "trace.service.name", "groupbyTagEntity": "DESTINATION"},
+                    "metrics": [{"metric": "traces", "aggregation": "SUM"}],
+                },
+                api_client=analyze_api_instance
+            ))
+
+            self.assertEqual(result["status_code"], 500)
+            self.assertIn("HTTP 500", result["error"])
+            self.assertNotIn("items", result)
 
     def test_get_trace_groups_exception(self):
         """Test get_trace_groups exception handling"""

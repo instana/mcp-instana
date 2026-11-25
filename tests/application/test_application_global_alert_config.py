@@ -242,6 +242,17 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
         self.assertIn("error", result)
         self.assertEqual(result["error"], "application_id is required")
 
+    def test_find_active_global_application_alert_configs_http_error_status(self):
+        """A non-2xx response must surface as an error, not as 'no configs found'"""
+        mock_response = _make_streaming_response(b'{"errors": ["boom"]}', status=500)
+        self.alert_config_api.find_active_global_application_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.find_active_global_application_alert_configs(application_id="app1"))
+
+        self.assertEqual(result["status_code"], 500)
+        self.assertIn("HTTP 500", result["error"])
+        self.assertNotIn("configs", result)
+
     def test_find_active_global_application_alert_configs_error(self):
         """Test find_active_global_application_alert_configs error handling"""
         # Set up the mock to raise an exception
@@ -1092,7 +1103,40 @@ class TestApplicationGlobalAlertMCPTools(unittest.TestCase):
             id="alert-1",
         ))
         self.assertFalse(result.get("elicitation_needed", False))
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
 
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; a mutating call must not report success."""
+
+    def setUp(self):
+        self.client = ApplicationGlobalAlertMCPTools(read_token="test_token", base_url="https://test.instana.io")
+        self.client.alert_config_api = MagicMock()
+        patcher = patch(
+            "src.application.application_global_alert_config.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_delete_timeout_returns_timeout_error(self):
+        result = asyncio.run(self.client.delete_global_application_alert_config(id="alert1"))
+
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.mock_keepalive.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

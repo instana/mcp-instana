@@ -15,7 +15,6 @@ from unittest.mock import MagicMock, patch
 
 from src.core.utils import parse_payload
 
-
 # Create a null handler that will discard all log messages
 class NullHandler(logging.Handler):
     def emit(self, record):
@@ -88,7 +87,6 @@ sys.modules['instana_client.api.service_levels_alert_configuration_api'].Service
 
 # Import with patched decorator
 import src.core.utils
-
 original_with_header_auth = src.core.utils.with_header_auth
 src.core.utils.with_header_auth = mock_with_header_auth
 
@@ -113,7 +111,7 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             read_token="test_token",
             base_url="https://test.instana.com"
         )
-
+        
         # Create a mock API client instance
         self.mock_api = MagicMock()
         self.client.alert_config_api = self.mock_api
@@ -884,9 +882,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should return a mock object (not an error dict)
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -902,9 +900,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "SERVICE_LEVELS_OBJECTIVE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should return a mock object (not an error dict)
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -920,9 +918,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         self.assertIn("error", result)
         self.assertIn("rule.metric is required", result["error"])
 
@@ -938,9 +936,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURN_RATE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         self.assertIn("error", result)
         self.assertIn("burnRateTimeWindows is required", result["error"])
 
@@ -956,9 +954,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "INVALID_TYPE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         self.assertIn("error", result)
         self.assertIn("Invalid alertType", result["error"])
 
@@ -974,9 +972,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000}  # Missing timeWindow
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         self.assertIn("error", result)
         self.assertIn("timeThreshold must include both", result["error"])
 
@@ -993,9 +991,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000},
             "threshold": {"value": 0.95, "operator": ">="}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1016,9 +1014,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             },
             "burnRateConfig": {"factor": 2}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1035,9 +1033,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000},
             "triggering": True
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1055,9 +1053,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-
+        
         result = self.client._build_alert_config_object(request_body)
-
+        
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1287,6 +1285,49 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
         }
         result = self.client._validate_alert_config_payload(payload)
         self.assertIsNone(result)
+
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; a mutating call must not report success."""
+
+    def setUp(self):
+        self.client = SLOAlertConfigMCPTools(read_token="test_token", base_url="https://test.instana.com")
+        self.client.alert_config_api = MagicMock()
+        patcher = patch(
+            "src.slo.slo_alert_config.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _assert_timeout_error(self, result):
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_delete_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.delete_alert_config(id="alert-123")))
+
+    def test_disable_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.disable_alert_config(id="alert-123")))
+
+    def test_enable_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.enable_alert_config(id="alert-123")))
 
 
 if __name__ == "__main__":

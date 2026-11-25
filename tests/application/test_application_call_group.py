@@ -201,6 +201,27 @@ class TestApplicationCallGroupMCPTools(unittest.TestCase):
         self.assertIn("items", result)
         self.assertEqual(len(result["items"]), 1)
 
+    def test_get_grouped_calls_metrics_alias_group_is_normalised_before_sdk(self):
+        """groupByTag/groupByTagEntity must reach GetCallGroups.from_dict as the
+        canonical keys; the SDK silently drops the aliases."""
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = {"items": []}
+        self.analyze_api.get_call_group.return_value = mock_result
+        mock_get_call_groups.from_dict.return_value = MagicMock()
+
+        result = asyncio.run(self.client.get_grouped_calls_metrics(
+            metrics=[{"metric": "calls", "aggregation": "SUM"}],
+            time_frame={"windowSize": 3600000},
+            group={"groupByTag": "service.name", "groupByTagEntity": "DESTINATION"},
+        ))
+
+        self.assertNotIn("elicitation_needed", result)
+        sent_group = mock_get_call_groups.from_dict.call_args[0][0]["group"]
+        self.assertEqual(
+            sent_group,
+            {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"},
+        )
+
     def test_get_grouped_calls_metrics_error(self):
         """Test get_grouped_calls_metrics error handling"""
         # Mock the API to raise an exception

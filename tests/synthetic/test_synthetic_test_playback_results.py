@@ -1,7 +1,7 @@
 """
 Unit tests for Synthetic Test Playback Results Module
 
-Tests execute_playback_operation dispatch, _normalize_tag_filter_key,
+Tests execute_playback_operation dispatch
 and all individual playback methods.
 """
 
@@ -11,7 +11,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -57,14 +57,12 @@ for model_name in ['GetTestResult', 'GetTestResultAnalytic', 'GetTestResultList'
     mock_cls.from_dict = MagicMock(return_value=MagicMock())
     mod_key = f'instana_client.models.{model_name[3:].replace("", "get_").lower()}'
     setattr(
-        sys.modules['instana_client.models.get_test_result'],
+        sys.modules[f'instana_client.models.get_test_result'],
         model_name, mock_cls
     )
 
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-    from src.synthetic.synthetic_test_playback_results import (
-        SyntheticTestPlaybackResultsMCPTools,
-    )
+    from src.synthetic.synthetic_test_playback_results import SyntheticTestPlaybackResultsMCPTools
 
 
 def _ok_response(payload):
@@ -83,49 +81,10 @@ def _error_response(status, body=b'Error'):
     return r
 
 
-class TestNormalizeTagFilterKey(unittest.TestCase):
-    """Tests for _normalize_tag_filter_key static method."""
-
-    def test_uppercase_t_is_renamed_when_lowercase_absent(self):
-        payload = {
-            "syntheticMetrics": ["synthetic.metricsStatus"],
-            "TagFilterExpression": {"type": "TAG_FILTER"},
-        }
-        result = SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(payload)
-        self.assertIn("tagFilterExpression", result)
-        self.assertNotIn("TagFilterExpression", result)
-
-    def test_lowercase_t_unchanged(self):
-        payload = {
-            "syntheticMetrics": ["synthetic.metricsStatus"],
-            "tagFilterExpression": {"type": "TAG_FILTER"},
-        }
-        result = SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(payload)
-        self.assertIn("tagFilterExpression", result)
-        self.assertNotIn("TagFilterExpression", result)
-
-    def test_both_present_keeps_existing_lowercase(self):
-        payload = {
-            "tagFilterExpression": {"type": "existing"},
-            "TagFilterExpression": {"type": "new"},
-        }
-        result = SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(payload)
-        # lowercase is already there — should not overwrite
-        self.assertEqual(result["tagFilterExpression"]["type"], "existing")
-
-    def test_non_dict_payload_returned_unchanged(self):
-        payload = "raw string"
-        result = SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(payload)
-        self.assertEqual(result, "raw string")
-
-    def test_none_payload_returned_unchanged(self):
-        result = SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(None)
-        self.assertIsNone(result)
-
-    def test_does_not_mutate_original_dict(self):
-        original = {"TagFilterExpression": {"type": "TAG_FILTER"}}
-        SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(original)
-        self.assertIn("TagFilterExpression", original)
+_CAPITAL_T_FILTER = {
+    "type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS",
+    "entity": "NOT_APPLICABLE", "stringValue": "loc-1",
+}
 
 
 class TestExecutePlaybackOperation(unittest.TestCase):
@@ -144,6 +103,24 @@ class TestExecutePlaybackOperation(unittest.TestCase):
         mock = AsyncMock(return_value=return_value)
         setattr(self.client, method_name, mock)
         return mock
+
+    def test_dispatch_to_real_method_keeps_capital_t_filter(self):
+        """The dispatcher path (real method, mocked SDK) must not drop a capital-T filter."""
+        from instana_client.models.get_test_result_list import GetTestResultList
+        GetTestResultList.from_dict = MagicMock(return_value=MagicMock())
+        self.playback_api.get_synthetic_result_list_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.execute_playback_operation(
+            "get_synthetic_result_list",
+            {"payload": {
+                "syntheticMetrics": ["synthetic.metricsStatus"],
+                "TagFilterExpression": _CAPITAL_T_FILTER,
+            }}
+        ))
+        sent = GetTestResultList.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
 
     def test_dispatches_get_synthetic_result(self):
         m = self._patch_method("get_synthetic_result", {"items": []})
@@ -165,7 +142,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_list(self):
         m = self._patch_method("get_synthetic_result_list", {"items": []})
-        asyncio.run(self.client.execute_playback_operation(
+        result = asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_list",
             {"payload": {"syntheticMetrics": ["synthetic.metricsStatus"]}}
         ))
@@ -173,7 +150,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_location_summary_list(self):
         m = self._patch_method("get_location_summary_list", {"items": []})
-        asyncio.run(self.client.execute_playback_operation(
+        result = asyncio.run(self.client.execute_playback_operation(
             "get_location_summary_list",
             {"payload": {"timeFrame": {"to": None, "windowSize": 300000}}}
         ))
@@ -181,7 +158,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_test_summary_list(self):
         m = self._patch_method("get_test_summary_list", {"items": []})
-        asyncio.run(self.client.execute_playback_operation(
+        result = asyncio.run(self.client.execute_playback_operation(
             "get_test_summary_list",
             {"payload": {"metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}]}}
         ))
@@ -189,7 +166,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_metadata(self):
         m = self._patch_method("get_synthetic_result_metadata", {"types": []})
-        asyncio.run(self.client.execute_playback_operation(
+        result = asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_metadata",
             {"testid": "t1", "testresultid": "r1"}
         ))
@@ -197,7 +174,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_detail_data(self):
         m = self._patch_method("get_synthetic_result_detail_data", {"data": "..."})
-        asyncio.run(self.client.execute_playback_operation(
+        result = asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_detail_data",
             {"testid": "t1", "testresultid": "r1", "type": "HAR"}
         ))
@@ -207,22 +184,6 @@ class TestExecutePlaybackOperation(unittest.TestCase):
         result = asyncio.run(self.client.execute_playback_operation("no_such_op", {}))
         self.assertIn("error", result)
         self.assertIn("no_such_op", result["error"])
-
-    def test_tag_filter_normalization_applied(self):
-        """Capital-T TagFilterExpression should be normalised before forwarding."""
-        m = self._patch_method("get_synthetic_result_list", {"items": []})
-        asyncio.run(self.client.execute_playback_operation(
-            "get_synthetic_result_list",
-            {
-                "payload": {
-                    "syntheticMetrics": ["synthetic.metricsStatus"],
-                    "TagFilterExpression": {"type": "TAG_FILTER"},
-                }
-            }
-        ))
-        called_payload = m.call_args.kwargs.get("payload") or m.call_args.args[0]
-        self.assertIn("tagFilterExpression", called_payload)
-        self.assertNotIn("TagFilterExpression", called_payload)
 
     def test_none_params_defaults_to_empty_dict(self):
         """None params should not raise; unknown op returns error gracefully."""
@@ -264,6 +225,19 @@ class TestGetSyntheticResult(unittest.TestCase):
             payload={"metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "MEAN"}]}
         ))
         self.assertNotIn("error", result)
+
+    def test_capital_t_filter_is_renamed(self):
+        from instana_client.models.get_test_result import GetTestResult
+        self.playback_api.get_synthetic_result_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.get_synthetic_result(payload={
+            "metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "MEAN"}],
+            "TagFilterExpression": _CAPITAL_T_FILTER,
+        }))
+        sent = GetTestResult.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
 
     def test_missing_metrics_field(self):
         result = asyncio.run(self.client.get_synthetic_result(
@@ -346,6 +320,20 @@ class TestGetSyntheticResultAnalytic(unittest.TestCase):
         ))
         self.assertNotIn("error", result)
 
+    def test_capital_t_filter_is_renamed(self):
+        from instana_client.models.get_test_result_analytic import GetTestResultAnalytic
+        self.playback_api.get_synthetic_result_analytic_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.get_synthetic_result_analytic(payload={
+            "syntheticMetrics": ["synthetic.metricsStatus"],
+            "analyticFunction": "LAST_VALUE",
+            "TagFilterExpression": _CAPITAL_T_FILTER,
+        }))
+        sent = GetTestResultAnalytic.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
+
     def test_missing_synthetic_metrics_field(self):
         result = asyncio.run(self.client.get_synthetic_result_analytic(
             payload={"analyticFunction": "LAST_VALUE"}
@@ -423,6 +411,43 @@ class TestGetSyntheticResultList(unittest.TestCase):
             payload={"syntheticMetrics": ["synthetic.metricsStatus"]}
         ))
         self.assertNotIn("error", result)
+
+    def test_json_string_payload_keeps_capital_t_filter(self):
+        """A JSON-string payload with TagFilterExpression must keep its filter
+        (previously the rename was skipped for non-dict input)."""
+        from instana_client.models.get_test_result_list import GetTestResultList
+        self.playback_api.get_synthetic_result_list_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        payload = json.dumps({
+            "syntheticMetrics": ["synthetic.metricsStatus"],
+            "TagFilterExpression": {
+                "type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS",
+                "entity": "NOT_APPLICABLE", "stringValue": "loc-1",
+            },
+        })
+        result = asyncio.run(self.client.get_synthetic_result_list(payload=payload))
+        self.assertNotIn("error", result)
+        sent = GetTestResultList.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
+
+    def test_direct_call_keeps_capital_t_filter(self):
+        """Direct service calls (no execute_playback_operation) are covered too."""
+        from instana_client.models.get_test_result_list import GetTestResultList
+        self.playback_api.get_synthetic_result_list_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.get_synthetic_result_list(payload={
+            "syntheticMetrics": ["synthetic.metricsStatus"],
+            "TagFilterExpression": {
+                "type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS",
+                "entity": "NOT_APPLICABLE", "stringValue": "loc-1",
+            },
+        }))
+        sent = GetTestResultList.from_dict.call_args[0][0]
+        self.assertIn("tagFilterExpression", sent)
+        self.assertNotIn("TagFilterExpression", sent)
 
     def test_missing_synthetic_metrics_field(self):
         result = asyncio.run(self.client.get_synthetic_result_list(
@@ -507,6 +532,19 @@ class TestGetLocationSummaryList(unittest.TestCase):
             payload={"timeFrame": {"to": None, "windowSize": 300000}}
         ))
         self.assertNotIn("error", result)
+
+    def test_capital_t_filter_is_renamed(self):
+        from instana_client.models.get_test_result_base import GetTestResultBase
+        self.playback_api.get_location_summary_list_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.get_location_summary_list(payload={
+            "timeFrame": {"to": None, "windowSize": 300000},
+            "TagFilterExpression": _CAPITAL_T_FILTER,
+        }))
+        sent = GetTestResultBase.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
 
     def test_success_with_pagination_only(self):
         """A payload carrying only pagination should also succeed."""
@@ -593,6 +631,19 @@ class TestGetTestSummaryList(unittest.TestCase):
             }
         ))
         self.assertNotIn("error", result)
+
+    def test_capital_t_filter_is_renamed(self):
+        from instana_client.models.get_test_summary_result import GetTestSummaryResult
+        self.playback_api.get_test_summary_list_without_preload_content = Mock(
+            return_value=_ok_response({"items": []})
+        )
+        asyncio.run(self.client.get_test_summary_list(payload={
+            "metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}],
+            "TagFilterExpression": _CAPITAL_T_FILTER,
+        }))
+        sent = GetTestSummaryResult.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["stringValue"], "loc-1")
+        self.assertNotIn("TagFilterExpression", sent)
 
     def test_missing_metrics_field(self):
         result = asyncio.run(self.client.get_test_summary_list(

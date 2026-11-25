@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-
 # Mock the ApiException since instana_client is not available in test environment
 class ApiException(Exception):
     def __init__(self, status=None, reason=None, *args, **kwargs):
@@ -41,15 +40,6 @@ class TestMobileAppConfigurationE2E:
         assert client is not None
         assert client.read_token == instana_credentials["api_token"]
         assert client.base_url == instana_credentials["base_url"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.mocked
-    async def test_debug_print(self):
-        """Test the debug_print helper function."""
-        # debug_print is not exported from the module
-        # This test verifies that the module can be imported successfully
-        assert create_mobile_app_configuration_client is not None
-
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
@@ -154,6 +144,7 @@ class TestMobileAppConfigurationE2E:
         mock_api_client.get_mobile_app_geo_mapping_rules_without_preload_content = MagicMock()
 
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         mock_api_client.get_mobile_app_geo_mapping_rules_without_preload_content.return_value = mock_response
 

@@ -74,14 +74,14 @@ _mocks = {
 }
 
 # Import src.core.utils to ensure it's available for patching
-import contextlib
-
-with contextlib.suppress(ImportError):
+try:
     import src.core.utils
+except ImportError:
+    pass
 
 # Save original modules
 _original_modules = {}
-for module_name in _mocks:
+for module_name in _mocks.keys():
     if module_name in sys.modules:
         _original_modules[module_name] = sys.modules[module_name]
 
@@ -319,6 +319,32 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
 
         # Check that the result is correct
         self.assertEqual(result, mock_result)
+
+    def test_get_entities_capital_t_tag_filter_is_normalised(self):
+        """TagFilterExpression must survive into the SDK query as tag_filter_expression."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.data = json.dumps({"items": []}).encode("utf-8")
+        self.analyze_api.get_entities_without_preload_content.return_value = mock_response
+
+        payload = {
+            "timeFrame": {"to": 1625184000000, "windowSize": 3600000},
+            "type": "jvmRuntimePlatform",
+            "metrics": [{"metric": "memory.used", "granularity": 3600000, "aggregation": "MAX"}],
+            "pagination": {"retrievalSize": 10},
+            "TagFilterExpression": {
+                "type": "TAG_FILTER", "name": "host.name", "operator": "EQUALS",
+                "entity": "NOT_APPLICABLE", "stringValue": "server1",
+            },
+        }
+
+        asyncio.run(self.client.get_entities(payload=payload))
+
+        sent = mock_infra_query.from_dict.call_args[0][0]
+        self.assertEqual(sent["tagFilterExpression"]["name"], "host.name")
+        self.assertNotIn("TagFilterExpression", sent)
+
+
 
     def test_get_entities_with_string_payload(self):
         """Test get_entities with a string payload"""
@@ -623,7 +649,7 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
         # Check that the result contains an error message
         self.assertIn("error", result)
         self.assertIn("Failed to get available plugins", result["error"])
-
+        
         # Reset side effect
         self.analyze_api.get_available_plugins.side_effect = None
 
@@ -709,14 +735,6 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
         self.assertIn("hosts", result)
         self.assertEqual(len(result["hosts"]), 0)
         self.assertEqual(result["count"], 0)
-
-    def test_debug_print_writes_to_stderr(self):
-        """Test debug_print writes to stderr."""
-        from src.infrastructure.infrastructure_analyze import debug_print
-
-        with patch("sys.stderr") as mock_stderr:
-            debug_print("hello", end="!")
-            mock_stderr.write.assert_called()
 
     def test_get_available_metrics_parses_python_literal_string(self):
         """Test get_available_metrics falls back to ast.literal_eval."""
@@ -854,7 +872,7 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
         self.assertIn("API call failed: api boom", result["error"])
-
+        
         # Reset the side effect
         self.analyze_api.get_entity_groups_without_preload_content.side_effect = None
 

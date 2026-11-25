@@ -124,6 +124,7 @@ class TestApplicationCatalogMCPTools(unittest.TestCase):
 
         # Set up the mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'[{"tagTree": [{"name": "level1", "children": [{"name": "child1"}, {"name": "child2"}, {"name": "child3"}, {"name": "child4"}]}, {"name": "level2", "children": []}, {"name": "level3", "children": []}, {"name": "level4"}]}]'
 
         self.client.catalog_api.get_application_tag_catalog_without_preload_content = MagicMock(return_value=mock_response)
@@ -144,6 +145,7 @@ class TestApplicationCatalogMCPTools(unittest.TestCase):
         """Test get_application_tag_catalog with specific parameters"""
         # Set up the mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'{"tagTree": []}'
 
         self.client.catalog_api.get_application_tag_catalog_without_preload_content = MagicMock(return_value=mock_response)
@@ -182,10 +184,24 @@ class TestApplicationCatalogMCPTools(unittest.TestCase):
         self.assertIn("Failed to get application catalog", result["error"])
         self.assertIn("Test error", result["error"])
 
+    def test_get_application_tag_catalog_http_error_status(self):
+        """A non-2xx raw response must be returned as an error, not parsed as data"""
+        mock_response = MagicMock()
+        mock_response.status = 401
+        mock_response.data = b'{"errors": ["Unauthorized"]}'
+        self.client.catalog_api.get_application_tag_catalog_without_preload_content = MagicMock(return_value=mock_response)
+
+        result = asyncio.run(self.client.get_application_tag_catalog())
+
+        self.assertEqual(result["status_code"], 401)
+        self.assertIn("HTTP 401", result["error"])
+        self.assertNotIn("tags", result)
+
     def test_get_application_tag_catalog_unexpected_format(self):
         """Test get_application_tag_catalog with unexpected response format"""
         # Set up the mock response with an unexpected format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b"not a valid json"
 
         self.client.catalog_api.get_application_tag_catalog_without_preload_content = MagicMock(return_value=mock_response)
