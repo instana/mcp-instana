@@ -4,8 +4,8 @@ Application Resources MCP Tools Module
 This module provides application resources-specific MCP tools for Instana monitoring.
 """
 
-import json
 import logging
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -24,13 +24,7 @@ except ImportError as e:
     raise
 
 from src.core.ui_links import add_application_link, add_service_link
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -186,6 +180,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 operation_name="get_applications"
             )
 
+            if (err := self.check_response_status(response, "get applications", logger)):
+                return err
+
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))
 
@@ -247,6 +244,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 operation_name="get_application_endpoints",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get application endpoints", logger)):
+                return err
 
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))
@@ -314,6 +314,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get application services", logger)):
+                return err
+
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))
             self._sanitize_items_technologies(result_dict)
@@ -366,6 +369,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get applications", logger)):
+                return err
+
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))
 
@@ -409,6 +415,9 @@ class ApplicationResourcesMCPTools(BaseInstanaClient):
                 operation_name="get_services",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get services", logger)):
+                return err
 
             # Parse the raw JSON response
             result_dict = json.loads(response.data.decode('utf-8'))

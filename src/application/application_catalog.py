@@ -75,6 +75,9 @@ class ApplicationCatalogMCPTools(BaseInstanaClient):
 
             raw_response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_application_tag_catalog_without_preload_content, use_case=use_case, data_source=data_source, var_from=var_from), ctx=ctx, operation_name="get_application_tag_catalog_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
+            if (err := self.check_response_status(raw_response, "get application tag catalog", logger)):
+                return err
+
             raw_data = raw_response.data
             parsed = json.loads(raw_data)
 

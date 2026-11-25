@@ -238,6 +238,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_application_configs",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if (err := self.check_response_status(result, "get application configs", logger)):
+                return [err]
             try:
                 response_text = decode_response(result)
                 json_data = json.loads(response_text)
@@ -693,6 +695,9 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "add application config", logger)):
+                return err
+
             result_dict = json.loads(response.data.decode('utf-8'))
             return self._build_add_application_response(result_dict, request_body, payload)
         except Exception as e:
@@ -737,6 +742,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_application_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if (err := self.check_response_status(response, "get application config", logger)):
+                return err
             result = json.loads(response.data.decode('utf-8'))
             # Add an Instana UI link to the application
             if isinstance(result, dict):
@@ -787,8 +794,14 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
-            result_dict = json.loads(response.data.decode('utf-8'))
-            return result_dict or {"success": True, "message": f"Application config '{id}' updated"}
+            if (err := self.check_response_status(response, "update application config", logger)):
+                return err
+
+            # 204 No Content carries no body, so only parse when there is one.
+            body = response.data.decode('utf-8') if response.data else ""
+            if not body.strip():
+                return {"success": True, "message": f"Application config '{id}' updated"}
+            return json.loads(body)
         except Exception as e:
             logger.error(f"Error in _update_application_config: {e}", exc_info=True)
             return {"error": f"Failed to update application config: {e!s}"}
@@ -805,7 +818,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             if not id:
                 return {"error": "id is required"}
 
-            await sdk_call_with_keepalive(
+            result = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.delete_application_config,
                     id=id
@@ -814,6 +827,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="delete_application_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Application config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_application_config: {e}", exc_info=True)
@@ -834,6 +849,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_endpoint_configs",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if (err := self.check_response_status(result, "get endpoint configs", logger)):
+                return [err]
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -957,7 +974,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             if not id:
                 return {"error": "id is required"}
-            await sdk_call_with_keepalive(
+            result = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.delete_endpoint_config,
                     id=id
@@ -966,6 +983,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="delete_endpoint_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Endpoint config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_endpoint_config: {e}", exc_info=True)
@@ -986,6 +1005,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_service_configs",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if (err := self.check_response_status(result, "get service configs", logger)):
+                return [err]
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -1109,7 +1130,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             if not id:
                 return {"error": "id is required"}
-            await sdk_call_with_keepalive(
+            result = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.delete_service_config,
                     id=id
@@ -1118,6 +1139,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="delete_service_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Service config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_service_config: {e}", exc_info=True)
@@ -1138,6 +1161,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="get_all_manual_service_configs",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if (err := self.check_response_status(result, "get manual service configs", logger)):
+                return [err]
             response_text = decode_response(result)
             json_data = json.loads(response_text)
             return json_data if isinstance(json_data, list) else [json_data] if json_data else []
@@ -1234,7 +1259,7 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         try:
             if not id:
                 return {"error": "id is required"}
-            await sdk_call_with_keepalive(
+            result = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.delete_manual_service_config,
                     id=id
@@ -1243,6 +1268,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 operation_name="delete_manual_service_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
             return {"success": True, "message": f"Manual service config '{id}' deleted successfully"}
         except Exception as e:
             logger.error(f"Error in _delete_manual_service_config: {e}", exc_info=True)

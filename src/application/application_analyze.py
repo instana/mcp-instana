@@ -28,14 +28,9 @@ except ImportError:
     logger.error("Failed to import application analyze API", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 from src.core.validation import (
+    ENTITY_GUIDANCE_CALL_SEMANTICS,
     BooleanCoercer,
     StructureValidator,
 )
@@ -371,7 +366,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         """
         try:
             # Parse the payload
-            request_body = self._parse_traces_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(self._parse_traces_payload(payload))
             if "error" in request_body:
                 return request_body
 
@@ -420,6 +415,9 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 operation_name="get_traces_without_preload_content",
                 resource_type=resource_type, tool_name=tool_name,
             )
+            
+            if (err := self.check_response_status(result, "get traces", logger)):
+                return err
 
             # Parse raw JSON response
             response_text = result.data.decode('utf-8')
@@ -455,7 +453,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         """Append an error if groupbyTag is present but not in the allowed set."""
         if not isinstance(group, dict):
             return
-        groupby_tag = group.get("groupbyTag") or group.get("groupByTag")
+        groupby_tag = group.get("groupbyTag")
         if groupby_tag and groupby_tag not in ApplicationAnalyzeMCPTools._VALID_TRACE_GROUP_TAGS:
             errors.append(
                 f"group.groupbyTag: '{groupby_tag}' is not supported for trace groups. "
@@ -480,7 +478,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         errors: List[str] = []
 
         for validator_fn, field_key, kwargs in [
-            (StructureValidator.validate_group, "group", {"required": True}),
+            (StructureValidator.validate_group, "group", {"required": True, "entity_guidance": ENTITY_GUIDANCE_CALL_SEMANTICS}),
             (StructureValidator.validate_metrics_array, "metrics", {"required": True, "max_items": 5}),
             (StructureValidator.validate_tag_filter_expression, "tagFilterExpression", {}),
             (StructureValidator.validate_order, "order", {}),
@@ -533,9 +531,11 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             totalHits, and cursor fields (ingestionTime, offset) if more data available
         """
         try:
-            request_body = self._parse_traces_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(self._parse_traces_payload(payload))
             if "error" in request_body:
                 return request_body
+            if "group" in request_body:
+                request_body["group"] = StructureValidator.normalize_group(request_body["group"])
 
             self._coerce_bool_flags(request_body)
 
@@ -562,6 +562,9 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 operation_name="get_trace_groups_without_preload_content",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(result, "get trace groups", logger)):
+                return err
 
             response_text = result.data.decode('utf-8')
             result_dict = json.loads(response_text)

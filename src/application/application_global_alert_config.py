@@ -566,6 +566,11 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            # Check the status before streaming: a non-array error body would
+            # otherwise be read as an empty list ("no configs found").
+            if (err := self.check_response_status(response, "find active global application alert configs", logger)):
+                return err
+
             # Stream-parse only the requested page so the full array is
             # never buffered in memory, regardless of tenant size.
             safe_page, safe_size = normalize_page_args(page, page_size, default_size=10, max_size=100)
@@ -747,7 +752,11 @@ class ApplicationGlobalAlertMCPTools(BaseInstanaClient):
 
             # Call the delete_global_application_alert_config method from the SDK
             logger.debug(f"Calling delete_global_application_alert_config with id={id}")
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_global_application_alert_config, id=id), ctx=ctx, operation_name="delete_global_application_alert_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_global_application_alert_config, id=id), ctx=ctx, operation_name="delete_global_application_alert_config", resource_type=resource_type, tool_name=tool_name)
+
+            # sdk_call_with_keepalive returns an error dict (not None) on timeout
+            if isinstance(result, dict):
+                return result
 
             # The delete operation doesn't return a result, so we'll create a success message
             result_dict = {
