@@ -10,17 +10,8 @@ from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 
-from src.core.alert_config_utils import (
-    parse_alert_config_response,
-    parse_single_alert_config_response,
-)
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.alert_config_utils import parse_alert_config_response, parse_single_alert_config_response
 
 # Import the necessary classes from the SDK
 try:
@@ -94,6 +85,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get active website alert configs", logger)):
+                return err
+
             return parse_alert_config_response(response, "website", website_id)
 
         except Exception as e:
@@ -149,6 +143,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
                 operation_name="find_website_alert_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get website alert config", logger)):
+                return err
 
             return parse_single_alert_config_response(response)
 

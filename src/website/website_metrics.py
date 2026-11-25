@@ -23,10 +23,12 @@ from mcp.types import ToolAnnotations
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_sdk_timeout,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
 )
+from src.core.validation import StructureValidator
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -72,7 +74,10 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
                 ctx=ctx,
                 operation_name="get_website_page_load"
             )
-                        # Convert the result to a list of dictionaries
+            if is_sdk_timeout(result):  # list-typed tool: wrap the timeout error dict
+                return [result]
+
+            # Convert the result to a list of dictionaries
             if isinstance(result, list):
                 # If it's a list, convert each item to dict if possible
                 result_list = []
@@ -184,6 +189,8 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
                 logger.debug("Using provided payload dictionary")
                 request_body = payload
 
+            request_body = StructureValidator.normalize_tag_filter_key(request_body)
+
             try:
                 from instana_client.models.get_website_metrics_v2 import (
                     GetWebsiteMetricsV2,
@@ -237,6 +244,9 @@ class WebsiteMetricsMCPTools(BaseInstanaClient):
                 ctx=ctx,
                 operation_name="get_website_beacon_metrics_v2"
             )
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
+
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
