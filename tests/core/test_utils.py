@@ -9,7 +9,6 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -85,23 +84,23 @@ class TestRegisterAsTool(unittest.TestCase):
 
     def test_register_as_tool_with_explicit_description(self):
         """Test that the register_as_tool decorator stores explicit description"""
-        
+
         # Define a test function with explicit description
         @register_as_tool(description="This is an explicit description")
         def test_function_with_description():
             """This is the docstring"""
             return "test"
-        
+
         # Check that the function was added to the registry
         self.assertIn("test_function_with_description", MCP_TOOLS)
-        
+
         # Check that the explicit description was stored
         self.assertTrue(hasattr(test_function_with_description, '_mcp_description'))
         self.assertEqual(test_function_with_description._mcp_description, "This is an explicit description")
-    
+
     def test_register_as_tool_with_docstring_description(self):
         """Test that the register_as_tool decorator extracts description from docstring"""
-        
+
         # Define a test function with only docstring (using proper formatting)
         @register_as_tool()
         def test_function_with_docstring():
@@ -109,38 +108,38 @@ class TestRegisterAsTool(unittest.TestCase):
 
 This is the second paragraph."""
             return "test"
-        
+
         # Check that the function was added to the registry
         self.assertIn("test_function_with_docstring", MCP_TOOLS)
-        
+
         # Check that the description was extracted from first paragraph
         self.assertTrue(hasattr(test_function_with_docstring, '_mcp_description'))
         self.assertEqual(test_function_with_docstring._mcp_description, "This is the first paragraph.")
-    
+
     def test_register_as_tool_description_priority(self):
         """Test that explicit description takes priority over docstring"""
-        
+
         # Define a test function with both explicit description and docstring
         @register_as_tool(description="Explicit description wins")
         def test_function_priority():
             """Docstring description"""
             return "test"
-        
+
         # Check that explicit description takes priority
         self.assertTrue(hasattr(test_function_priority, '_mcp_description'))
         self.assertEqual(test_function_priority._mcp_description, "Explicit description wins")
-    
+
     def test_register_as_tool_no_description(self):
         """Test that the register_as_tool decorator handles functions without description"""
-        
+
         # Define a test function without docstring or explicit description
         @register_as_tool()
         def test_function_no_description():
             return "test"
-        
+
         # Check that the function was added to the registry
         self.assertIn("test_function_no_description", MCP_TOOLS)
-        
+
         # Check that _mcp_description is None
         self.assertTrue(hasattr(test_function_no_description, '_mcp_description'))
         self.assertIsNone(test_function_no_description._mcp_description)
@@ -404,7 +403,7 @@ class TestBaseInstanaClient(unittest.TestCase):
                 # Check that the result is correct
                 self.assertIn("success", result)
                 self.assertTrue(result["success"])
-                
+
                 # Verify API token was configured
                 self.assertEqual(mock_config_instance.api_key['ApiKeyAuth'], "api_token_123")
                 self.assertEqual(mock_config_instance.api_key_prefix['ApiKeyAuth'], 'apiToken')
@@ -445,7 +444,7 @@ class TestBaseInstanaClient(unittest.TestCase):
                 # Check that the result is correct
                 self.assertIn("success", result)
                 self.assertTrue(result["success"])
-                
+
                 # Verify API token was configured
                 self.assertEqual(mock_config_instance.api_key['ApiKeyAuth'], "api_token_456")
                 self.assertEqual(mock_config_instance.api_key_prefix['ApiKeyAuth'], 'apiToken')
@@ -485,7 +484,7 @@ class TestBaseInstanaClient(unittest.TestCase):
 
                 # Check that the result is correct
                 self.assertIn("success", result)
-                
+
                 # Verify API token was configured
                 self.assertEqual(mock_config_instance.api_key['ApiKeyAuth'], "api_token_789")
                 self.assertEqual(mock_config_instance.api_key_prefix['ApiKeyAuth'], 'apiToken')
@@ -552,7 +551,7 @@ class TestBaseInstanaClient(unittest.TestCase):
                 # Check that the result is correct
                 self.assertIn("success", result)
                 self.assertTrue(result["success"])
-                
+
                 # Verify Authorization header was set with Bearer prefix
                 mock_api_client_instance.set_default_header.assert_any_call(
                     "Authorization",
@@ -601,7 +600,7 @@ class TestBaseInstanaClient(unittest.TestCase):
                 # Check that the result is correct
                 self.assertIn("success", result)
                 self.assertTrue(result["success"])
-                
+
                 # Verify JWT token was used (Bearer prefix), not API token
                 mock_api_client_instance.set_default_header.assert_any_call(
                     "Authorization",
@@ -653,7 +652,7 @@ class TestBaseInstanaClient(unittest.TestCase):
                 # Check that the result is correct
                 self.assertIn("success", result)
                 self.assertTrue(result["success"])
-                
+
                 # Verify session token headers were set (CSRF and Cookie)
                 mock_api_client_instance.set_default_header.assert_any_call(
                     "X-CSRF-TOKEN",
@@ -667,7 +666,7 @@ class TestBaseInstanaClient(unittest.TestCase):
     def test_with_header_auth_jwt_token_exceeds_max_length(self):
         """Test that JWT token exceeding maximum length is rejected"""
         long_jwt_token = "a" * 2049  # Exceeds MAX_TOKEN_LENGTH of 2048
-        
+
         with patch('src.core.auth_helper.get_http_headers') as mock_get_headers:
             mock_get_headers.return_value = {
                 "instana-jwt-token": long_jwt_token,
@@ -773,10 +772,10 @@ class TestBaseInstanaClient(unittest.TestCase):
         """Test get_headers with empty token - should raise AuthenticationError"""
         empty_token = ""
         client = BaseInstanaClient(read_token=empty_token, base_url=self.base_url)
-        
+
         # Empty token should return headers with empty Authorization
         headers = client.get_headers()
-        
+
         self.assertEqual(headers["Authorization"], f"apiToken {empty_token}")
         self.assertEqual(headers["Content-Type"], "application/json")
 
@@ -794,31 +793,31 @@ class TestBaseInstanaClient(unittest.TestCase):
         # The simplified get_headers() method only supports API token authentication
         # Session token authentication is handled by the with_header_auth decorator
         headers = self.client.get_headers()
-        
+
         # Should return standard API token headers
         self.assertEqual(headers["Authorization"], f"apiToken {self.read_token}")
         self.assertEqual(headers["Content-Type"], "application/json")
-        
+
     def test_get_headers_with_custom_cookie_name(self):
         """Test get_headers no longer supports custom cookie names"""
         # The simplified get_headers() method only supports API token authentication
         headers = self.client.get_headers()
-        
+
         # Should return standard API token headers
         self.assertEqual(headers["Authorization"], f"apiToken {self.read_token}")
-        
+
     def test_get_headers_api_token_priority_over_session(self):
         """Test get_headers only uses API token from constructor"""
         # The simplified get_headers() method only uses the API token from constructor
         headers = self.client.get_headers()
-        
+
         # Should return standard API token headers
         self.assertEqual(headers["Authorization"], f"apiToken {self.read_token}")
-        
+
     def test_get_headers_session_only_when_no_api_token(self):
         """Test get_headers with empty API token"""
         client = BaseInstanaClient(read_token="", base_url=self.base_url)
-        
+
         # Should still return headers with empty token
         headers = client.get_headers()
         self.assertEqual(headers["Authorization"], "apiToken ")
@@ -941,6 +940,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_sdk_v2_simple_namespace(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         # SimpleNamespace has no auto-created attributes, unlike MagicMock
         params = SimpleNamespace(client_info=SimpleNamespace(name="copilot-v2"))
@@ -949,6 +949,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_v2_takes_precedence_over_v1(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         params = SimpleNamespace(
             client_info=SimpleNamespace(name="v2-client"),
@@ -959,6 +960,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_supports_dicts(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         # client_params and client_info both dicts
         params = {"client_info": {"name": "dict-client"}}
@@ -967,6 +969,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_supports_dicts_with_v1_key(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         params = {"clientInfo": {"name": "dict-legacy"}}
         ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
@@ -974,6 +977,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_dict_v2_takes_precedence_over_v1(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         params = {
             "client_info": {"name": "v2-dict"},
@@ -984,6 +988,7 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_object_params_with_dict_client_info(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         params = SimpleNamespace(client_info={"name": "mixed-client"})
         ctx = SimpleNamespace(session=SimpleNamespace(client_params=params))
@@ -995,12 +1000,14 @@ class TestMcpTrackingHelpers(unittest.TestCase):
 
     def test_get_ctx_client_name_returns_none_when_client_info_missing(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         ctx = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace()))
         self.assertIsNone(_get_ctx_client_name(ctx))
 
     def test_get_ctx_client_name_falls_back_to_sdk_v1_camelcase(self):
         from types import SimpleNamespace
+
         from src.core.auth_helper import _get_ctx_client_name
         # SimpleNamespace has no auto-created attributes, unlike MagicMock
         params = SimpleNamespace(clientInfo=SimpleNamespace(name="legacy-client"))
@@ -1246,61 +1253,61 @@ class TestDecodeResponse(unittest.TestCase):
     def test_decode_response_with_utf8(self):
         """Test decode_response with UTF-8 charset"""
         from src.core.utils import decode_response
-        
+
         # Create a mock response with UTF-8 charset
         mock_response = MagicMock()
         mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
         mock_response.data = b'{"test": "data"}'
-        
+
         result = decode_response(mock_response)
         self.assertEqual(result, '{"test": "data"}')
-    
+
     def test_decode_response_with_latin1(self):
         """Test decode_response with latin-1 charset"""
         from src.core.utils import decode_response
-        
+
         # Create a mock response with latin-1 charset
         mock_response = MagicMock()
         mock_response.headers = {'Content-Type': 'text/html; charset=iso-8859-1'}
         mock_response.data = b'test data'
-        
+
         result = decode_response(mock_response)
         self.assertEqual(result, 'test data')
-    
+
     def test_decode_response_without_charset(self):
         """Test decode_response without charset (should use default UTF-8)"""
         from src.core.utils import decode_response
-        
+
         # Create a mock response without charset
         mock_response = MagicMock()
         mock_response.headers = {'Content-Type': 'application/json'}
         mock_response.data = b'{"test": "data"}'
-        
+
         result = decode_response(mock_response)
         self.assertEqual(result, '{"test": "data"}')
-    
+
     def test_decode_response_with_invalid_charset(self):
         """Test decode_response with invalid charset (should fallback to UTF-8)"""
         from src.core.utils import decode_response
-        
+
         # Create a mock response with invalid charset
         mock_response = MagicMock()
         mock_response.headers = {'Content-Type': 'application/json; charset=invalid-charset'}
         mock_response.data = b'{"test": "data"}'
-        
+
         result = decode_response(mock_response)
         self.assertEqual(result, '{"test": "data"}')
-    
+
     def test_decode_response_with_unicode_decode_error(self):
         """Test decode_response with data that causes UnicodeDecodeError"""
         from src.core.utils import decode_response
-        
+
         # Create a mock response with invalid UTF-8 bytes
         mock_response = MagicMock()
         mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
         # Invalid UTF-8 sequence
         mock_response.data = b'\xff\xfe'
-        
+
         # Should fallback to UTF-8 with error replacement
         result = decode_response(mock_response)
         self.assertIsInstance(result, str)
@@ -1312,15 +1319,15 @@ class TestExtractTagNamesFromTree(unittest.TestCase):
     def test_extract_from_dict_with_tag_name(self):
         """Test extracting tag names from a dict node with tagName"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         node = {"tagName": "test.tag"}
         result = extract_tag_names_from_tree(node)
         self.assertEqual(result, ["test.tag"])
-    
+
     def test_extract_from_dict_with_children(self):
         """Test extracting tag names from a dict node with children"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         node = {
             "tagName": "parent.tag",
             "children": [
@@ -1330,11 +1337,11 @@ class TestExtractTagNamesFromTree(unittest.TestCase):
         }
         result = extract_tag_names_from_tree(node)
         self.assertEqual(sorted(result), ["child1.tag", "child2.tag", "parent.tag"])
-    
+
     def test_extract_from_nested_structure(self):
         """Test extracting tag names from deeply nested structure"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         node = {
             "tagName": "root",
             "children": [
@@ -1348,11 +1355,11 @@ class TestExtractTagNamesFromTree(unittest.TestCase):
         }
         result = extract_tag_names_from_tree(node)
         self.assertEqual(sorted(result), ["level1", "level2", "root"])
-    
+
     def test_extract_from_list(self):
         """Test extracting tag names from a list of nodes"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         nodes = [
             {"tagName": "tag1"},
             {"tagName": "tag2"},
@@ -1360,19 +1367,19 @@ class TestExtractTagNamesFromTree(unittest.TestCase):
         ]
         result = extract_tag_names_from_tree(nodes)
         self.assertEqual(sorted(result), ["tag1", "tag2", "tag3"])
-    
+
     def test_extract_from_dict_without_tag_name(self):
         """Test extracting from dict without tagName"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         node = {"otherField": "value"}
         result = extract_tag_names_from_tree(node)
         self.assertEqual(result, [])
-    
+
     def test_extract_with_existing_tag_names_list(self):
         """Test extracting with pre-existing tag_names list"""
         from src.core.utils import extract_tag_names_from_tree
-        
+
         existing_tags = ["existing.tag"]
         node = {"tagName": "new.tag"}
         result = extract_tag_names_from_tree(node, existing_tags)
@@ -1397,19 +1404,19 @@ class TestHandleApiErrorResponse(unittest.TestCase):
         mock_response.status = 404
         mock_response.headers = {'Content-Type': 'application/json; charset=utf-8'}
         mock_response.data = b'{"error": "Not found"}'
-        
+
         # Create mock logger (without spec to avoid InvalidSpecError)
         mock_logger = MagicMock()
-        
+
         result = self.client.handle_api_error_response(mock_response, "test_operation", mock_logger)
-        
+
         self.assertEqual(result["error"], "Failed to test_operation: HTTP 404")
         self.assertEqual(result["details"], '{"error": "Not found"}')
         self.assertEqual(result["status_code"], 404)
-        
+
         # Verify logger was called
         self.assertEqual(mock_logger.error.call_count, 2)
-    
+
     def test_handle_api_error_with_decode_exception(self):
         """Test handling API error when decode_response raises exception"""
         # Create mock response that will cause decode to fail
@@ -1418,16 +1425,16 @@ class TestHandleApiErrorResponse(unittest.TestCase):
         mock_response.headers = {}
         mock_response.data = MagicMock()
         mock_response.data.decode = MagicMock(side_effect=Exception("Decode failed"))
-        
+
         # Create mock logger (without spec to avoid InvalidSpecError)
         mock_logger = MagicMock()
-        
+
         result = self.client.handle_api_error_response(mock_response, "test_operation", mock_logger)
-        
+
         self.assertEqual(result["error"], "Failed to test_operation: HTTP 500")
         self.assertNotIn("details", result)
         self.assertEqual(result["status_code"], 500)
-        
+
         # Verify logger was called once (before the exception)
         mock_logger.error.assert_called_once()
 
@@ -1512,7 +1519,7 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
     def test_process_from_tag_tree(self):
         """Test processing tag names from tagTree"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {
             "tagTree": {
                 "tagName": "root",
@@ -1523,16 +1530,16 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
             }
         }
         result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
-        
+
         self.assertEqual(sorted(result["tag_names"]), ["child1", "child2", "root"])
         self.assertEqual(result["count"], 3)
         self.assertEqual(result["beacon_type"], "pageLoad")
         self.assertEqual(result["use_case"], "GROUPING")
-    
+
     def test_process_from_flat_tags_list(self):
         """Test processing tag names from flat tags list"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {
             "tags": [
                 {"name": "tag1"},
@@ -1541,14 +1548,14 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
             ]
         }
         result = process_tag_catalog_response(response, "pageLoad", "FILTERING")
-        
+
         self.assertEqual(sorted(result["tag_names"]), ["tag1", "tag2", "tag3"])
         self.assertEqual(result["count"], 3)
-    
+
     def test_process_from_both_sources(self):
         """Test processing from both tagTree and tags list"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {
             "tagTree": {"tagName": "tree.tag"},
             "tags": [
@@ -1557,14 +1564,14 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
             ]
         }
         result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
-        
+
         self.assertEqual(sorted(result["tag_names"]), ["flat.tag1", "flat.tag2", "tree.tag"])
         self.assertEqual(result["count"], 3)
-    
+
     def test_process_removes_duplicates(self):
         """Test that duplicate tag names are removed"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {
             "tagTree": {"tagName": "duplicate.tag"},
             "tags": [
@@ -1573,24 +1580,24 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
             ]
         }
         result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
-        
+
         self.assertEqual(sorted(result["tag_names"]), ["duplicate.tag", "unique.tag"])
         self.assertEqual(result["count"], 2)
-    
+
     def test_process_from_empty_response(self):
         """Test processing from empty response"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {}
         result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
-        
+
         self.assertEqual(result["tag_names"], [])
         self.assertEqual(result["count"], 0)
-    
+
     def test_process_ignores_tags_without_name(self):
         """Test that tags without 'name' field are ignored"""
         from src.core.utils import process_tag_catalog_response
-        
+
         response = {
             "tags": [
                 {"name": "valid.tag"},
@@ -1600,7 +1607,7 @@ class TestProcessTagCatalogResponse(unittest.TestCase):
             ]
         }
         result = process_tag_catalog_response(response, "pageLoad", "GROUPING")
-        
+
         # Only valid.tag should be included (empty string and None are filtered out)
         self.assertEqual(result["tag_names"], ["valid.tag"])
         self.assertEqual(result["count"], 1)
@@ -1611,55 +1618,55 @@ class TestNormalizeBeaconType(unittest.TestCase):
     def test_normalize_uppercase_to_camelcase(self):
         """Test normalizing uppercase beacon type to camelCase"""
         from src.core.utils import normalize_beacon_type
-        
+
         beacon_type_map = {
             "SESSION_START": "sessionStart",
             "PAGE_LOAD": "pageLoad",
             "HTTP_REQUEST": "httpRequest"
         }
-        
+
         result = normalize_beacon_type("SESSION_START", beacon_type_map)
         self.assertEqual(result, "sessionStart")
-        
+
         result = normalize_beacon_type("PAGE_LOAD", beacon_type_map)
         self.assertEqual(result, "pageLoad")
-    
+
     def test_normalize_lowercase_to_camelcase(self):
         """Test normalizing lowercase beacon type to camelCase"""
         from src.core.utils import normalize_beacon_type
-        
+
         beacon_type_map = {
             "SESSION_START": "sessionStart",
             "PAGE_LOAD": "pageLoad"
         }
-        
+
         # Should work with lowercase input (converted to uppercase internally)
         result = normalize_beacon_type("session_start", beacon_type_map)
         self.assertEqual(result, "sessionStart")
-    
+
     def test_normalize_already_camelcase(self):
         """Test that already camelCase beacon type is returned as-is"""
         from src.core.utils import normalize_beacon_type
-        
+
         beacon_type_map = {
             "SESSION_START": "sessionStart"
         }
-        
+
         # If input is already camelCase and not in map, return as-is
         result = normalize_beacon_type("sessionStart", beacon_type_map)
         self.assertEqual(result, "sessionStart")
-    
+
     def test_normalize_unknown_beacon_type(self):
         """Test normalizing unknown beacon type returns input unchanged"""
         from src.core.utils import normalize_beacon_type
-        
+
         beacon_type_map = {
             "SESSION_START": "sessionStart"
         }
-        
+
         result = normalize_beacon_type("UNKNOWN_TYPE", beacon_type_map)
         self.assertEqual(result, "UNKNOWN_TYPE")
-    
+
 
 
 
@@ -1669,6 +1676,7 @@ class TestCallSdkFn(unittest.TestCase):
     def test_async_mock_is_awaited_directly(self):
         """When fn is a coroutine function it is awaited, not dispatched to a thread."""
         from unittest.mock import AsyncMock
+
         from src.core.utils import call_sdk_fn
 
         mock_fn = AsyncMock(return_value="async_result")
@@ -1703,6 +1711,7 @@ class TestCallSdkFn(unittest.TestCase):
     def test_async_mock_exception_propagates(self):
         """Exceptions raised by an async callable propagate to the caller."""
         from unittest.mock import AsyncMock
+
         from src.core.utils import call_sdk_fn
 
         mock_fn = AsyncMock(side_effect=RuntimeError("async error"))
@@ -1720,6 +1729,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
     def test_returns_result_without_ctx(self):
         """With ctx=None the SDK coroutine still runs and its result is returned."""
         from unittest.mock import AsyncMock
+
         from src.core.utils import sdk_call_with_keepalive
 
         async def coro():
@@ -1731,6 +1741,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
     def test_returns_result_with_ctx(self):
         """With a ctx the task group path runs and the result is returned."""
         from unittest.mock import AsyncMock, MagicMock
+
         from src.core.utils import sdk_call_with_keepalive
 
         ctx = MagicMock()
@@ -1745,6 +1756,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
     def test_keepalive_log_sent_when_sdk_is_slow(self):
         """The ticker writes a server-side log line (not ctx.log) when the SDK call outlasts the interval."""
         from unittest.mock import AsyncMock, MagicMock
+
         from src.core.utils import sdk_call_with_keepalive
 
         ctx = MagicMock()
@@ -1781,6 +1793,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
     def test_sdk_exception_propagates_with_ctx(self):
         """SDK exceptions are unwrapped from ExceptionGroup and re-raised when ctx is set."""
         from unittest.mock import AsyncMock, MagicMock
+
         from src.core.utils import sdk_call_with_keepalive
 
         ctx = MagicMock()
@@ -1819,6 +1832,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
     def test_timeout_fires_and_returns_error_dict(self):
         """When the SDK call exceeds the timeout an error dict is returned (no hang)."""
         from unittest.mock import AsyncMock, MagicMock
+
         from src.core.utils import sdk_call_with_keepalive
 
         ctx = MagicMock()
@@ -1876,14 +1890,14 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
 
     def test_api_timeout_invalid_env_var_uses_default(self):
         """Non-integer INSTANA_API_TIMEOUT falls back to the hardcoded default."""
-        from src.core.utils import _api_timeout, _DEFAULT_API_TIMEOUT
+        from src.core.utils import _DEFAULT_API_TIMEOUT, _api_timeout
 
         with patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "not_a_number"}):
             self.assertEqual(_api_timeout(), _DEFAULT_API_TIMEOUT)
 
     def test_api_timeout_zero_env_var_uses_default(self):
         """Zero or negative INSTANA_API_TIMEOUT falls back to the hardcoded default."""
-        from src.core.utils import _api_timeout, _DEFAULT_API_TIMEOUT
+        from src.core.utils import _DEFAULT_API_TIMEOUT, _api_timeout
 
         with patch.dict(os.environ, {"INSTANA_API_TIMEOUT": "0"}):
             self.assertEqual(_api_timeout(), _DEFAULT_API_TIMEOUT)
@@ -1989,7 +2003,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
             self.assertEqual(_resolve_stream_chunk_size(), 128 * 1024)
 
     def test_env_var_invalid_string_falls_back_and_logs(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "invalid_size"}):
             with patch("src.core.utils.logger.warning") as mock_warn:
                 result = _resolve_stream_chunk_size()
@@ -1997,7 +2014,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
                 mock_warn.assert_called_once()
 
     def test_env_var_zero_falls_back_and_logs(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {"STREAM_READ_BUFFER_SIZE": "0"}):
             with patch("src.core.utils.logger.warning") as mock_warn:
                 result = _resolve_stream_chunk_size()
@@ -2005,7 +2025,10 @@ class TestResolveStreamChunkSize(unittest.TestCase):
                 mock_warn.assert_called_once()
 
     def test_env_unset_uses_default(self):
-        from src.core.utils import _resolve_stream_chunk_size, DEFAULT_STREAM_READ_BUFFER_SIZE
+        from src.core.utils import (
+            DEFAULT_STREAM_READ_BUFFER_SIZE,
+            _resolve_stream_chunk_size,
+        )
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(_resolve_stream_chunk_size(), DEFAULT_STREAM_READ_BUFFER_SIZE)
 

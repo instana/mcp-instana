@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
+
 # Mock the ApiException since instana_client is not available in test environment
 class ApiException(Exception):
     def __init__(self, status=None, reason=None, *args, **kwargs):

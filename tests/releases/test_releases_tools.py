@@ -185,7 +185,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         # Verify the result
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 1)
-        
+
         # Verify API was called with correct parameters
         self.mock_api.get_all_releases_without_preload_content.assert_called_once_with(
             var_from=1000000,

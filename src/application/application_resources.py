@@ -4,8 +4,8 @@ Application Resources MCP Tools Module
 This module provides application resources-specific MCP tools for Instana monitoring.
 """
 
-import logging
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +24,13 @@ except ImportError as e:
     raise
 
 from src.core.ui_links import add_application_link, add_service_link
-from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)

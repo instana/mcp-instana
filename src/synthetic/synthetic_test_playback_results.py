@@ -24,7 +24,14 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, sdk_call_with_keepalive, with_header_auth, parse_payload
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    parse_payload,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.core.validation import StructureValidator
 
 

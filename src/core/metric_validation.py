@@ -42,7 +42,12 @@ from src.core.catalog_cache import (
     _cache_get,
     _cache_set,
 )
-from src.core.utils import decode_response, is_success_status, normalize_beacon_type, project_metric_card
+from src.core.utils import (
+    decode_response,
+    is_success_status,
+    normalize_beacon_type,
+    project_metric_card,
+)
 
 logger = logging.getLogger(__name__)
 

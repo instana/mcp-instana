@@ -19,7 +19,13 @@ except ImportError:
     logger.error("Failed to import infrastructure topology API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -301,7 +307,7 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
             try:
                 response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_topology_without_preload_content, include_data=include_data), ctx=ctx, operation_name="get_topology_without_preload_content")
                 logger.debug("SDK call successful using get_topology_without_preload_content")
-                
+
                 if (err := self.check_response_status(response, "get topology", logger)):
                     return err
 

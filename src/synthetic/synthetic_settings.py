@@ -19,7 +19,14 @@ except ImportError as e:
 
 from src.core.pagination import paginate, stable_sort_key
 from src.core.ui_links import add_synthetic_test_link
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    is_success_status,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 
 class SyntheticSettingsMCPTools(BaseInstanaClient):

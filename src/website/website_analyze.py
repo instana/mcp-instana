@@ -56,7 +56,11 @@ from src.core.utils import (
     sdk_call_with_keepalive,
     with_header_auth,
 )
-from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_WEBSITE_BEACON_TYPES
+from src.core.validation import (
+    ENTITY_GUIDANCE_EUM,
+    VALID_WEBSITE_BEACON_TYPES,
+    StructureValidator,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)

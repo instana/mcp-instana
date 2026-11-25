@@ -18,7 +18,15 @@ except ImportError as e:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)

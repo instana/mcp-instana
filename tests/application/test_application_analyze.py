@@ -1038,7 +1038,7 @@ class TestApplicationAnalyzeMCPTools(unittest.TestCase):
         sent = mock_get_trace_groups.from_dict.call_args[0][0]
         self.assertEqual(sent["tagFilterExpression"], tag_filter)
         self.assertNotIn("TagFilterExpression", sent)
-    
+
     def test_get_trace_groups_invalid_payload_string(self):
         """Test get_trace_groups with invalid string payload"""
         configuration_instance = MagicMock()

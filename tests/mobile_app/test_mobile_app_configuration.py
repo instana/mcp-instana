@@ -11,7 +11,7 @@ import sys
 import unittest
 from functools import wraps
 from unittest import result
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 # Add src to path before any imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
@@ -70,7 +70,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         """Test MobileAppConfigurationMCPTools initialization"""
         self.assertEqual(self.client.read_token, "test_token")
         self.assertEqual(self.client.base_url, "https://test.instana.io")
-    
+
     def test_get_all_mobile_apps_success(self):
         self.client.config_api.get_mobile_app_config = Mock(
             return_value=Mock(to_dict=Mock(return_value=[
@@ -162,7 +162,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         # Use regular Mock + .to_dict(), NOT AsyncMock
         mock_geo = Mock()
         mock_geo.to_dict.return_value = {"enabled": True}
-        
+
         self.client.config_api.get_mobile_app_geo_location_configuration = Mock(
             return_value=mock_geo
         )
@@ -214,7 +214,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         """Test get_mobile_app_geo_location_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "mode": "AUTO"}
-        
+
         self.client.config_api.get_mobile_app_geo_location_configuration = Mock(return_value=mock_config)
 
         result = asyncio.run(self.client.get_mobile_app_geo_location_configuration(
@@ -242,7 +242,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         """Test get_mobile_app_ip_masking_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "maskingType": "FULL"}
-        
+
         self.client.config_api.get_mobile_app_ip_masking_configuration = Mock(return_value=mock_config)
 
         result = asyncio.run(self.client.get_mobile_app_ip_masking_configuration(
@@ -307,7 +307,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         class BadResponse:
             def to_dict(self):
                 return "not a list"
-        
+
         self.client.config_api.get_mobile_app_config = Mock(return_value=BadResponse())
 
         result = asyncio.run(self.client.execute_mobile_app_advanced_config_operation(
@@ -396,7 +396,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(
             side_effect=Exception("API Error")
         )
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
@@ -416,7 +416,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
     def test_get_mobile_app_geo_mapping_rules_non_csv_data(self):
         """Test get_mobile_app_geo_mapping_rules with non-CSV data"""
         self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(return_value=None)
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = b"Some non-CSV data"
@@ -760,7 +760,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         mock_response = Mock()
         mock_response.status = 404
         mock_response.data = b"Not Found"
-        
+
         self.client.config_api.get_mobile_app_source_map_file_without_preload_content = Mock(
             return_value=mock_response
         )
@@ -864,7 +864,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         # Properly mock the response so .to_dict() returns a real dict
         mock_response = Mock()
         mock_response.to_dict.return_value = {"enabled": True}
-        
+
         # Mock the method that should actually be called
         self.client.config_api.get_mobile_app_ip_masking_configuration = Mock(
             return_value=mock_response
@@ -994,7 +994,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
 
         self.assertIsInstance(result, dict)
         self.assertIn("error", result)
-    
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -22,7 +22,13 @@ except ImportError:
     logging.getLogger(__name__).error("Instana SDK not available.", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, is_success_status, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    is_success_status,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 

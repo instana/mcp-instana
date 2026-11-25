@@ -3,6 +3,7 @@ Unit tests for the InfrastructureAnalyzeMCPTools class
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -74,14 +75,12 @@ _mocks = {
 }
 
 # Import src.core.utils to ensure it's available for patching
-try:
+with contextlib.suppress(ImportError):
     import src.core.utils
-except ImportError:
-    pass
 
 # Save original modules
 _original_modules = {}
-for module_name in _mocks.keys():
+for module_name in _mocks:
     if module_name in sys.modules:
         _original_modules[module_name] = sys.modules[module_name]
 
@@ -649,7 +648,7 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
         # Check that the result contains an error message
         self.assertIn("error", result)
         self.assertIn("Failed to get available plugins", result["error"])
-        
+
         # Reset side effect
         self.analyze_api.get_available_plugins.side_effect = None
 
@@ -872,7 +871,7 @@ class TestInfrastructureAnalyzeMCPTools(unittest.TestCase):
 
         self.assertIn("error", result)
         self.assertIn("API call failed: api boom", result["error"])
-        
+
         # Reset the side effect
         self.analyze_api.get_entity_groups_without_preload_content.side_effect = None
 

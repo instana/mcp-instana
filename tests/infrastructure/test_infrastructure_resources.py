@@ -353,11 +353,11 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         """Test software_versions with unexpected result format"""
         class UnexpectedType:
             pass
-        
+
         self.resources_api.software_versions.return_value = UnexpectedType()
-        
+
         result = asyncio.run(self.client.software_versions())
-        
+
         self.assertIn("data", result)
 
     def test_software_versions_with_large_items_list(self):
@@ -366,9 +366,9 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
             "items": [{"name": f"App{i}"} for i in range(15)]
         }
         self.resources_api.software_versions.return_value = mock_result
-        
+
         result = asyncio.run(self.client.software_versions())
-        
+
         self.assertIn("summary", result)
         self.assertEqual(len(result["items"]), 10)
 
@@ -376,23 +376,23 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         """Test get_plugin_payload with successful response"""
         mock_result = {"payload": "data"}
         self.resources_api.get_plugin_payload.return_value = mock_result
-        
+
         result = asyncio.run(self.client.get_plugin_payload(
             snapshot_id="snap1",
             payload_key="key1"
         ))
-        
+
         self.assertEqual(result, mock_result)
 
     def test_get_plugin_payload_error(self):
         """Test get_plugin_payload error handling"""
         self.resources_api.get_plugin_payload.side_effect = Exception("Test error")
-        
+
         result = asyncio.run(self.client.get_plugin_payload(
             snapshot_id="snap1",
             payload_key="key1"
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_get_snapshot_with_to_dict_method(self):
@@ -422,18 +422,18 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         response.status = 404
         self.resources_api.get_snapshot.side_effect = Exception("Validation error")
         self.resources_api.get_snapshot_without_preload_content.return_value = response
-        
+
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_get_snapshot_validation_error_fallback_exception(self):
         """Test get_snapshot validation error with exception in fallback"""
         self.resources_api.get_snapshot.side_effect = Exception("Validation error")
         self.resources_api.get_snapshot_without_preload_content.side_effect = Exception("Fallback error")
-        
+
         result = asyncio.run(self.client.get_snapshot(snapshot_id="snap1"))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_get_snapshots_with_to_dict_method(self):
@@ -441,17 +441,17 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         mock_result = MagicMock()
         mock_result.to_dict.return_value = {"items": [{"snapshotId": "s1"}]}
         self.resources_api.get_snapshots.return_value = mock_result
-        
+
         result = asyncio.run(self.client.get_snapshots())
-        
+
         self.assertIn("message", result)
 
     def test_get_snapshots_with_other_type(self):
         """Test get_snapshots when result is neither dict nor has to_dict"""
         self.resources_api.get_snapshots.return_value = "string_result"
-        
+
         result = asyncio.run(self.client.get_snapshots())
-        
+
         self.assertIn("message", result)
 
     def test_post_snapshots_with_list_string(self):
@@ -460,9 +460,9 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         response.status = 200
         response.data = b'{"items":[]}'
         self.resources_api.post_snapshots_without_preload_content.return_value = response
-        
+
         result = asyncio.run(self.client.post_snapshots(snapshot_ids='["snap1","snap2"]'))
-        
+
         self.assertEqual(result["total_snapshots"], 0)
 
     def test_post_snapshots_detailed_true(self):
@@ -471,9 +471,9 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         response.status = 200
         response.data = b'{"items":[{"snapshotId":"snap1"}]}'
         self.resources_api.post_snapshots_without_preload_content.return_value = response
-        
+
         result = asyncio.run(self.client.post_snapshots(snapshot_ids=['snap1'], detailed=True))
-        
+
         self.assertIn("items", result)
 
     def test_summarize_snapshots_response_nodejs(self):
@@ -502,9 +502,9 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
                 }
             }]
         }
-        
+
         result = self.client._summarize_snapshots_response(response_data)
-        
+
         self.assertEqual(result["total_snapshots"], 1)
         self.assertIn("key_info", result["snapshots"][0])
 
@@ -522,18 +522,18 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
                 "data": {"field1": "value1", "field2": "value2"}
             }]
         }
-        
+
         result = self.client._summarize_snapshots_response(response_data)
-        
+
         self.assertEqual(result["total_snapshots"], 1)
         self.assertIn("data_keys", result["snapshots"][0]["key_info"])
 
     def test_summarize_snapshots_response_error(self):
         """Test _summarize_snapshots_response with error - function handles gracefully"""
         response_data = {"items": [{"invalid": "data"}]}
-        
+
         result = self.client._summarize_snapshots_response(response_data)
-        
+
         # The function handles missing fields gracefully, returning None values
         self.assertEqual(result["total_snapshots"], 1)
         self.assertIsNone(result["snapshots"][0]["snapshotId"])
@@ -541,9 +541,9 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
     def test_post_snapshots_exception(self):
         """Test post_snapshots with exception"""
         self.resources_api.post_snapshots_without_preload_content.side_effect = Exception("Test error")
-        
+
         result = asyncio.run(self.client.post_snapshots(snapshot_ids=['snap1']))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
 

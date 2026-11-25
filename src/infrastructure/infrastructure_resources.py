@@ -29,7 +29,15 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -418,7 +426,9 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
             window_size = window_size or 3600000
             logger.debug(f"Using to_time={to_time}, window_size={window_size}")
 
-            from instana_client.models.get_snapshots_query import GetSnapshotsQuery  # type: ignore
+            from instana_client.models.get_snapshots_query import (
+                GetSnapshotsQuery,  # type: ignore
+            )
             from instana_client.models.time_frame import TimeFrame  # type: ignore
 
             query_obj = GetSnapshotsQuery(

@@ -12,7 +12,10 @@ from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.pagination import apply_navigation, page_kwargs, paginate, stable_sort_key
-from src.core.timestamp_utils import convert_datetime_param, convert_nested_datetime_param
+from src.core.timestamp_utils import (
+    convert_datetime_param,
+    convert_nested_datetime_param,
+)
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)

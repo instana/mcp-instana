@@ -9,21 +9,21 @@ from datetime import datetime
 from unittest.mock import patch
 
 from src.core.validation import (
-    ValidationError,
-    ValidationResult,
-    TimeValidator,
-    EventsValidator,
-    StructureValidator,
-    BooleanCoercer,
     ENTITY_GUIDANCE_CALL_SEMANTICS,
     ENTITY_GUIDANCE_EUM,
+    RETRIEVAL_SIZE_MAX,
+    RETRIEVAL_SIZE_MIN,
     VALID_AGGREGATIONS,
     VALID_ENTITY_VALUES,
     VALID_ORDER_DIRECTIONS,
     VALID_TAG_FILTER_OPERATORS,
     WINDOW_SIZE_MAX_MS,
-    RETRIEVAL_SIZE_MIN,
-    RETRIEVAL_SIZE_MAX,
+    BooleanCoercer,
+    EventsValidator,
+    StructureValidator,
+    TimeValidator,
+    ValidationError,
+    ValidationResult,
 )
 
 
@@ -179,10 +179,10 @@ class TestTimeValidator(unittest.TestCase):
         # Mock current time
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         future_timestamp = current_time_ms + 120000  # 2 minutes in future
-        
+
         error = TimeValidator.validate_timestamp(future_timestamp, "test_field")
         self.assertIsNotNone(error)
         self.assertIn("cannot be in the future", error.message)
@@ -193,10 +193,10 @@ class TestTimeValidator(unittest.TestCase):
         # Mock current time
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         valid_timestamp = current_time_ms - 86400000  # Yesterday
-        
+
         error = TimeValidator.validate_timestamp(valid_timestamp, "test_field")
         self.assertIsNone(error)
 
@@ -206,11 +206,11 @@ class TestTimeValidator(unittest.TestCase):
         # Mock current time
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         # 30 seconds in future (within 1 minute skew allowance)
         timestamp_with_skew = current_time_ms + 30000
-        
+
         error = TimeValidator.validate_timestamp(timestamp_with_skew, "test_field")
         self.assertIsNone(error)
 
@@ -321,10 +321,10 @@ class TestTimeValidator(unittest.TestCase):
         """Test time parameters validation with from_time"""
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         from_time = current_time_ms - 86400000  # Yesterday
-        
+
         result = TimeValidator.validate_time_parameters(from_time=from_time)
         self.assertTrue(result.is_valid())
 
@@ -333,11 +333,11 @@ class TestTimeValidator(unittest.TestCase):
         """Test time parameters validation with both timestamps"""
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         from_time = current_time_ms - 86400000  # Yesterday
         to_time = current_time_ms
-        
+
         result = TimeValidator.validate_time_parameters(from_time=from_time, to_time=to_time)
         self.assertTrue(result.is_valid())
 
@@ -346,11 +346,11 @@ class TestTimeValidator(unittest.TestCase):
         """Test time parameters validation when from_time is after to_time"""
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         from_time = current_time_ms
         to_time = current_time_ms - 86400000  # Yesterday
-        
+
         result = TimeValidator.validate_time_parameters(from_time=from_time, to_time=to_time)
         self.assertFalse(result.is_valid())
         self.assertTrue(any("must be before" in error.message for error in result.errors))
@@ -360,11 +360,11 @@ class TestTimeValidator(unittest.TestCase):
         """Test time parameters validation with range exceeding 90 days"""
         mock_now = datetime(2026, 4, 8, 5, 0, 0)
         mock_datetime.now.return_value = mock_now
-        
+
         current_time_ms = int(mock_now.timestamp() * 1000)
         from_time = current_time_ms - (100 * 24 * 60 * 60 * 1000)  # 100 days ago
         to_time = current_time_ms
-        
+
         result = TimeValidator.validate_time_parameters(from_time=from_time, to_time=to_time)
         self.assertFalse(result.is_valid())
         self.assertTrue(any("too large" in error.message for error in result.errors))

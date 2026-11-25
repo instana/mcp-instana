@@ -82,11 +82,13 @@ def mock_with_header_auth(api_class, allow_mock=False):
 # then restore it immediately after the module-under-test is loaded so the
 # patch does not leak into other test modules that run in the same process.
 import src.core.utils as _core_utils
+
 _original_with_header_auth = _core_utils.with_header_auth
 _core_utils.with_header_auth = mock_with_header_auth
 
 # Now safe to import and reload the module under test
 import src.infrastructure.infrastructure_alert_config as _alert_mod
+
 _alert_mod = importlib.reload(_alert_mod)
 InfrastructureAlertConfigMCPTools = _alert_mod.InfrastructureAlertConfigMCPTools
 

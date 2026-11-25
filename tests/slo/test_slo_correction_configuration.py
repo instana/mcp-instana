@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from unittest.mock import MagicMock, patch
 
+
 # Create a null handler that will discard all log messages
 class NullHandler(logging.Handler):
     def emit(self, record):
@@ -68,6 +69,7 @@ sys.modules['instana_client.api.slo_correction_configurations_api'].SLOCorrectio
 
 # Import with patched decorator
 import src.core.utils
+
 original_with_header_auth = src.core.utils.with_header_auth
 src.core.utils.with_header_auth = mock_with_header_auth
 
@@ -90,7 +92,7 @@ class TestSLOCorrectionMCPTools(unittest.TestCase):
             read_token="test_token",
             base_url="https://test.instana.com"
         )
-        
+
         self.mock_api = MagicMock()
         self.client.correction_api = self.mock_api
 

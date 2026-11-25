@@ -7,6 +7,7 @@ are removed since they are internal implementation details.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -196,7 +197,7 @@ with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     from src.application.application_settings import ApplicationSettingsMCPTools
 
 # Clean up mocks from sys.modules to prevent interference with other tests
-for module_name in _mocks.keys():
+for module_name in _mocks:
     if module_name in _original_modules:
         # Restore original module
         sys.modules[module_name] = _original_modules[module_name]
@@ -223,10 +224,8 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         for attr_name in dir(mock_settings_api):
             attr = getattr(mock_settings_api, attr_name)
             if callable(attr) and not attr_name.startswith('__'):
-                try:
+                with contextlib.suppress(AttributeError):
                     attr.side_effect = None
-                except AttributeError:
-                    pass
 
         self.mock_configuration = mock_configuration
         self.mock_api_client = mock_api_client
@@ -805,7 +804,7 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
             id="ep1",
             payload=payload
         ))
-        
+
         self.client._update_endpoint_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -813,13 +812,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         """Test execute_settings_operation routes endpoint/delete correctly"""
         expected = {"success": True}
         self.client._delete_endpoint_config = AsyncMock(return_value=expected)
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="delete",
             resource_subtype="endpoint",
             id="ep1"
         ))
-        
+
         self.client._delete_endpoint_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -827,12 +826,12 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         """Test execute_settings_operation routes service/get_all correctly"""
         expected = [{"id": "svc1"}]
         self.client._get_all_service_configs = AsyncMock(return_value=expected)
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="get_all",
             resource_subtype="service"
         ))
-        
+
         self.client._get_all_service_configs.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -840,13 +839,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         """Test execute_settings_operation routes service/get correctly"""
         expected = {"id": "svc1"}
         self.client._get_service_config = AsyncMock(return_value=expected)
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="get",
             resource_subtype="service",
             id="svc1"
         ))
-        
+
         self.client._get_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -855,13 +854,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         expected = {"id": "svc1"}
         self.client._add_service_config = AsyncMock(return_value=expected)
         payload = {"label": "Service"}
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="create",
             resource_subtype="service",
             payload=payload
         ))
-        
+
         self.client._add_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -870,14 +869,14 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         expected = {"id": "svc1"}
         self.client._update_service_config = AsyncMock(return_value=expected)
         payload = {"label": "Updated"}
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="update",
             resource_subtype="service",
             id="svc1",
             payload=payload
         ))
-        
+
         self.client._update_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -885,13 +884,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         """Test execute_settings_operation routes service/delete correctly"""
         expected = {"success": True}
         self.client._delete_service_config = AsyncMock(return_value=expected)
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="delete",
             resource_subtype="service",
             id="svc1"
         ))
-        
+
         self.client._delete_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -900,13 +899,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         expected = {"id": "ms1"}
         self.client._add_manual_service_config = AsyncMock(return_value=expected)
         payload = {"label": "Manual Service"}
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="create",
             resource_subtype="manual_service",
             payload=payload
         ))
-        
+
         self.client._add_manual_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -915,14 +914,14 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         expected = {"id": "ms1"}
         self.client._update_manual_service_config = AsyncMock(return_value=expected)
         payload = {"label": "Updated"}
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="update",
             resource_subtype="manual_service",
             id="ms1",
             payload=payload
         ))
-        
+
         self.client._update_manual_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -930,13 +929,13 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         """Test execute_settings_operation routes manual_service/delete correctly"""
         expected = {"success": True}
         self.client._delete_manual_service_config = AsyncMock(return_value=expected)
-        
+
         result = asyncio.run(self.client.execute_settings_operation(
             operation="delete",
             resource_subtype="manual_service",
             id="ms1"
         ))
-        
+
         self.client._delete_manual_service_config.assert_called_once()
         self.assertEqual(result, expected)
 
@@ -947,9 +946,9 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         mock_result.status = 200
         mock_result.data.decode.return_value = "invalid json"
         mock_settings_api.get_application_configs_without_preload_content.return_value = mock_result
-        
+
         result = asyncio.run(self.client._get_all_applications_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertIn("error", result[0])
 
@@ -959,9 +958,9 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         mock_result.status = 200
         mock_result.data.decode.return_value = '{"id": "app1", "label": "App"}'
         mock_settings_api.get_application_configs_without_preload_content.return_value = mock_result
-        
+
         result = asyncio.run(self.client._get_all_applications_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
 
@@ -971,18 +970,18 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
         mock_result.status = 200
         mock_result.data.decode.return_value = 'null'
         mock_settings_api.get_application_configs_without_preload_content.return_value = mock_result
-        
+
         result = asyncio.run(self.client._get_all_applications_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 0)
 
     def test_get_all_applications_configs_exception(self):
         """Test _get_all_applications_configs handles general exceptions"""
         mock_settings_api.get_application_configs_without_preload_content.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_all_applications_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertIn("error", result[0])
 
@@ -1137,35 +1136,35 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
     def test_delete_application_config_exception(self):
         """Test _delete_application_config handles exceptions"""
         mock_settings_api.delete_application_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._delete_application_config("app1"))
-        
+
         self.assertIn("error", result)
 
     def test_get_all_endpoint_configs_exception(self):
         """Test _get_all_endpoint_configs handles exceptions"""
         mock_settings_api.get_endpoint_configs_without_preload_content.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_all_endpoint_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertIn("error", result[0])
 
     def test_get_endpoint_config_exception(self):
         """Test _get_endpoint_config handles exceptions"""
         mock_settings_api.get_endpoint_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_endpoint_config("ep1"))
-        
+
         self.assertIn("error", result)
 
     def test_get_endpoint_config_no_to_dict(self):
         """Test _get_endpoint_config when result doesn't have to_dict"""
         mock_result = {"id": "ep1"}
         mock_settings_api.get_endpoint_config.return_value = mock_result
-        
+
         result = asyncio.run(self.client._get_endpoint_config("ep1"))
-        
+
         self.assertEqual(result, mock_result)
 
     def test_create_endpoint_config_with_ast_literal_eval(self):
@@ -1229,35 +1228,35 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
     def test_delete_endpoint_config_exception(self):
         """Test _delete_endpoint_config handles exceptions"""
         mock_settings_api.delete_endpoint_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._delete_endpoint_config("ep1"))
-        
+
         self.assertIn("error", result)
 
     def test_get_all_service_configs_exception(self):
         """Test _get_all_service_configs handles exceptions"""
         mock_settings_api.get_service_configs_without_preload_content.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_all_service_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertIn("error", result[0])
 
     def test_get_service_config_exception(self):
         """Test _get_service_config handles exceptions"""
         mock_settings_api.get_service_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_service_config("svc1"))
-        
+
         self.assertIn("error", result)
 
     def test_get_service_config_no_to_dict(self):
         """Test _get_service_config when result doesn't have to_dict"""
         mock_result = {"id": "svc1"}
         mock_settings_api.get_service_config.return_value = mock_result
-        
+
         result = asyncio.run(self.client._get_service_config("svc1"))
-        
+
         self.assertEqual(result, mock_result)
 
     def test_add_service_config_with_ast_literal_eval(self):
@@ -1321,17 +1320,17 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
     def test_delete_service_config_exception(self):
         """Test _delete_service_config handles exceptions"""
         mock_settings_api.delete_service_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._delete_service_config("svc1"))
-        
+
         self.assertIn("error", result)
 
     def test_get_all_manual_service_configs_exception(self):
         """Test _get_all_manual_service_configs handles exceptions"""
         mock_settings_api.get_manual_service_configs_without_preload_content.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._get_all_manual_service_configs())
-        
+
         self.assertIsInstance(result, list)
         self.assertIn("error", result[0])
 
@@ -1404,9 +1403,9 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
     def test_delete_manual_service_config_exception(self):
         """Test _delete_manual_service_config handles exceptions"""
         mock_settings_api.delete_manual_service_config.side_effect = Exception("API Error")
-        
+
         result = asyncio.run(self.client._delete_manual_service_config("ms1"))
-        
+
         self.assertIn("error", result)
 
     def test_validate_and_prepare_application_payload_with_non_dict_element(self):
@@ -1420,10 +1419,10 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
             }
         }
         result = self.client._validate_and_prepare_application_payload(payload)
-        
+
         self.assertIn("payload", result)
 
-    def test_validate_and_prepare_application_payload_tag_filter_with_stringValue(self):
+    def test_validate_and_prepare_application_payload_tag_filter_with_string_value(self):
         """Test validation with TAG_FILTER having stringValue — result is a TagFilter model object"""
         payload = {
             "label": "Test App",

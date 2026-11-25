@@ -43,13 +43,15 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        from src.maintenance_window.maintenance_window_tool import MaintenanceWindowMCPTools
-        
+        from src.maintenance_window.maintenance_window_tool import (
+            MaintenanceWindowMCPTools,
+        )
+
         self.tool = MaintenanceWindowMCPTools(
             read_token="test_token",
             base_url="https://test.instana.com"
         )
-        
+
         # Mock current timestamp to be consistent
         self.current_time = int(datetime.now().timestamp() * 1000)
         self.future_time = self.current_time + (2 * 60 * 60 * 1000)  # 2 hours from now
@@ -60,8 +62,10 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
 
     def test_init_basic(self):
         """Tool initializes with basic credentials."""
-        from src.maintenance_window.maintenance_window_tool import MaintenanceWindowMCPTools
-        
+        from src.maintenance_window.maintenance_window_tool import (
+            MaintenanceWindowMCPTools,
+        )
+
         tool = MaintenanceWindowMCPTools(
             read_token="token123",
             base_url="https://example.instana.com"
@@ -73,8 +77,10 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
 
     def test_init_with_servicenow(self):
         """Tool initializes with ServiceNow credentials."""
-        from src.maintenance_window.maintenance_window_tool import MaintenanceWindowMCPTools
-        
+        from src.maintenance_window.maintenance_window_tool import (
+            MaintenanceWindowMCPTools,
+        )
+
         tool = MaintenanceWindowMCPTools(
             read_token="token123",
             base_url="https://example.instana.com",
@@ -108,14 +114,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """String start_time is converted to integer."""
         with patch.object(self.tool, '_create_maintenance_window', new_callable=AsyncMock) as mock_create:
             mock_create.return_value = {"status": "success"}
-            
+
             asyncio.run(self.tool.execute_maintenance_operation(
                 operation="create",
                 imap_code="EAL-012471",
                 start_time=str(self.future_time),
                 duration_minutes="60"
             ))
-            
+
             # Verify start_time was converted to int in params dict
             call_kwargs = mock_create.call_args.kwargs
             params = call_kwargs["params"]
@@ -136,7 +142,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """String duration parameters are converted to integers."""
         with patch.object(self.tool, '_create_maintenance_window', new_callable=AsyncMock) as mock_create:
             mock_create.return_value = {"status": "success"}
-            
+
             asyncio.run(self.tool.execute_maintenance_operation(
                 operation="create",
                 imap_code="EAL-012471",
@@ -145,7 +151,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 duration_hours="2",
                 duration_days="1"
             ))
-            
+
             # Verify durations were converted to int in params dict
             call_kwargs = mock_create.call_args.kwargs
             params = call_kwargs["params"]
@@ -172,14 +178,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create operation routes to _create_maintenance_window."""
         with patch.object(self.tool, '_create_maintenance_window', new_callable=AsyncMock) as mock_create:
             mock_create.return_value = {"status": "success", "window_id": "mw-123"}
-            
+
             result = asyncio.run(self.tool.execute_maintenance_operation(
                 operation="create",
                 imap_code="EAL-012471",
                 start_time=self.future_time,
                 duration_minutes=60
             ))
-            
+
             mock_create.assert_called_once()
             self.assertEqual(result["status"], "success")
 
@@ -187,13 +193,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """modify operation routes to _modify_maintenance_window."""
         with patch.object(self.tool, '_modify_maintenance_window', new_callable=AsyncMock) as mock_modify:
             mock_modify.return_value = {"status": "success"}
-            
+
             result = asyncio.run(self.tool.execute_maintenance_operation(
                 operation="modify",
                 window_id="mw-789",
                 duration_minutes=120
             ))
-            
+
             mock_modify.assert_called_once()
             self.assertEqual(result["status"], "success")
 
@@ -201,13 +207,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """modify operation converts duration_hours to duration_minutes."""
         with patch.object(self.tool, '_modify_maintenance_window', new_callable=AsyncMock) as mock_modify:
             mock_modify.return_value = {"status": "success"}
-            
+
             asyncio.run(self.tool.execute_maintenance_operation(
                 operation="modify",
                 window_id="mw-789",
                 duration_hours=3
             ))
-            
+
             call_kwargs = mock_modify.call_args.kwargs
             self.assertEqual(call_kwargs["duration_minutes"], 180)
 
@@ -215,13 +221,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """modify operation converts duration_days to duration_minutes."""
         with patch.object(self.tool, '_modify_maintenance_window', new_callable=AsyncMock) as mock_modify:
             mock_modify.return_value = {"status": "success"}
-            
+
             asyncio.run(self.tool.execute_maintenance_operation(
                 operation="modify",
                 window_id="mw-789",
                 duration_days=2
             ))
-            
+
             call_kwargs = mock_modify.call_args.kwargs
             self.assertEqual(call_kwargs["duration_minutes"], 2880)  # 2 days * 24 * 60
 
@@ -229,13 +235,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """close operation routes to _close_maintenance_window."""
         with patch.object(self.tool, '_close_maintenance_window', new_callable=AsyncMock) as mock_close:
             mock_close.return_value = {"status": "success"}
-            
+
             result = asyncio.run(self.tool.execute_maintenance_operation(
                 operation="close",
                 window_id="mw-789",
                 completion_notes="Completed"
             ))
-            
+
             mock_close.assert_called_once()
             self.assertEqual(result["status"], "success")
 
@@ -243,12 +249,12 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_active operation routes to _list_active_windows."""
         with patch.object(self.tool, '_list_active_windows', new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {"status": "success", "windows": []}
-            
+
             result = asyncio.run(self.tool.execute_maintenance_operation(
                 operation="list_active",
                 imap_code="EAL-012471"
             ))
-            
+
             mock_list.assert_called_once()
             self.assertEqual(result["status"], "success")
 
@@ -256,61 +262,61 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_scheduled operation routes to _list_scheduled_windows."""
         with patch.object(self.tool, '_list_scheduled_windows', new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {"status": "success", "windows": []}
-            
-            result = asyncio.run(self.tool.execute_maintenance_operation(
+
+            asyncio.run(self.tool.execute_maintenance_operation(
                 operation="list_scheduled"
             ))
-            
+
             mock_list.assert_called_once()
 
     def test_list_all_operation_routing(self):
         """list_all operation routes to _list_all_windows."""
         with patch.object(self.tool, '_list_all_windows', new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {"status": "success", "windows": []}
-            
-            result = asyncio.run(self.tool.execute_maintenance_operation(
+
+            asyncio.run(self.tool.execute_maintenance_operation(
                 operation="list_all"
             ))
-            
+
             mock_list.assert_called_once()
 
     def test_list_expired_operation_routing(self):
         """list_expired operation routes to _list_expired_windows."""
         with patch.object(self.tool, '_list_expired_windows', new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {"status": "success", "windows": []}
-            
-            result = asyncio.run(self.tool.execute_maintenance_operation(
+
+            asyncio.run(self.tool.execute_maintenance_operation(
                 operation="list_expired"
             ))
-            
+
             mock_list.assert_called_once()
 
     def test_bulk_create_operation_routing(self):
         """bulk_create operation routes to _bulk_create_windows."""
         with patch.object(self.tool, '_bulk_create_windows', new_callable=AsyncMock) as mock_bulk:
             mock_bulk.return_value = {"status": "success", "total": 2}
-            
-            result = asyncio.run(self.tool.execute_maintenance_operation(
+
+            asyncio.run(self.tool.execute_maintenance_operation(
                 operation="bulk_create",
                 imap_codes=["EAL-012471", "ORZ-000012"],
                 start_time=self.future_time,
                 duration_minutes=60
             ))
-            
+
             mock_bulk.assert_called_once()
 
     def test_validate_operation_routing(self):
         """validate operation routes to _validate_window_params."""
         with patch.object(self.tool, '_validate_window_params', new_callable=AsyncMock) as mock_validate:
             mock_validate.return_value = {"status": "valid"}
-            
-            result = asyncio.run(self.tool.execute_maintenance_operation(
+
+            asyncio.run(self.tool.execute_maintenance_operation(
                 operation="validate",
                 imap_code="EAL-012471",
                 start_time=self.future_time,
                 duration_minutes=60
             ))
-            
+
             mock_validate.assert_called_once()
 
     def test_get_templates_operation(self):
@@ -318,7 +324,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         result = asyncio.run(self.tool.execute_maintenance_operation(
             operation="get_templates"
         ))
-        
+
         self.assertEqual(result["operation"], "get_templates")
         self.assertEqual(result["status"], "success")
         self.assertIn("templates", result)
@@ -332,7 +338,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """_check_response_status returns None for successful status codes."""
         mock_response = Mock()
         mock_response.status = 200
-        
+
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNone(result)
 
@@ -340,7 +346,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """_check_response_status returns None for 201 Created."""
         mock_response = Mock()
         mock_response.status = 201
-        
+
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNone(result)
 
@@ -348,7 +354,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """_check_response_status returns None for 204 No Content."""
         mock_response = Mock()
         mock_response.status = 204
-        
+
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNone(result)
 
@@ -364,7 +370,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """_check_response_status returns error dict for error status codes."""
         mock_response = Mock()
         mock_response.status = 404
-        
+
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
@@ -373,7 +379,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_check_response_status_no_status_attribute(self):
         """_check_response_status returns None when response has no status attribute."""
         mock_response = Mock(spec=[])  # No attributes
-        
+
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNone(result)
 
@@ -384,7 +390,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_get_templates_returns_all_templates(self):
         """_get_templates returns all available templates."""
         result = self.tool._get_templates()
-        
+
         self.assertEqual(result["operation"], "get_templates")
         self.assertEqual(result["status"], "success")
         self.assertIn("templates", result)
@@ -398,24 +404,24 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_validate_missing_application_id(self, mock_timestamp):
         """validate returns error when application_id is missing."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
-        
+
         result = asyncio.run(self.tool._validate_window_params(
             application_id=None,
             start_time=self.future_time
         ))
-        
+
         self.assertTrue(result.get("elicitation_needed") or "error" in result)
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     def test_validate_missing_start_time(self, mock_timestamp):
         """validate returns error when start_time is missing."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
-        
+
         result = asyncio.run(self.tool._validate_window_params(
             application_id="EAL-012471",
             start_time=None
         ))
-        
+
         self.assertTrue(result.get("elicitation_needed") or "error" in result)
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
@@ -423,36 +429,36 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """validate returns error when start_time is in the past."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         past_time = self.current_time - (60 * 60 * 1000)  # 1 hour ago
-        
+
         result = asyncio.run(self.tool._validate_window_params(
             application_id="EAL-012471",
             start_time=past_time
         ))
-        
+
         self.assertTrue(result.get("elicitation_needed") or "error" in result)
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     def test_validate_invalid_template(self, mock_timestamp):
         """validate returns error for invalid template."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
-        
+
         result = asyncio.run(self.tool._validate_window_params(
             application_id="EAL-012471",
             start_time=self.future_time
         ))
-        
+
         self.assertEqual(result["status"], "valid")
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     def test_validate_success(self, mock_timestamp):
         """validate returns success for valid parameters."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
-        
+
         result = asyncio.run(self.tool._validate_window_params(
             application_id="EAL-012471",
             start_time=self.future_time
         ))
-        
+
         self.assertEqual(result["status"], "valid")
         self.assertIn("All parameters are valid", result["message"])
 
@@ -484,27 +490,29 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             window_id="mw-123",
             status="maintenance_scheduled"
         ))
-        
+
         self.assertEqual(result["status"], "skipped")
         self.assertIn("ServiceNow not configured", result["reason"])
 
     def test_servicenow_update_success(self):
         """ServiceNow update succeeds when configured."""
-        from src.maintenance_window.maintenance_window_tool import MaintenanceWindowMCPTools
-        
+        from src.maintenance_window.maintenance_window_tool import (
+            MaintenanceWindowMCPTools,
+        )
+
         tool = MaintenanceWindowMCPTools(
             read_token="test_token",
             base_url="https://test.instana.com",
             servicenow_token="snow_token",
             servicenow_url="https://snow.example.com"
         )
-        
+
         result = asyncio.run(tool._update_servicenow_change(
             change_request_id="CHG0012345",
             window_id="mw-123",
             status="maintenance_scheduled"
         ))
-        
+
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["change_request_id"], "CHG0012345")
         self.assertEqual(result["window_id"], "mw-123")
@@ -522,7 +530,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 start_time=self.future_time,
                 duration_minutes=60
             ))
-            
+
             self.assertTrue("error" in result or result.get("elicitation_needed"))
             self.assertIn("Test error", (result.get("error") or result.get("message", "")))
 
@@ -535,10 +543,10 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_create_window_missing_imap_code(self, mock_uuid, mock_timestamp):
         """create returns error when imap_code is missing."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
-        
+
         # Mock the API client
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -561,7 +569,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("imap_code", (result.get("error") or result.get("message", "")))
 
@@ -570,7 +578,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create returns error when start_time is missing."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -593,7 +601,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("start_time", (result.get("error") or result.get("message", "")))
 
@@ -602,7 +610,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create returns error for invalid template."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -625,7 +633,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("template", (result.get("error") or result.get("message", "")))
 
@@ -635,7 +643,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
         past_time = self.current_time - (60 * 60 * 1000)  # 1 hour ago
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -658,7 +666,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("start_time", (result.get("error") or result.get("message", "")))
 
@@ -669,7 +677,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create successfully creates window with duration_minutes."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         # Mock API client
         mock_api_client = Mock()
         mock_response = Mock()
@@ -680,10 +688,10 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "scheduling": {"type": "ONE_TIME"}
         }).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
-        
+
         # Mock MaintenanceConfigV2.from_dict
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -706,7 +714,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "create")
         self.assertEqual(result["status"], "success")
         self.assertIn("window_id", result["details"])
@@ -839,7 +847,6 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
 
     def test_modify_window_missing_window_id(self):
         """modify returns error when window_id is missing."""
-        mock_api_client = Mock()
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')
@@ -848,7 +855,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create applies template configuration."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
@@ -858,7 +865,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         }).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -881,7 +888,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -892,14 +899,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create calculates end time from duration_hours."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -922,7 +929,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -933,14 +940,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create calculates end time from duration_days."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -963,7 +970,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -974,14 +981,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create rounds duration to whole hours for recurring windows."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1004,7 +1011,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1015,14 +1022,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create enforces minimum 1 hour for recurring windows."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1045,7 +1052,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1056,16 +1063,16 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create calculates duration from end_time."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         end_time = self.future_time + (2 * 60 * 60 * 1000)  # 2 hours later
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1088,7 +1095,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1099,9 +1106,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create calculates duration in days from end_time."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
-        mock_api_client = Mock()
-        mock_response = Mock()
+
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')
@@ -1110,14 +1115,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create adds UNTIL to rrule when until_date provided."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1140,7 +1145,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1151,14 +1156,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create uses rrule as-is when UNTIL already present."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1181,7 +1186,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1192,14 +1197,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create handles invalid until_date gracefully."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1222,7 +1227,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1233,14 +1238,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create uses tag filter expression format."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1263,7 +1268,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1274,14 +1279,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create handles API errors."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 400
         mock_response.data = b'{"error": "Bad request"}'
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1304,16 +1309,16 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         end_time = self.future_time + (48 * 60 * 60 * 1000)  # 2 days later
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1336,7 +1341,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1347,14 +1352,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create handles empty API response."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = b''
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1377,7 +1382,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Empty response", (result.get("error") or result.get("message", "")))
@@ -1389,7 +1394,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create validates recurring window in response."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
@@ -1402,7 +1407,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         }).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1425,7 +1430,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1436,7 +1441,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create warns when response type doesn't match request."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
@@ -1449,7 +1454,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         }).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "application_id": None,
@@ -1472,7 +1477,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1483,7 +1488,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create integrates with ServiceNow when configured."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
-        
+
         # Create tool with ServiceNow credentials
         tool_with_snow = MaintenanceWindowMCPTools(
             read_token="test_token",
@@ -1491,14 +1496,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             servicenow_token="snow_token",
             servicenow_url="https://test.service-now.com"
         )
-        
+
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
         mock_response.data = json.dumps({"id": "mw-123"}).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         # Mock ServiceNow update
         with patch.object(tool_with_snow, '_update_servicenow_change', return_value=None) as mock_snow:
             result = asyncio.run(tool_with_snow._create_maintenance_window(
@@ -1523,7 +1528,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 ctx=None,
                 api_client=mock_api_client
             ))
-            
+
             self.assertIsNotNone(result)
             self.assertEqual(result["status"], "success")
             mock_snow.assert_called_once()
@@ -1532,7 +1537,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_modify_window_with_rrule(self, mock_config_class):
         """modify updates rrule for recurring windows."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1547,19 +1552,19 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1570,7 +1575,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["operation"], "modify")
         self.assertEqual(result["status"], "success")
@@ -1578,14 +1583,12 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
     def test_modify_window_api_error(self, mock_config_class):
         """modify handles API errors."""
-        mock_api_client = Mock()
-        mock_response = Mock()
 
     @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
     def test_modify_window_with_until_date_iso_format(self, mock_config_class):
         """modify updates until_date in ISO format."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1600,19 +1603,19 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1623,7 +1626,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1631,7 +1634,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_modify_window_with_until_date_only(self, mock_config_class):
         """modify handles date-only until_date."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1646,19 +1649,19 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1669,7 +1672,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1677,7 +1680,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_modify_window_with_until_date_timestamp(self, mock_config_class):
         """modify handles timestamp until_date."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1692,19 +1695,19 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1715,7 +1718,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1723,7 +1726,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_modify_window_invalid_until_date(self, mock_config_class):
         """modify returns error for invalid until_date."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1738,14 +1741,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1756,7 +1759,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
@@ -1764,7 +1767,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_modify_window_no_existing_rrule_with_until_date(self, mock_config_class):
         """modify creates rrule when until_date provided but no existing rrule."""
         mock_api_client = Mock()
-        
+
         existing_window = {
             "id": "mw-123",
             "name": "test_window",
@@ -1778,19 +1781,19 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             "tagFilterExpressionEnabled": False,
             "retriggerOpenAlertsEnabled": False
         }
-        
+
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1801,7 +1804,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(result["status"], "success")
 
@@ -1813,7 +1816,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_response.status = 500
         mock_response.data = b'{"error": "Internal server error"}'
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1824,7 +1827,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
@@ -1834,7 +1837,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_response = Mock()
         mock_response.status = 404
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="nonexistent",
             end_time=None,
@@ -1845,14 +1848,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
     def test_modify_window_success(self, mock_config_class):
         """modify successfully updates window."""
         mock_api_client = Mock()
-        
+
         # Mock get response
         existing_window = {
             "id": "mw-123",
@@ -1870,16 +1873,16 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_get_response = Mock()
         mock_get_response.status = 200
         mock_get_response.data = json.dumps(existing_window).encode()
-        
+
         # Mock put response
         mock_put_response = Mock()
         mock_put_response.status = 200
         mock_put_response.data = json.dumps(existing_window).encode()
-        
+
         mock_api_client.get_maintenance_config_v2_without_preload_content.return_value = mock_get_response
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_put_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -1890,7 +1893,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "modify")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["window_id"], "mw-123")
@@ -1902,14 +1905,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_close_window_missing_window_id(self):
         """close returns error when window_id is missing."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._close_maintenance_window(
             window_id=None,
             completion_notes="Completed",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("window_id", (result.get("error") or result.get("message", "")))
 
@@ -1922,14 +1925,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_response.status = 204
         mock_response.data = b''
         mock_api_client.delete_maintenance_config_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._close_maintenance_window(
             window_id="mw-123",
             completion_notes="Completed successfully",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "close")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["window_id"], "mw-123")
@@ -1948,13 +1951,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_response.status = 200
         mock_response.data = json.dumps([]).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "list_active")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 0)
@@ -1965,24 +1968,24 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_active returns active windows."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         windows = [
             {"id": "mw-1", "name": "window1", "state": "ACTIVE", "query": "entity.tag:imap=EAL-012471"},
             {"id": "mw-2", "name": "window2", "state": "SCHEDULED", "query": "entity.tag:imap=EAL-012471"},
             {"id": "mw-3", "name": "window3", "state": "ACTIVE", "query": "entity.tag:imap=ORZ-000012"}
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "list_active")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 2)  # Only ACTIVE windows
@@ -1994,24 +1997,24 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_list_scheduled_windows(self):
         """list_scheduled returns scheduled windows."""
         mock_api_client = Mock()
-        
+
         windows = [
             {"id": "mw-1", "name": "window1", "state": "ACTIVE"},
             {"id": "mw-2", "name": "window2", "state": "SCHEDULED"},
             {"id": "mw-3", "name": "window3", "state": "SCHEDULED"}
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_scheduled_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "list_scheduled")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 2)  # Only SCHEDULED windows
@@ -2023,24 +2026,24 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_list_all_windows(self):
         """list_all returns all windows grouped by state."""
         mock_api_client = Mock()
-        
+
         windows = [
             {"id": "mw-1", "name": "window1", "state": "ACTIVE"},
             {"id": "mw-2", "name": "window2", "state": "SCHEDULED"},
             {"id": "mw-3", "name": "window3", "state": "EXPIRED"}
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_all_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "list_all")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["total_count"], 3)
@@ -2055,24 +2058,24 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_list_expired_windows(self):
         """list_expired returns expired windows."""
         mock_api_client = Mock()
-        
+
         windows = [
             {"id": "mw-1", "name": "window1", "state": "ACTIVE"},
             {"id": "mw-2", "name": "window2", "state": "EXPIRED"},
             {"id": "mw-3", "name": "window3", "state": "EXPIRED"}
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_expired_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "list_expired")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 2)  # Only EXPIRED windows
@@ -2085,7 +2088,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_bulk_create_missing_codes(self, mock_create):
         """bulk_create returns error when no codes provided."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._bulk_create_windows(
             params={
                 "application_ids": None,
@@ -2103,7 +2106,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertIsNotNone(result)
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("imap_codes", (result.get("error") or result.get("message", "")))
@@ -2113,7 +2116,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """bulk_create successfully creates multiple windows."""
         mock_create.return_value = {"status": "success", "window_id": "mw-123"}
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._bulk_create_windows(
             params={
                 "application_ids": None,
@@ -2131,7 +2134,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["operation"], "bulk_create")
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["total"], 2)
@@ -2405,7 +2408,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_api_client = Mock()
         mock_response = Mock()
         mock_response.status = 201
-        
+
         window_data = {
             "id": "mw-123",
             "name": "test_window",
@@ -2414,7 +2417,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_response.data = json.dumps(window_data).encode()
         mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
         mock_config_class.from_dict.return_value = Mock()
-        
+
         # 90 minutes should round up to 2 hours for recurring windows
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
@@ -2438,13 +2441,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["status"], "success")
 
     def test_create_window_end_time_before_start_time(self):
         """create returns error when end_time is before start_time."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "imap_code": "EAL-012471",
@@ -2467,7 +2470,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("end_time must be after start_time", (result.get("error") or result.get("message", "")))
 
@@ -2476,7 +2479,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_active uses occurrence times when state is not available."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         # Windows without state field, using occurrence times
         windows = [
             {
@@ -2498,18 +2501,18 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 }
             }
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 1)  # Only mw-1 is active
 
@@ -2518,7 +2521,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_active filters by application_id using occurrence fallback."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         windows = [
             {
                 "id": "mw-1",
@@ -2539,18 +2542,18 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 }
             }
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id="EAL-012471",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["windows"][0]["id"], "mw-1")
@@ -2561,37 +2564,37 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.side_effect = Exception("API error")
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Failed to list active windows", (result.get("error") or result.get("message", "")))
 
     def test_list_scheduled_windows_with_application_filter(self):
         """list_scheduled filters by application_id."""
         mock_api_client = Mock()
-        
+
         windows = [
             {"id": "mw-1", "name": "window1", "state": "SCHEDULED", "query": "entity.tag:imap=EAL-012471"},
             {"id": "mw-2", "name": "window2", "state": "SCHEDULED", "query": "entity.tag:imap=ORZ-000012"},
             {"id": "mw-3", "name": "window3", "state": "ACTIVE", "query": "entity.tag:imap=EAL-012471"}
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_scheduled_windows(
             application_id="EAL-012471",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["windows"][0]["id"], "mw-1")
@@ -2601,13 +2604,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_scheduled handles exceptions gracefully."""
         mock_api_client = Mock()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.side_effect = Exception("API error")
-        
+
         result = asyncio.run(self.tool._list_scheduled_windows(
             application_id=None,
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Failed to list scheduled windows", (result.get("error") or result.get("message", "")))
 
@@ -2616,7 +2619,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """list_active filters using tagFilterExpression."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_api_client = Mock()
-        
+
         windows = [
             {
                 "id": "mw-1",
@@ -2633,18 +2636,18 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
                 "tagFilterExpression": {"value": "ORZ-000012"}
             }
         ]
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = json.dumps(windows).encode()
         mock_api_client.get_maintenance_configs_v2_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.tool._list_active_windows(
             application_id="EAL-012471",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["windows"][0]["id"], "mw-1")
@@ -2653,7 +2656,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
     def test_create_window_invalid_end_time_string(self):
         """create returns error when end_time string is invalid."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "imap_code": "EAL-012471",
@@ -2676,13 +2679,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_create_window_invalid_duration_hours_string(self):
         """create returns error when duration_hours string is invalid."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "imap_code": "EAL-012471",
@@ -2705,13 +2708,13 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_create_window_invalid_duration_days_string(self):
         """create returns error when duration_days string is invalid."""
         mock_api_client = Mock()
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "imap_code": "EAL-012471",
@@ -2734,7 +2737,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
@@ -2742,7 +2745,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create handles general exceptions."""
         mock_api_client = Mock()
         mock_config_class.from_dict.side_effect = Exception("Unexpected error")
-        
+
         result = asyncio.run(self.tool._create_maintenance_window(
             params={
                 "imap_code": "EAL-012471",
@@ -2765,7 +2768,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Failed to create maintenance window", (result.get("error") or result.get("message", "")))
 
@@ -2774,7 +2777,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """modify handles general exceptions."""
         mock_api_client = Mock()
         mock_api_client.get_maintenance_config_v2_without_preload_content.side_effect = Exception("Unexpected error")
-        
+
         result = asyncio.run(self.tool._modify_maintenance_window(
             window_id="mw-123",
             end_time=None,
@@ -2785,7 +2788,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Failed to fetch window", (result.get("error") or result.get("message", "")))
 
@@ -2793,14 +2796,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """close handles general exceptions."""
         mock_api_client = Mock()
         mock_api_client.delete_maintenance_config_v2_without_preload_content.side_effect = Exception("Unexpected error")
-        
+
         result = asyncio.run(self.tool._close_maintenance_window(
             window_id="mw-123",
             completion_notes="Test",
             ctx=None,
             api_client=mock_api_client
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Failed to close maintenance window", (result.get("error") or result.get("message", "")))
 
@@ -2814,7 +2817,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             end_time="not-a-number",  # Invalid
             ctx=None
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_execute_operation_invalid_duration_hours_string(self):
@@ -2826,7 +2829,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             duration_hours="not-a-number",  # Invalid
             ctx=None
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_execute_operation_invalid_duration_days_string(self):
@@ -2838,7 +2841,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             duration_days="not-a-number",  # Invalid
             ctx=None
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
     def test_execute_operation_unimplemented_operation(self):
@@ -2849,7 +2852,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
             start_time=str(self.future_time),
             ctx=None
         ))
-        
+
         self.assertTrue("error" in result or result.get("elicitation_needed"))
         self.assertIn("Invalid operation", (result.get("error") or result.get("message", "")))
 

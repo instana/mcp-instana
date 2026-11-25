@@ -43,8 +43,20 @@ except ImportError as e:
 from instana_client import DeprecatedTagFilter
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
-from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_MOBILE_BEACON_TYPES
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
+from src.core.validation import (
+    ENTITY_GUIDANCE_EUM,
+    VALID_MOBILE_BEACON_TYPES,
+    StructureValidator,
+)
 
 logger = logging.getLogger(__name__)
 

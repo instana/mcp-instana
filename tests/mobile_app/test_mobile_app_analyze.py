@@ -51,8 +51,8 @@ sys.modules["instana_client.models.get_mobile_app_beacons"].GetMobileAppBeacons 
 sys.modules["instana_client.models.deprecated_tag_filter"].DeprecatedTagFilter = FakeModel
 sys.modules["instana_client"].DeprecatedTagFilter = FakeModel
 
-from src.mobile_app.mobile_app_analyze import MobileAppAnalyzeMCPTools, clean_nan_values
 from src.core.utils import decode_response as _decode_response
+from src.mobile_app.mobile_app_analyze import MobileAppAnalyzeMCPTools, clean_nan_values
 
 
 class MockResponse:
@@ -556,17 +556,17 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
             json.dumps(payload).encode("utf-8"),
             {"Content-Type": "application/json"},
         )
-        
+
         # Don't specify filter_fields - should default to True
         result = await self.client.get_all_mobile_app_beacons(
             beacon_type="SESSION_START",
             api_client=self.mock_api,
         )
-        
+
         self.assertIn("summary", result)
         self.assertIn("beacons", result)
         self.assertEqual(len(result["beacons"]), 1)
-        
+
         beacon = result["beacons"][0]
         # Essential fields should be present
         self.assertIn("mobileAppLabel", beacon)
@@ -576,7 +576,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
         self.assertIn("view", beacon)
         self.assertIn("platform", beacon)
         self.assertIn("osVersion", beacon)
-        
+
         # Non-essential fields should be filtered out
         self.assertNotIn("unusedField1", beacon)
         self.assertNotIn("unusedField2", beacon)
@@ -607,17 +607,17 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
             json.dumps(payload).encode("utf-8"),
             {"Content-Type": "application/json"},
         )
-        
+
         result = await self.client.get_all_mobile_app_beacons(
             beacon_type="SESSION_START",
             filter_fields=False,  # Explicitly disable filtering
             api_client=self.mock_api,
         )
-        
+
         self.assertIn("summary", result)
         self.assertIn("beacons", result)
         self.assertEqual(len(result["beacons"]), 1)
-        
+
         beacon = result["beacons"][0]
         # ALL fields should be present when filter_fields=False
         self.assertIn("mobileAppLabel", beacon)

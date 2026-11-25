@@ -20,7 +20,15 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    decode_response,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -462,7 +470,7 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
 
         # Outside the try so a RuntimeError from the raw call is not swallowed and retried.
         return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
-        
+
     async def _fetch_raw_geo_mapping_rules(self, api_client, mobile_app_id: str, ctx=None,
                                            resource_type: Optional[str] = None,
                                            tool_name: Optional[str] = None) -> str:

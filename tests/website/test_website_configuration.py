@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 # Add src to path before any imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
@@ -81,7 +81,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
             {"id": "web1", "name": "Website 1"},
             {"id": "web2", "name": "Website 2"}
         ]
-        
+
         self.config_api.get_websites = Mock(return_value=mock_result)
 
         result = asyncio.run(self.client.get_websites())
@@ -106,7 +106,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test get_website with website_id"""
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web1", "name": "Website 1"}
-        
+
         self.config_api.get_website = Mock(return_value=mock_website)
 
         result = asyncio.run(self.client.get_website(website_id="web1"))
@@ -119,7 +119,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test get_website with website_name (uses _get_website helper)"""
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web2", "name": "Test Website"}
-        
+
         self.config_api.get_website = Mock(return_value=mock_website)
 
         result = asyncio.run(self.client.get_website(website_id="web2"))
@@ -150,7 +150,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test create_website with successful response"""
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "new_web", "name": "New Website"}
-        
+
         self.config_api.create_website = Mock(return_value=mock_website)
 
         payload = {
@@ -211,7 +211,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test rename_website with successful response"""
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web1", "name": "New Name"}
-        
+
         self.config_api.rename_website = Mock(return_value=mock_website)
 
         result = asyncio.run(self.client.rename_website(website_id="web1", name="New Name"))
@@ -306,11 +306,11 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         mock_websites = Mock()
         mock_websites.to_dict.return_value = [{"id": "web1", "name": "Test"}]
         self.config_api.get_websites = Mock(return_value=mock_websites)
-        
+
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web1", "name": "Test"}
         self.config_api.get_website = Mock(return_value=mock_website)
-        
+
         mock_geo = Mock()
         mock_geo.to_dict.return_value = {"enabled": True}
         self.config_api.get_website_geo_location_configuration = Mock(return_value=mock_geo)
@@ -385,10 +385,10 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
             def __init__(self):
                 self.id = "web1"
                 self.name = "Test"
-        
+
         mock_websites = [MockWebsite()]
         self.config_api.get_websites = Mock(return_value=mock_websites)
-        
+
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web1", "name": "Test"}
         self.config_api.get_website = Mock(return_value=mock_website)
@@ -420,7 +420,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test get_website_geo_location_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "mode": "AUTO"}
-        
+
         self.config_api.get_website_geo_location_configuration = Mock(return_value=mock_config)
 
         result = asyncio.run(self.client.get_website_geo_location_configuration(
@@ -448,7 +448,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test update_website_geo_location_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "mode": "MANUAL"}
-        
+
         self.config_api.update_website_geo_location_configuration = Mock(return_value=mock_config)
 
         payload = {"geoDetailRemoval": "NO_REMOVAL"}
@@ -488,7 +488,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test get_website_ip_masking_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "maskingType": "FULL"}
-        
+
         self.config_api.get_website_ip_masking_configuration = Mock(return_value=mock_config)
 
         result = asyncio.run(self.client.get_website_ip_masking_configuration(
@@ -638,7 +638,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test update_website_ip_masking_configuration with successful response"""
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True, "maskingType": "PARTIAL"}
-        
+
         self.config_api.update_website_ip_masking_configuration = Mock(return_value=mock_config)
 
         payload = {"ipMasking": "DEFAULT"}
@@ -668,7 +668,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test get_website_geo_mapping_rules with CSV response"""
         # Mock returns None, triggering fallback to raw response
         self.config_api.get_website_geo_mapping_rules = Mock(return_value=None)
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US\n10.0.0.1,UK"
@@ -692,7 +692,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         self.config_api.get_website_geo_mapping_rules = Mock(
             side_effect=Exception("API Error")
         )
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
@@ -711,7 +711,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
     def test_get_website_geo_mapping_rules_non_csv_data(self):
         """Test get_website_geo_mapping_rules with non-CSV data"""
         self.config_api.get_website_geo_mapping_rules = Mock(return_value=None)
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.data = b"Some non-CSV data"
@@ -806,7 +806,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test upload_source_map_file with successful response"""
         mock_result = Mock()
         mock_result.to_dict.return_value = {"id": "map1", "status": "uploaded"}
-        
+
         self.config_api.upload_source_map_file = Mock(return_value=mock_result)
 
         result = asyncio.run(self.client.upload_source_map_file(
@@ -1431,7 +1431,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         mock_response = Mock()
         mock_response.status = 404
         mock_response.data = b"Not Found"
-        
+
         self.config_api.get_website_source_map_upload_configuration_without_preload_content = Mock(
             return_value=mock_response
         )
@@ -1454,7 +1454,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         mock_response = Mock()
         mock_response.status = 500
         mock_response.data = b"Internal Server Error"
-        
+
         self.config_api.get_website_source_map_upload_configurations_without_preload_content = Mock(
             return_value=mock_response
         )
@@ -1538,12 +1538,12 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         mock_result = Mock()
         mock_result.to_dict.return_value = [{"id": "web1", "name": "Test Website"}]
         self.config_api.get_websites = Mock(return_value=mock_result)
-        
+
         # Mock get_website to return the website details
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web1", "name": "Test Website"}
         self.config_api.get_website = Mock(return_value=mock_website)
-        
+
         # Mock the actual operation
         mock_config = Mock()
         mock_config.to_dict.return_value = {"enabled": True}
@@ -1599,7 +1599,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
             {"id": "web2", "name": "Test Website"}
         ]
         self.config_api.get_websites = Mock(return_value=mock_result)
-        
+
         # Mock get_website
         mock_website = Mock()
         mock_website.to_dict.return_value = {"id": "web2", "name": "Test Website"}
@@ -1618,7 +1618,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         mock_result = Mock()
         mock_result.to_dict.return_value = [{"id": "web1", "name": "Website 1"}]
         self.config_api.get_websites = Mock(return_value=mock_result)
-        
+
         # Mock get_website to raise exception for non-existent ID
         self.config_api.get_website = Mock(side_effect=Exception("Website not found"))
 

@@ -115,12 +115,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             "name": "Test Alert",
             "enabled": True
         }
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -137,12 +137,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             "validFrom": 1609459200,
             "validTo": 1609545600
         }
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -155,12 +155,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_mobile_app_alert_config_list_response(self):
         """Test find_mobile_app_alert_config when API returns a list"""
         mock_configs = [{"id": "alert1", "name": "Alert 1"}, {"id": "alert2", "name": "Alert 2"}]
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -175,7 +175,7 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps([]).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -187,12 +187,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_mobile_app_alert_config_dict_response(self):
         """Test find_mobile_app_alert_config when API returns a dict directly"""
         expected_dict = {"id": "alert1", "name": "Test Alert"}
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(expected_dict).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -232,12 +232,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             "name": "Test Alert",
             "validFrom": 1609459200
         }
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -265,12 +265,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_mobile_app_alert_config_with_model_without_to_dict(self):
         """Test find_mobile_app_alert_config with valid response"""
         mock_config = {"id": "alert1", "name": "Test Alert"}
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -282,12 +282,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_mobile_app_alert_config_list_with_mixed_types(self):
         """Test find_mobile_app_alert_config when API returns array"""
         mock_configs = [{"id": "alert1"}, {"id": "alert2"}]
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 
@@ -304,12 +304,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             {"id": "alert1", "name": "Alert 1", "enabled": True},
             {"id": "alert2", "name": "Alert 2", "enabled": False}
         ]
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -328,7 +328,7 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps([]).encode('utf-8'))
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -352,12 +352,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_active_configs_with_alert_ids_filter(self):
         """Test find_active_mobile_app_alert_configs with alert_ids filter"""
         mock_configs = [{"id": "alert1", "name": "Alert 1"}]
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -376,12 +376,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_active_configs_pagination_limit(self):
         """Test find_active_mobile_app_alert_configs limits to 10 results"""
         mock_configs = [{"id": f"alert{i}", "name": f"Alert {i}"} for i in range(15)]
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -396,12 +396,12 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
     def test_find_active_configs_single_object_response(self):
         """Test find_active_mobile_app_alert_configs when API returns single object"""
         mock_config = {"id": "alert1", "name": "Alert 1"}
-        
+
         class MockResponse:
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -418,7 +418,7 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(b"invalid json{")
         self.client.config_api.find_active_mobile_app_alert_configs_without_preload_content = Mock(return_value=mock_response)
 
@@ -470,7 +470,7 @@ class TestMobileAppAlertMCPTools(unittest.TestCase):
             def __init__(self, data):
                 self.data = data
                 self.status = 200
-        
+
         mock_response = MockResponse(b"invalid json{")
         self.client.config_api.find_mobile_app_alert_config_without_preload_content = Mock(return_value=mock_response)
 

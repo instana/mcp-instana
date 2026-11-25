@@ -6,11 +6,11 @@ This module contains tests for the automation action catalog tools.
 
 import asyncio
 import logging
+import os
 import sys
 import unittest
 from functools import wraps
 from unittest.mock import MagicMock, patch
-import os
 
 
 # Create a null handler that will discard all log messages

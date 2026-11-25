@@ -28,7 +28,13 @@ except ImportError:
     logger.error("Failed to import application analyze API", exc_info=True)
     raise
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 from src.core.validation import (
     ENTITY_GUIDANCE_CALL_SEMANTICS,
     BooleanCoercer,
@@ -415,7 +421,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                 operation_name="get_traces_without_preload_content",
                 resource_type=resource_type, tool_name=tool_name,
             )
-            
+
             if (err := self.check_response_status(result, "get traces", logger)):
                 return err
 

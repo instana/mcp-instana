@@ -20,7 +20,15 @@ except ImportError as e:
     raise
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import BaseInstanaClient, call_sdk_fn, extract_tag_names_from_tree, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    extract_tag_names_from_tree,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)

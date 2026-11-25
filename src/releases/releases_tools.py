@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional
 from instana_client.api.releases_api import ReleasesApi
 from instana_client.models.release import Release
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, sdk_call_with_keepalive, with_header_auth
+from src.core.pagination import coerce_int, paginate
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    sdk_call_with_keepalive,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -88,6 +88,7 @@ sys.modules['mcp.types'] = MagicMock()
 # Import src.core.utils first to ensure it's available for patching
 import src.core.utils
 
+
 def create_infrastructure_topology_client(read_token: str, base_url: str):
     with patch.object(src.core.utils, 'with_header_auth', mock_with_header_auth):
         module = importlib.import_module('src.infrastructure.infrastructure_topology')
@@ -273,16 +274,16 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
     def test_get_related_hosts_missing_snapshot_id(self):
         """Test get_related_hosts with missing snapshot_id"""
         result = asyncio.run(self.client.get_related_hosts(snapshot_id=""))
-        
+
         self.assertIn("error", result)
         self.assertIn("required", result["error"])
 
     def test_get_related_hosts_non_list_result(self):
         """Test get_related_hosts with non-list result"""
         self.topology_api.get_related_hosts.return_value = "string_result"
-        
+
         result = asyncio.run(self.client.get_related_hosts(snapshot_id="snap1"))
-        
+
         self.assertIn("data", result)
         self.assertEqual(result["snapshotId"], "snap1")
 
@@ -293,15 +294,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             "nodes": [{"id": "n1", "plugin": "host", "label": "Host"}],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result.to_dict()).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
 
     def test_get_topology_with_dict_result(self):
@@ -310,15 +311,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             "nodes": [{"id": "n1", "plugin": "host", "label": "Host"}],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
 
     def test_get_topology_with_kubernetes_resources(self):
@@ -331,15 +332,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             ],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         self.assertIn("kubernetesTypes", result["summary"]["infrastructureOverview"])
 
@@ -353,15 +354,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             ],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         self.assertIn("estimatedContainers", result["summary"]["infrastructureOverview"])
 
@@ -374,15 +375,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             ],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         self.assertIn("estimatedProcesses", result["summary"]["infrastructureOverview"])
 
@@ -398,15 +399,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
                 {"from": "n1", "to": "n2", "type": "runs"}
             ]
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         self.assertIn("connectionAnalysis", result["summary"])
 
@@ -414,15 +415,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         """Test get_topology with more than 30 nodes (sampling)"""
         nodes = [{"id": f"n{i}", "plugin": "host", "label": f"Host {i}"} for i in range(50)]
         mock_result = {"nodes": nodes, "edges": []}
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         self.assertEqual(result["summary"]["totalNodes"], 50)
         self.assertIn("sampleAnalysis", result["summary"])
@@ -430,15 +431,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
     def test_get_topology_unexpected_format(self):
         """Test get_topology with unexpected data format"""
         mock_result = {"unexpected": "format"}
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("error", result)
 
     def test_get_topology_with_invalid_node(self):
@@ -447,15 +448,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             "nodes": ["invalid_node", {"id": "n1", "plugin": "host", "label": "Host"}],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
 
     def test_get_topology_with_long_labels(self):
@@ -465,15 +466,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             "nodes": [{"id": "n1", "plugin": "host", "label": long_label}],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         # Check that label was truncated in sample nodes (at 80 chars, not 40)
         if result.get("sampleNodes"):
@@ -486,15 +487,15 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
             "nodes": [{"id": long_id, "plugin": "host", "label": "Host"}],
             "edges": []
         }
-        
+
         mock_response = MagicMock()
-        
+
         mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
-        
+
         result = asyncio.run(self.client.get_topology())
-        
+
         self.assertIn("summary", result)
         # Verify that full IDs are preserved (not truncated) for lookups
         if result.get("sampleNodes"):

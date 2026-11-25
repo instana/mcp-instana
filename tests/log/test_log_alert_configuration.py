@@ -649,35 +649,35 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_config_instance = MagicMock()
         mock_log_alert_config.return_value = mock_config_instance
         self.client.log_alert_api.create_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         config = {"name": "Test", "query": "test", "threshold": 5, "timeThreshold": 300000, "rule": {"type": "count"}}
         result = asyncio.run(self.client.create_log_alert_config(config=config))
-        
+
         self.assertIn("error", result)
         self.assertIn("API Error", result["error"])
 
     def test_delete_log_alert_config_api_error(self):
         """Test delete_log_alert_config with API error"""
         self.client.log_alert_api.delete_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         result = asyncio.run(self.client.delete_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_disable_log_alert_config_api_error(self):
         """Test disable_log_alert_config with API error"""
         self.client.log_alert_api.disable_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         result = asyncio.run(self.client.disable_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_enable_log_alert_config_api_error(self):
         """Test enable_log_alert_config with API error"""
         self.client.log_alert_api.enable_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         result = asyncio.run(self.client.enable_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_find_active_log_alert_configs_json_decode_error(self):
@@ -686,9 +686,9 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
-        
+
         result = asyncio.run(self.client.find_active_log_alert_configs())
-        
+
         self.assertIn("error", result)
         self.assertIn("Failed to parse JSON response", result["error"])
 
@@ -698,9 +698,9 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_response.status = 200
         del mock_response.data
         self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
-        
+
         result = asyncio.run(self.client.find_active_log_alert_configs())
-        
+
         self.assertIn("error", result)
 
     def test_find_log_alert_config_json_decode_error(self):
@@ -709,9 +709,9 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_log_alert_config_without_preload_content = MagicMock(return_value=mock_response)
-        
+
         result = asyncio.run(self.client.find_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_find_log_alert_config_versions_json_decode_error(self):
@@ -720,17 +720,17 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_log_alert_config_versions_without_preload_content = MagicMock(return_value=mock_response)
-        
+
         result = asyncio.run(self.client.find_log_alert_config_versions(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_restore_log_alert_config_api_error(self):
         """Test restore_log_alert_config with API error"""
         self.client.log_alert_api.restore_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         result = asyncio.run(self.client.restore_log_alert_config(id="alert1", created=1625097600000))
-        
+
         self.assertIn("error", result)
 
     def test_update_log_alert_config_api_error(self):
@@ -738,71 +738,71 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_config_instance = MagicMock()
         mock_log_alert_config.return_value = mock_config_instance
         self.client.log_alert_api.update_log_alert_config = MagicMock(side_effect=Exception("API Error"))
-        
+
         config = {"name": "Updated", "query": "test", "threshold": 10, "timeThreshold": 600000, "rule": {"type": "count"}}
         result = asyncio.run(self.client.update_log_alert_config(id="alert1", config=config))
-        
+
         self.assertIn("error", result)
 
     def test_create_log_alert_config_outer_exception(self):
         """Test create_log_alert_config with outer exception"""
         mock_log_alert_config.side_effect = Exception("Outer error")
-        
+
         config = {"name": "Test", "query": "test", "threshold": 5, "timeThreshold": 300000, "rule": {"type": "count"}}
-        
+
         # This should catch the outer exception
         result = asyncio.run(self.client.create_log_alert_config(config=config))
-        
+
         self.assertIn("error", result)
 
     def test_delete_log_alert_config_outer_exception(self):
         """Test delete_log_alert_config with outer exception"""
         # Simulate an exception in the outer try block
         self.client.log_alert_api = None
-        
+
         result = asyncio.run(self.client.delete_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_find_active_log_alert_configs_outer_exception(self):
         """Test find_active_log_alert_configs with outer exception"""
         self.client.log_alert_api = None
-        
+
         result = asyncio.run(self.client.find_active_log_alert_configs())
-        
+
         self.assertIn("error", result)
 
     def test_find_log_alert_config_outer_exception(self):
         """Test find_log_alert_config with outer exception"""
         self.client.log_alert_api = None
-        
+
         result = asyncio.run(self.client.find_log_alert_config(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_find_log_alert_config_versions_outer_exception(self):
         """Test find_log_alert_config_versions with outer exception"""
         self.client.log_alert_api = None
-        
+
         result = asyncio.run(self.client.find_log_alert_config_versions(id="alert1"))
-        
+
         self.assertIn("error", result)
 
     def test_restore_log_alert_config_outer_exception(self):
         """Test restore_log_alert_config with outer exception"""
         self.client.log_alert_api = None
-        
+
         result = asyncio.run(self.client.restore_log_alert_config(id="alert1", created=1625097600000))
-        
+
         self.assertIn("error", result)
 
     def test_update_log_alert_config_outer_exception(self):
         """Test update_log_alert_config with outer exception"""
         mock_log_alert_config.side_effect = Exception("Outer error")
-        
+
         config = {"name": "Updated", "query": "test", "threshold": 10, "timeThreshold": 600000, "rule": {"type": "count"}}
         result = asyncio.run(self.client.update_log_alert_config(id="alert1", config=config))
-        
+
         self.assertIn("error", result)
 
 

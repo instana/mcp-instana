@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 from src.core.utils import parse_payload
 
+
 # Create a null handler that will discard all log messages
 class NullHandler(logging.Handler):
     def emit(self, record):
@@ -87,6 +88,7 @@ sys.modules['instana_client.api.service_levels_alert_configuration_api'].Service
 
 # Import with patched decorator
 import src.core.utils
+
 original_with_header_auth = src.core.utils.with_header_auth
 src.core.utils.with_header_auth = mock_with_header_auth
 
@@ -111,7 +113,7 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             read_token="test_token",
             base_url="https://test.instana.com"
         )
-        
+
         # Create a mock API client instance
         self.mock_api = MagicMock()
         self.client.alert_config_api = self.mock_api
@@ -882,9 +884,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should return a mock object (not an error dict)
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -900,9 +902,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "SERVICE_LEVELS_OBJECTIVE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should return a mock object (not an error dict)
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -918,9 +920,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         self.assertIn("error", result)
         self.assertIn("rule.metric is required", result["error"])
 
@@ -936,9 +938,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURN_RATE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         self.assertIn("error", result)
         self.assertIn("burnRateTimeWindows is required", result["error"])
 
@@ -954,9 +956,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "INVALID_TYPE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         self.assertIn("error", result)
         self.assertIn("Invalid alertType", result["error"])
 
@@ -972,9 +974,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000}  # Missing timeWindow
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         self.assertIn("error", result)
         self.assertIn("timeThreshold must include both", result["error"])
 
@@ -991,9 +993,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000},
             "threshold": {"value": 0.95, "operator": ">="}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1014,9 +1016,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             },
             "burnRateConfig": {"factor": 2}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1033,9 +1035,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000},
             "triggering": True
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 
@@ -1053,9 +1055,9 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
             "rule": {"alertType": "ERROR_BUDGET", "metric": "BURNED_PERCENTAGE"},
             "timeThreshold": {"expiry": 604800000, "timeWindow": 604800000}
         }
-        
+
         result = self.client._build_alert_config_object(request_body)
-        
+
         # Should succeed
         self.assertNotIsInstance(result, dict) or self.assertNotIn("error", result)
 

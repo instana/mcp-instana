@@ -11,7 +11,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -57,12 +57,14 @@ for model_name in ['GetTestResult', 'GetTestResultAnalytic', 'GetTestResultList'
     mock_cls.from_dict = MagicMock(return_value=MagicMock())
     mod_key = f'instana_client.models.{model_name[3:].replace("", "get_").lower()}'
     setattr(
-        sys.modules[f'instana_client.models.get_test_result'],
+        sys.modules['instana_client.models.get_test_result'],
         model_name, mock_cls
     )
 
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-    from src.synthetic.synthetic_test_playback_results import SyntheticTestPlaybackResultsMCPTools
+    from src.synthetic.synthetic_test_playback_results import (
+        SyntheticTestPlaybackResultsMCPTools,
+    )
 
 
 def _ok_response(payload):
@@ -142,7 +144,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_list(self):
         m = self._patch_method("get_synthetic_result_list", {"items": []})
-        result = asyncio.run(self.client.execute_playback_operation(
+        asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_list",
             {"payload": {"syntheticMetrics": ["synthetic.metricsStatus"]}}
         ))
@@ -150,7 +152,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_location_summary_list(self):
         m = self._patch_method("get_location_summary_list", {"items": []})
-        result = asyncio.run(self.client.execute_playback_operation(
+        asyncio.run(self.client.execute_playback_operation(
             "get_location_summary_list",
             {"payload": {"timeFrame": {"to": None, "windowSize": 300000}}}
         ))
@@ -158,7 +160,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_test_summary_list(self):
         m = self._patch_method("get_test_summary_list", {"items": []})
-        result = asyncio.run(self.client.execute_playback_operation(
+        asyncio.run(self.client.execute_playback_operation(
             "get_test_summary_list",
             {"payload": {"metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}]}}
         ))
@@ -166,7 +168,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_metadata(self):
         m = self._patch_method("get_synthetic_result_metadata", {"types": []})
-        result = asyncio.run(self.client.execute_playback_operation(
+        asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_metadata",
             {"testid": "t1", "testresultid": "r1"}
         ))
@@ -174,7 +176,7 @@ class TestExecutePlaybackOperation(unittest.TestCase):
 
     def test_dispatches_get_synthetic_result_detail_data(self):
         m = self._patch_method("get_synthetic_result_detail_data", {"data": "..."})
-        result = asyncio.run(self.client.execute_playback_operation(
+        asyncio.run(self.client.execute_playback_operation(
             "get_synthetic_result_detail_data",
             {"testid": "t1", "testresultid": "r1", "type": "HAR"}
         ))

@@ -9,6 +9,7 @@ import ast
 import functools
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -26,7 +27,15 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import BaseInstanaClient, call_sdk_fn, is_success_status, register_as_tool, sdk_call_with_keepalive, stream_filter_events, with_header_auth
+from src.core.utils import (
+    BaseInstanaClient,
+    call_sdk_fn,
+    is_success_status,
+    register_as_tool,
+    sdk_call_with_keepalive,
+    stream_filter_events,
+    with_header_auth,
+)
 
 logger = logging.getLogger(__name__)
 
