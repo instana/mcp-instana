@@ -248,6 +248,12 @@ class EventsSmartRouterMCPTool(BaseInstanaClient):
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
         description="""Unified Instana events resource manager for events monitoring operations.
 
+NOT for application error messages: when the user asks to "show/list error messages (or errors)
+for an application" and gives an application name or ID, do NOT call get_events. Use
+manage_applications with resource_type="resources", operation="get_error_messages_by_application_name",
+params={"application_name": <name>} or {"application_id": <id>}. Use get_events only for
+Instana events/incidents/issues (alerts, state, severity).
+
 Operations:
     - "get_events": Get all events
     - "get_event": Get a specific event by ID

@@ -723,6 +723,37 @@ class TestApplicationCallGroupMCPTools(unittest.TestCase):
             # Also verify the method completed successfully
             self.assertIn("items", result)
 
+    def test_get_grouped_calls_metrics_normalizes_group_and_pagination_keys(self):
+        """Test that camelCase groupByTag and pageSize are normalized to canonical SDK format."""
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = {
+            "items": [
+                {
+                    "name": "endpoint.name",
+                    "metrics": {
+                        "erroneousCalls.sum": [[1793008800000, 5.0]]
+                    }
+                }
+            ]
+        }
+        self.analyze_api.get_call_group.return_value = mock_result
+        mock_get_call_groups.from_dict.return_value = MagicMock()
+
+        result = asyncio.run(self.client.get_grouped_calls_metrics(
+            metrics=[{"metric": "erroneousCalls", "aggregation": "SUM"}],
+            time_frame={"windowSize": 3600000},
+            group={"groupByTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"},
+            pagination={"page": 1, "pageSize": 20}
+        ))
+
+        # Verify from_dict received normalized group and pagination
+        mock_get_call_groups.from_dict.assert_called_once()
+        passed_body = mock_get_call_groups.from_dict.call_args[0][0]
+        self.assertEqual(passed_body["group"]["groupbyTag"], "endpoint.name")
+        self.assertEqual(passed_body["group"]["groupbyTagEntity"], "DESTINATION")
+        self.assertEqual(passed_body["pagination"]["retrievalSize"], 20)
+        self.assertIn("items", result)
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -81,7 +81,7 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
         Called by the smart router tool.
 
         Args:
-            operation: Operation to perform: get_all_traces, get_trace_details or get_trace_groups
+            operation: Operation to perform (get_all_traces, get_trace_details)
             params: Dictionary containing operation-specific parameters
             ctx: MCP context
 
@@ -533,13 +533,14 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
             totalHits, and cursor fields (ingestionTime, offset) if more data available
         """
         try:
-            request_body = self._parse_traces_payload(payload)
-            if "error" in request_body:
-                return request_body
+            parsed = self._parse_traces_payload(payload)
+            if not isinstance(parsed, dict) or "error" in parsed:
+                return parsed
 
-            self._coerce_bool_flags(request_body)
+            request_dict: Dict[str, Any] = dict(parsed)
+            self._coerce_bool_flags(request_dict)
 
-            all_errors = self._validate_trace_group_structure(request_body)
+            all_errors = self._validate_trace_group_structure(request_dict)
             if all_errors:
                 return {
                     "elicitation_needed": True,
@@ -552,7 +553,19 @@ class ApplicationAnalyzeMCPTools(BaseInstanaClient):
                     ),
                 }
 
-            config = GetTraceGroups.from_dict(request_body)
+            # Normalize group keys (e.g. groupByTag -> groupbyTag)
+            group_val = request_dict.get("group")
+            if isinstance(group_val, dict):
+                group_data: Dict[str, Any] = dict(group_val)
+                if "groupByTag" in group_data and "groupbyTag" not in group_data:
+                    group_data["groupbyTag"] = group_data.pop("groupByTag")
+                if "groupByTagEntity" in group_data and "groupbyTagEntity" not in group_data:
+                    group_data["groupbyTagEntity"] = group_data.pop("groupByTagEntity")
+                if "entity" in group_data and "groupbyTagEntity" not in group_data:
+                    group_data["groupbyTagEntity"] = group_data.pop("entity")
+                request_dict["group"] = group_data
+
+            config = GetTraceGroups.from_dict(request_dict)
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(
                     api_client.get_trace_groups_without_preload_content,
