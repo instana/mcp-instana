@@ -19,13 +19,7 @@ except ImportError as e:
 
 from src.core.pagination import paginate, stable_sort_key
 from src.core.ui_links import add_synthetic_test_link
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, sdk_call_with_keepalive, with_header_auth
 
 
 class SyntheticSettingsMCPTools(BaseInstanaClient):
@@ -76,7 +70,9 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                     tool_name=tool_name,
                 )
 
-                if list_response.status != 200:
+                if isinstance(list_response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return list_response
+                if not is_success_status(list_response):
                     error_body = decode_response(list_response)
                     return {
                         "error": f"Failed to list synthetic tests for name resolution: HTTP {list_response.status}",
@@ -111,7 +107,9 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_body = decode_response(response)
                 return {
                     "error": f"Failed to get synthetic test: HTTP {response.status}",
@@ -200,8 +198,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "list synthetic tests", logger)
+            if (err := self.check_response_status(response, "list synthetic tests", logger)):
+                return err
 
             items = json.loads(decode_response(response))
             if isinstance(items, list):
@@ -295,8 +293,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "list synthetic locations", logger)
+            if (err := self.check_response_status(response, "list synthetic locations", logger)):
+                return err
 
             items: List[Dict] = json.loads(decode_response(response))
 
@@ -368,8 +366,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                     tool_name=tool_name,
                 )
 
-                if list_response.status != 200:
-                    return self.handle_api_error_response(list_response, "list synthetic locations for name resolution", logger)
+                if (err := self.check_response_status(list_response, "list synthetic locations for name resolution", logger)):
+                    return err
 
                 locations: List[Dict] = json.loads(decode_response(list_response))
 
@@ -406,7 +404,9 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_body = decode_response(response)
                 return {
                     "error": f"Failed to get synthetic location: HTTP {response.status}",
@@ -465,8 +465,8 @@ class SyntheticSettingsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "list synthetic locations", logger)
+            if (err := self.check_response_status(response, "list synthetic locations", logger)):
+                return err
 
             all_locations: List[Dict] = json.loads(decode_response(response))
 

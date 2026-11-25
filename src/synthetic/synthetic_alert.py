@@ -16,6 +16,7 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     parse_payload,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -148,7 +149,7 @@ class SyntheticAlertMCPTools(BaseInstanaClient):
         # sdk_call_with_keepalive returns an error dict (not a response) on timeout.
         if isinstance(response, dict):
             return None, response
-        if response.status >= 400:
+        if not is_success_status(response):
             text = decode_response(response) if response.data else _NO_ERROR_DETAILS
             return None, {"error": f"API error (status {response.status}): {text}"}
         if not parse_body:

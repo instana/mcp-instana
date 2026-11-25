@@ -18,15 +18,7 @@ except ImportError as e:
     raise
 
 from src.core.catalog_cache import ttl_cached
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    process_tag_catalog_response,
-    project_metric_card,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, process_tag_catalog_response, project_metric_card, sdk_call_with_keepalive, with_header_auth
 
 
 class SyntheticCatalogMCPTools(BaseInstanaClient):
@@ -80,8 +72,8 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic catalog metrics", logger)
+            if (err := self.check_response_status(response, "get synthetic catalog metrics", logger)):
+                return err
 
             # Read and parse the response content
             response_text = decode_response(response)
@@ -154,8 +146,8 @@ class SyntheticCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic tag catalog", logger)
+            if (err := self.check_response_status(response, "get synthetic tag catalog", logger)):
+                return err
 
             # Read and parse the response content
             response_text = decode_response(response)

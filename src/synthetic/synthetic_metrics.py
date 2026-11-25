@@ -18,14 +18,7 @@ except ImportError as e:
     logger.error("Error importing Instana SDK: %s", e, exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    parse_payload,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, parse_payload, sdk_call_with_keepalive, with_header_auth
 from src.core.validation import StructureValidator
 
 
@@ -68,11 +61,15 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
                     },
                     "groups": [
                         {
-                        "groupbyTag": "synthetic.applicationId"
+                        "groupbyTag": "synthetic.applicationId",
+                        "groupbyTagEntity": "NOT_APPLICABLE",
+                        "direction": "DESC"
                         },
                         {
                         "groupbyTag": "synthetic.tags",
-                        "groupbyTagSecondLevelTag": "region"
+                        "groupbyTagSecondLevelKey": "region",
+                        "groupbyTagEntity": "NOT_APPLICABLE",
+                        "direction": "DESC"
                         }
                     ]
                 }
@@ -90,6 +87,10 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
                 return request_body
             if not request_body:
                 return {"error": "payload must not be an empty object"}
+            if isinstance(request_body.get("groups"), list):
+                request_body["groups"] = [
+                    StructureValidator.normalize_group(g) for g in request_body["groups"]
+                ]
 
             validation = StructureValidator.validate_synthetic_playback_structure(
                 "get_metrics_result", request_body,
@@ -119,8 +120,8 @@ class SyntheticMetricsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic metrics", logger)
+            if (err := self.check_response_status(response, "get synthetic metrics", logger)):
+                return err
 
             logger.debug("[get_metrics_result] Returning result")
             return json.loads(decode_response(response))
