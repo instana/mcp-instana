@@ -508,6 +508,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Test get_application_services adds an Instana UI url/link to each service"""
         payload = {"items": [{"id": "svc-1", "label": "checkout [v2] (prod)"}]}
         response = MagicMock()
+        response.status = 200
         response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_application_services_without_preload_content.return_value = response
 
@@ -541,6 +542,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Items without an id (e.g. unexpected API payloads) get no link"""
         payload = {"items": [{"label": "no id"}]}
         response = MagicMock()
+        response.status = 200
         response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_application_services_without_preload_content.return_value = response
 
@@ -552,6 +554,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Test get_applications adds an Instana UI url/link to each application perspective"""
         payload = {"items": [{"id": "app-1", "label": "My App [prod]"}]}
         response = MagicMock()
+        response.status = 200
         response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_applications_without_preload_content.return_value = response
 
@@ -568,6 +571,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Test get_services adds an Instana UI url/link to each service"""
         payload = {"items": [{"id": "svc-1", "label": "checkout"}]}
         response = MagicMock()
+        response.status = 200
         response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_services_without_preload_content.return_value = response
 
@@ -605,6 +609,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Test get_application_endpoints with explicit id parameters"""
         payload = {"items": [{"id": "endpoint-2", "name": "Explicit"}]}
         response = MagicMock()
+        response.status = 200
         response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_application_endpoints_without_preload_content.return_value = response
 
@@ -633,6 +638,7 @@ class TestApplicationResourcesMCPTools(unittest.TestCase):
         """Test get_applications returns parsed JSON from raw response with url/link enrichment"""
         payload = {"items": [{"id": "app-789", "label": "Plain App"}]}
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = json.dumps(payload).encode('utf-8')
         self.resources_api.get_applications_without_preload_content.return_value = mock_response
 

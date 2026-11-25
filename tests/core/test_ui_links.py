@@ -7,6 +7,8 @@ import sys
 import unittest
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.core.ui_links import (
@@ -20,6 +22,16 @@ from src.core.ui_links import (
 )
 
 BASE = "https://test.instana.io"
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_request_base_url(request):
+    """Other test modules mock fastmcp.server.dependencies; ignore it unless a test patches it."""
+    if request.cls is TestRequestBaseUrl:
+        yield
+        return
+    with patch("src.core.ui_links._request_base_url", return_value=None):
+        yield
 
 
 class TestMarkdownLink(unittest.TestCase):

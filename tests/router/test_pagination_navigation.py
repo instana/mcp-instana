@@ -6,9 +6,9 @@ Every list tool behind a smart router must resolve ``page_N`` / ``next`` / ``pre
 tool's list operation, and answer an unresolvable request with an elicitation error
 instead of guessing.
 """
-
 import asyncio
 import json
+import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,7 +26,18 @@ def _run(coro):
 
 
 def _tool(cls):
-    return cls("tok", "https://x.instana.io")
+    # Other test modules leave stub stand-ins (no __file__) for instana_client in sys.modules. The
+    # routers import the real SDK lazily, so hide the stand-ins while constructing one.
+    stale = {
+        name: mod for name, mod in sys.modules.items()
+        if name.split(".")[0] == "instana_client" and getattr(mod, "__file__", None) is None
+    }
+    for name in stale:
+        del sys.modules[name]
+    try:
+        return cls("tok", "https://x.instana.io")
+    finally:
+        sys.modules.update(stale)
 
 
 class NavigationCases:

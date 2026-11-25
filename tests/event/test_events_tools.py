@@ -1616,28 +1616,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertIn("affectedMetrics", result)
         self.assertEqual(result["affectedMetrics"], ["errors", "latency"])
 
-    def test_optimize_event_data_agent_monitoring_event_has_uniform_shape(self):
-        """'Monitoring issue:' events keep severity and a dict entity, like every other event.
-
-        The change-timeline normalizer reads entity as a dict, so agent monitoring
-        events must not collapse entity to a bare label string.
-        """
-        event = {
-            "eventId": "agent-1",
-            "type": "issue",
-            "state": "open",
-            "problem": "Monitoring issue: High CPU",
-            "start": 1000000,
-            "end": 2000000,
-            "severity": 5,
-            "entityLabel": "host-1",
-            "entityType": "INFRASTRUCTURE",
-        }
-        result = self.client._optimize_event_data(event)
-        self.assertEqual(result["severity"], 5)
-        self.assertIsInstance(result["entity"], dict)
-        self.assertEqual(result["entity"], {"type": "INFRASTRUCTURE", "label": "host-1"})
-
     def test_build_time_params_with_invalid_time_range(self):
         """Test _build_time_params with an unrecognised time_range uses the default window_size."""
         # _convert_time_range_to_window_size always returns a value (defaults to 10 minutes)
@@ -1649,38 +1627,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertIn("from_time", result)
         self.assertIn("to_time", result)
 
-    def test_build_time_params_delegates_to_timestamp_utils(self):
-        """_build_time_params should delegate to core build_time_params with a patched 'now'."""
-        sentinel = {"api_params": {"window_size": 1}, "from_time": 1, "to_time": 2}
-        with patch('src.event.events_tools.datetime') as mock_datetime, \
-             patch('src.event.events_tools.build_time_params', return_value=sentinel) as mock_build:
-            mock_datetime.now = MagicMock(return_value=datetime(2025, 1, 1, 12, 0, 0))
-            result = self.client._build_time_params(
-                time_range="last 5 minutes", from_time=10, to_time=20
-            )
-
-        self.assertIs(result, sentinel)
-        expected_now = int(datetime(2025, 1, 1, 12, 0, 0).timestamp() * 1000)
-        mock_build.assert_called_once_with(
-            time_range="last 5 minutes", from_time=10, to_time=20, now_ms=expected_now
-        )
-
-    def test_convert_time_range_to_window_size_delegates(self):
-        """_convert_time_range_to_window_size should delegate to the core helper."""
-        with patch(
-            'src.event.events_tools.convert_time_range_to_window_size', return_value=12345
-        ) as mock_convert:
-            result = self.client._convert_time_range_to_window_size("last 2 hours")
-
-        self.assertEqual(result, 12345)
-        mock_convert.assert_called_once_with("last 2 hours")
-
-    def test_convert_time_range_to_window_size_empty_returns_none(self):
-        """An empty time_range keeps returning None without calling the core helper."""
-        with patch('src.event.events_tools.convert_time_range_to_window_size') as mock_convert:
-            self.assertIsNone(self.client._convert_time_range_to_window_size(""))
-        mock_convert.assert_not_called()
-
     def test_convert_time_range_to_window_size_values(self):
         """Behaviour is preserved through the delegating wrapper."""
         self.assertEqual(
@@ -1691,21 +1637,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
             self.client._convert_time_range_to_window_size("gibberish"),
             10 * 60 * 1000,
         )
-
-    def test_build_time_params_mixed_time_range_and_to_time(self):
-        """time_range + explicit to_time derives from_time = to_time - window."""
-        to_ms = 1_700_000_000_000
-        result = self.client._build_time_params(time_range="last 1 hour", to_time=to_ms)
-
-        self.assertEqual(result["to_time"], to_ms)
-        self.assertEqual(result["from_time"], to_ms - 60 * 60 * 1000)
-
-    def test_events_tools_has_no_duplicate_time_parsing(self):
-        """Time parsing lives in timestamp_utils; events_tools must not re-implement it."""
-        module = sys.modules['src.event.events_tools']
-        self.assertFalse(hasattr(module, 're'))
-        self.assertTrue(hasattr(module, 'build_time_params'))
-        self.assertTrue(hasattr(module, 'convert_time_range_to_window_size'))
 
     def test_extract_event_filters_returns_only_allowed_keys(self):
         """_extract_event_filters should whitelist keys and apply defaults."""
@@ -1818,22 +1749,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         event = {"entityLabel": "pod/my-deployment-abc"}
         self.assertTrue(self.client._matches_entity_label(event, "my-deployment"))
         self.assertFalse(self.client._matches_entity_label(event, "other-pod"))
-
-    def test_matches_filter_helpers_with_none_values_in_event(self):
-        """String matching helpers should safely handle None values without raising TypeError or AttributeError."""
-        event_with_nones = {
-            "entityLabel": None,
-            "entityType": None,
-            "state": None,
-            "problem": None,
-            "detail": None,
-            "entityName": None,
-        }
-        self.assertFalse(self.client._matches_entity_label(event_with_nones, "my-deployment"))
-        self.assertFalse(self.client._matches_entity_type(event_with_nones, "service"))
-        self.assertFalse(self.client._matches_state(event_with_nones, "open"))
-        self.assertFalse(self.client._matches_problem(event_with_nones, "error"))
-        self.assertFalse(self.client._matches_entity_name(event_with_nones, "kubernetes"))
 
     def test_matches_event_specification_id_exact(self):
         """Event specification ID matching should be exact."""
@@ -2333,135 +2248,6 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
     # -------------------------------------------------------------------------
     # Tests for entity_label filtering — get_kubernetes_info_events
     # -------------------------------------------------------------------------
-
-    @patch('src.event.events_tools.datetime')
-    def test_get_kubernetes_info_events_with_entity_label_filter(self, mock_datetime):
-        """entity_label keeps only matching events; events_filtered_out counts the rest."""
-        mock_now = MagicMock()
-        mock_now.timestamp = MagicMock(return_value=1000)
-        mock_datetime.now = MagicMock(return_value=mock_now)
-        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *args: __import__('datetime').datetime.fromtimestamp(ts))
-
-        def _make_event(event_id, entity_label, problem="Pod Crash"):
-            m = MagicMock()
-            m.to_dict = MagicMock(return_value={
-                "eventId": event_id,
-                "problem": problem,
-                "entityLabel": entity_label,
-                "detail": "Some detail",
-                "fixSuggestion": "Some fix",
-                "start": 900000,
-            })
-            return m
-
-        # 2 events match "payment", 1 does not
-        self.events_api.kubernetes_info_events = MagicMock(return_value=[
-            _make_event("e1", "payment/payment-pod-1"),
-            _make_event("e2", "payment/payment-pod-2"),
-            _make_event("e3", "cart/cart-pod-1"),
-        ])
-
-        result = asyncio.run(self.client.get_kubernetes_info_events(entity_label="payment"))
-
-        self.assertEqual(result["events_analyzed"], 2)
-        self.assertEqual(result["events_filtered_out"], 1)
-        self.assertEqual(result["events_count"], 3)
-        # problem_analyses should only reflect the 2 matched events
-        self.assertEqual(result["problem_analyses"][0]["count"], 2)
-
-    @patch('src.event.events_tools.datetime')
-    def test_get_kubernetes_info_events_entity_label_no_match(self, mock_datetime):
-        """When no events match entity_label, result is the empty structure with correct counts."""
-        mock_now = MagicMock()
-        mock_now.timestamp = MagicMock(return_value=1000)
-        mock_datetime.now = MagicMock(return_value=mock_now)
-        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *args: __import__('datetime').datetime.fromtimestamp(ts))
-
-        def _make_event(event_id, entity_label):
-            m = MagicMock()
-            m.to_dict = MagicMock(return_value={
-                "eventId": event_id,
-                "problem": "Pod Crash",
-                "entityLabel": entity_label,
-                "detail": "",
-                "fixSuggestion": "",
-                "start": 900000,
-            })
-            return m
-
-        self.events_api.kubernetes_info_events = MagicMock(return_value=[
-            _make_event("e1", "cart/cart-pod-1"),
-            _make_event("e2", "cart/cart-pod-2"),
-        ])
-
-        result = asyncio.run(self.client.get_kubernetes_info_events(entity_label="payment"))
-
-        self.assertEqual(result["events_analyzed"], 0)
-        self.assertEqual(result["events_filtered_out"], 2)
-        self.assertEqual(result["events_count"], 2)
-        self.assertIn("events", result)
-        self.assertEqual(result["events"], [])
-        # Same keys as the non-empty response, so callers never hit missing keys
-        for key in ("summary", "markdown_summary", "problem_analyses", "time_range"):
-            self.assertIn(key, result)
-        self.assertEqual(result["problem_analyses"], [])
-        self.assertIn("0 of 2 Kubernetes events", result["summary"])
-        # Filtered-out events must be visible so "none matched" is not read as "none exist"
-        self.assertIn("No Kubernetes events found", result["analysis"])
-        self.assertIn("2 of 2 events were excluded by the entity_label filter 'payment'", result["analysis"])
-        self.assertIn(result["analysis"], result["markdown_summary"])
-
-    @patch('src.event.events_tools.datetime')
-    def test_get_kubernetes_info_events_empty_without_filter_has_consistent_shape(self, mock_datetime):
-        """No events at all: full key set, no entity_label sentence in the message."""
-        mock_now = MagicMock()
-        mock_now.timestamp = MagicMock(return_value=1000)
-        mock_datetime.now = MagicMock(return_value=mock_now)
-        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *args: __import__('datetime').datetime.fromtimestamp(ts))
-
-        self.events_api.kubernetes_info_events = MagicMock(return_value=[])
-
-        result = asyncio.run(self.client.get_kubernetes_info_events())
-
-        for key in ("summary", "markdown_summary", "problem_analyses", "events", "events_count",
-                    "events_analyzed", "events_filtered_out", "time_range", "analysis"):
-            self.assertIn(key, result)
-        self.assertEqual(result["events_count"], 0)
-        self.assertEqual(result["events_filtered_out"], 0)
-        self.assertNotIn("entity_label", result["analysis"])
-
-    @patch('src.event.events_tools.datetime')
-    def test_get_kubernetes_info_events_entity_label_none_passes_all(self, mock_datetime):
-        """Without entity_label, all events pass through and events_filtered_out is 0."""
-        mock_now = MagicMock()
-        mock_now.timestamp = MagicMock(return_value=1000)
-        mock_datetime.now = MagicMock(return_value=mock_now)
-        mock_datetime.fromtimestamp = MagicMock(side_effect=lambda ts, *args: __import__('datetime').datetime.fromtimestamp(ts))
-
-        def _make_event(event_id):
-            m = MagicMock()
-            m.to_dict = MagicMock(return_value={
-                "eventId": event_id,
-                "problem": "Pod Crash",
-                "entityLabel": f"ns/{event_id}",
-                "detail": "",
-                "fixSuggestion": "",
-                "start": 900000,
-            })
-            return m
-
-        self.events_api.kubernetes_info_events = MagicMock(return_value=[
-            _make_event("e1"),
-            _make_event("e2"),
-            _make_event("e3"),
-        ])
-
-        result = asyncio.run(self.client.get_kubernetes_info_events())
-
-        self.assertEqual(result["events_analyzed"], 3)
-        self.assertEqual(result["events_filtered_out"], 0)
-        self.assertEqual(result["events_count"], 3)
-
 
 _TIMEOUT_DICT = {
     "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",

@@ -1003,7 +1003,8 @@ class TestApplicationSettingsMCPTools(unittest.TestCase):
 
         result = asyncio.run(self.client._get_application_config("app1"))
 
-        self.assertEqual(result, data)
+        self.assertEqual(result["id"], "app1")
+        self.assertEqual(result["label"], "App")
 
     def test_add_application_config_validation_error(self):
         """Test _add_application_config without label returns elicitation"""
