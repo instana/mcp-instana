@@ -20,13 +20,7 @@ except ImportError as e:
     logger.error(f"Error importing Instana SDK: {e}", exc_info=True)
     raise
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -449,6 +443,7 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
     async def _fetch_geo_mapping_rules_csv(self, api_client, mobile_app_id: str, ctx=None,
                                            resource_type: Optional[str] = None,
                                            tool_name: Optional[str] = None) -> str:
+        result = None
         try:
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_mobile_app_geo_mapping_rules, mobile_app_id=mobile_app_id),
@@ -457,16 +452,17 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
                 resource_type=resource_type,
                 tool_name=tool_name,
             )
-
-            if result is not None:
-                return str(result)
-
-            return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
-
         except Exception as api_error:
             logger.warning(f"High-level API call failed: {api_error}, trying raw response")
-            return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
 
+        if isinstance(result, dict):  # timeout error dict: surface it, don't retry or CSV-parse it
+            raise RuntimeError(result.get("error", "Timed out fetching geo mapping rules"))
+        if result is not None:
+            return str(result)
+
+        # Outside the try so a RuntimeError from the raw call is not swallowed and retried.
+        return await self._fetch_raw_geo_mapping_rules(api_client, mobile_app_id, ctx=ctx, resource_type=resource_type, tool_name=tool_name)
+        
     async def _fetch_raw_geo_mapping_rules(self, api_client, mobile_app_id: str, ctx=None,
                                            resource_type: Optional[str] = None,
                                            tool_name: Optional[str] = None) -> str:
@@ -480,6 +476,11 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
             resource_type=resource_type,
             tool_name=tool_name,
         )
+        if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+            raise RuntimeError(response.get("error", "Timed out fetching geo mapping rules"))
+        if hasattr(response, "status") and not is_success_status(response):
+            # Raise so the caller reports an error instead of CSV-parsing the error body.
+            raise RuntimeError(f"HTTP {getattr(response, 'status', 'unknown')}: {decode_response(response)}")
 
         if hasattr(response, "data"):
             return response.data.decode("utf-8") if isinstance(response.data, bytes) else str(response.data)
@@ -596,7 +597,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
                     tool_name=tool_name,
                 )
 
-                if response.status != 200:
+                if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response
+                if not is_success_status(response):
                     error_message = f"Failed to get source map configurations: HTTP {response.status}"
                     logger.error(error_message)
                     try:
@@ -670,7 +673,9 @@ class MobileAppConfigurationMCPTools(BaseInstanaClient):
                 )
 
                 # Check response status
-                if response.status != 200:
+                if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response
+                if not is_success_status(response):
                     error_message = f"Failed to get source map configuration: HTTP {response.status}"
                     logger.error(error_message)
                     try:

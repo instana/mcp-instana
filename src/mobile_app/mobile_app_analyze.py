@@ -43,19 +43,8 @@ except ImportError as e:
 from instana_client import DeprecatedTagFilter
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    decode_response,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
-from src.core.validation import (
-    ENTITY_GUIDANCE_EUM,
-    VALID_MOBILE_BEACON_TYPES,
-    StructureValidator,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, decode_response, is_success_status, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_MOBILE_BEACON_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +104,10 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             "timeFrame": time_frame
         }
 
-        # Handle group field with field name mapping
-        # Normalize to lowercase 'groupbyTag' (canonical format for API)
-        mapped_group = {
-            "groupbyTag": group.get("groupbyTag") or group.get("groupByTag", DEFAULT_GROUP_BY_TAG),
-            "groupbyTagEntity": group.get("groupbyTagEntity") or group.get("groupByTagEntity", DEFAULT_GROUP_BY_TAG_ENTITY),
-        }
+        # Aliases are already normalised at the service entry; only fill defaults here.
+        mapped_group = dict(group)
+        mapped_group.setdefault("groupbyTag", DEFAULT_GROUP_BY_TAG)
+        mapped_group.setdefault("groupbyTagEntity", DEFAULT_GROUP_BY_TAG_ENTITY)
         query_params["group"] = mapped_group
 
         # Convert tag filter expression to SDK model
@@ -295,8 +282,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 }
 
                 Rules:
-                - Only `groupbyTag` and `groupbyTagEntity` keys are supported.
-                - camelCase variants such as `groupByTag` are NOT supported.
+                - `groupbyTag` AND `groupbyTagEntity` are required; use lowercase `b`.
+                - Aliases such as `groupByTag` and `groupByTagEntity` are tolerated and
+                  renamed, but only the canonical keys should be emitted.
                 - If `group` is not provided, default grouping will be applied.
                 - If `group` is provided but fields are missing:
                     - groupbyTag defaults to: mobileBeacon.mobileApp.name
@@ -328,6 +316,7 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 f"beacon_type={beacon_type}, time_frame={time_frame}"
             )
 
+            group = StructureValidator.normalize_group(group)
             user_provided_metrics = metrics is not None
             user_provided_group = group is not None
             user_provided_tag_filter = tag_filter_expression is not None and (
@@ -425,7 +414,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
             )
             logger.debug("[get_mobile_app_beacon_groups] Successfully received response from get_beacon_groups")
 
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_body = decode_response(response)
                 logger.error(f"[get_mobile_app_beacon_groups] API Error Response: {error_body}")
                 return self._handle_beacon_groups_error_response(response, error_body)
@@ -745,6 +736,9 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(result, "get mobile app beacons", logger)):
+                return err
+
             # Process and return results
             return self._process_beacons_response(result, filter_fields)
 
@@ -839,10 +833,10 @@ class MobileAppAnalyzeMCPTools(BaseInstanaClient):
         # Extract and validate tags from filter expression
         filter_tags = self._extract_tags_and_check_entity(tag_filter_expression, missing_entity_tags)
 
-        # Extract tag from group (support both camelCase variants)
+        # Group aliases are already normalised at the service entry.
         group_tag = None
         if group:
-            group_tag = group.get("groupbyTag") or group.get("groupByTag")
+            group_tag = group.get("groupbyTag")
 
         # Combine all tags
         all_tags = filter_tags + ([group_tag] if group_tag else [])

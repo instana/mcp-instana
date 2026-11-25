@@ -10,17 +10,8 @@ from typing import Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 
-from src.core.alert_config_utils import (
-    parse_alert_config_response,
-    parse_single_alert_config_response,
-)
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
+from src.core.alert_config_utils import parse_alert_config_response, parse_single_alert_config_response
 
 # Import the necessary classes from the SDK
 try:
@@ -95,6 +86,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get active mobile app alert configs", logger)):
+                return err
+
             return parse_alert_config_response(response, "mobile app", mobile_app_id)
 
         except Exception as e:
@@ -151,6 +145,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type,
                 tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get mobile app alert config", logger)):
+                return err
 
             return parse_single_alert_config_response(response)
 
