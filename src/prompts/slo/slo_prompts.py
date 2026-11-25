@@ -551,7 +551,7 @@ class SLOPrompts:
                   "to": <toTimestamp_from_step2>,
                   "windowSize": <window_size_ms_from_step2>
                 }},
-                "TagFilterExpression": {{
+                "tagFilterExpression": {{
                   "type": "TAG_FILTER",
                   "name": "synthetic.testId",
                   "operator": "EQUALS",
@@ -577,7 +577,7 @@ class SLOPrompts:
                   "to": <toTimestamp_from_step2>,
                   "windowSize": <window_size_ms_from_step2>
                 }},
-                "TagFilterExpression": {{
+                "tagFilterExpression": {{
                   "type": "TAG_FILTER",
                   "name": "synthetic.testId",
                   "operator": "EQUALS",
@@ -676,7 +676,7 @@ class SLOPrompts:
            Call manage_websites, resource_type="analyze", operation="get_beacon_groups",
            params={{
              "metrics": [{{"metric": "<metric_from_mapping_above>", "aggregation": "P95"}}],
-             "group": {{"groupByTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}},
+             "group": {{"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}},
              "tag_filter_expression": {{
                "type": "TAG_FILTER",
                "name": "beacon.website.id",

@@ -20,13 +20,7 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, register_as_tool, sdk_call_with_keepalive, with_header_auth
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -174,6 +168,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(result, "get action matches", logger)):
+                return err
+
             try:
                 response_text = result.data.decode('utf-8')
                 result_dict = json.loads(response_text)
@@ -269,6 +266,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(result, "get actions", logger)):
+                return err
+
             # Parse the JSON response manually
             try:
                 # The result from get_actions_without_preload_content is a response object
@@ -345,6 +345,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(result, "get action details", logger)):
+                return err
+
             # Parse the JSON response manually
             try:
                 # The result from get_action_by_id_without_preload_content is a response object
@@ -391,6 +394,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="get_action_types",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(result, "get action types", logger)):
+                return err
 
             # Parse the JSON response manually
             try:
@@ -450,6 +456,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="get_action_tags",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(result, "get action tags", logger)):
+                return err
 
             # Parse the JSON response manually
             try:
@@ -640,6 +649,9 @@ class ActionCatalogMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="get_action_matches_by_id_and_time_window",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(result, "get action matches by ID and time window", logger)):
+                return err
 
             try:
                 response_text = result.data.decode('utf-8')

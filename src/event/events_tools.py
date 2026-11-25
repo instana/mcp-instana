@@ -9,7 +9,6 @@ import ast
 import functools
 import json
 import logging
-import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -27,14 +26,7 @@ except ImportError:
 
 from mcp.types import ToolAnnotations
 
-from src.core.utils import (
-    BaseInstanaClient,
-    call_sdk_fn,
-    register_as_tool,
-    sdk_call_with_keepalive,
-    stream_filter_events,
-    with_header_auth,
-)
+from src.core.utils import BaseInstanaClient, call_sdk_fn, is_success_status, register_as_tool, sdk_call_with_keepalive, stream_filter_events, with_header_auth
 
 logger = logging.getLogger(__name__)
 
@@ -613,11 +605,13 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     tool_name=tool_name,
                 )
 
+                if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response_data
                 if response_data.status == 404:
                     return {"error": f"Event with ID {event_id} not found", "event_id": event_id}
                 elif response_data.status in (401, 403):
                     return {"error": "Authentication failed. Please check your API token and permissions."}
-                elif response_data.status != 200:
+                elif not is_success_status(response_data):
                     error_message = f"Failed to get event: HTTP {response_data.status}"
                     logger.error(error_message)
                     return {"error": error_message, "event_id": event_id}
@@ -724,6 +718,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     "error": f"Failed to get Kubernetes info events: {api_error}",
                     "details": str(api_error)
                 }
+
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             events = result if isinstance(result, list) else ([result] if result else [])
             total_events_count = len(events)
@@ -891,6 +888,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     "error": f"Failed to get agent monitoring events: {api_error}",
                     "details": str(api_error)
                 }
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+
             events = result if isinstance(result, list) else ([result] if result else [])
             total_events_count = len(events)
             events = events[:max_events]
@@ -1045,7 +1045,9 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response_data.status != 200:
+            if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response_data
+            if not is_success_status(response_data):
                 raise ValueError(f"HTTP {response_data.status}")
 
             # Stream-parse the response one object at a time, applying post-API
@@ -1315,6 +1317,11 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                     tool_name=tool_name,
                 )
 
+                # A timeout is returned as an error dict; return it rather than iterating its
+                # keys, which would fail and trigger the slow per-event fallback below.
+                if isinstance(events_result, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return events_result
+
                 all_events = []
                 for event in events_result:
                     if hasattr(event, 'to_dict'):
@@ -1353,8 +1360,12 @@ class AgentMonitoringEventsMCPTools(BaseInstanaClient):
                             tool_name=tool_name,
                         )
 
-                        # Check if the response was successful
-                        if response_data.status != 200:
+                        if isinstance(response_data, dict):  # timeout error dict from sdk_call_with_keepalive
+                            all_events.append({"eventId": event_id, **response_data})
+                            continue
+                        # Only 200 carries the events payload here; other 2xx codes
+                        # (e.g. 204) have no body to parse, so don't accept the whole 2xx range.
+                        if not is_success_status(response_data, allowed={200}):
                             error_message = f"Failed to get event {event_id}: HTTP {response_data.status}"
                             logger.error(error_message)
                             all_events.append({"eventId": event_id, "error": error_message})

@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_sdk_timeout,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -163,6 +164,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
+
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()
@@ -252,6 +256,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="get_action_instance",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -351,6 +358,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="get_action_instances",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):
@@ -454,6 +464,9 @@ class ActionHistoryMCPTools(BaseInstanaClient):
                 ctx=ctx, operation_name="delete_action_instance",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):

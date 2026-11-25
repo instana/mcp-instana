@@ -18,7 +18,7 @@ class SyntheticMetricsPrompts:
         - metrics (required): List of metric/aggregation objects, e.g. [{{"metric": "synthetic.metricsResponseTime", "aggregation": "SUM"}}]
         - timeFrame (optional): {{"to": <unix_ms>, "windowSize": <milliseconds>}}
         - pagination (optional): {{"page": 1, "pageSize": 3}}
-        - groups (optional): List of grouping objects, e.g. [{{"groupbyTag": "synthetic.applicationId"}}]
+        - groups (optional): List of grouping objects; each requires groupbyTag, groupbyTagEntity and direction, e.g. [{{"groupbyTag": "synthetic.applicationId", "groupbyTagEntity": "NOT_APPLICABLE", "direction": "DESC"}}]
         - tagFilterExpression (optional): Tag filter expression object
         - disableDefaultGroups (optional): boolean
         - includeAggregatedTestIds (optional): boolean
