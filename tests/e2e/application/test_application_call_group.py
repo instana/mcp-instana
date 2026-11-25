@@ -294,7 +294,7 @@ class TestApplicationCallGroupE2E:
     def test_apply_call_group_defaults(self, instana_credentials):
         client = create_application_call_group_client(instana_credentials)
 
-        metrics, time_frame, group = client._apply_call_group_defaults(None, None, None)
+        metrics, time_frame, group, pagination = client._apply_call_group_defaults(None, None, None)
 
         assert metrics == [
             {"metric": "calls", "aggregation": "SUM"},
@@ -303,9 +303,10 @@ class TestApplicationCallGroupE2E:
         assert time_frame["windowSize"] == 3600000
         assert isinstance(time_frame["to"], int)
         assert group == {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
+        assert pagination == {"retrievalSize": 20}
 
         given = ([{"metric": "x"}], {"windowSize": 1}, {"groupbyTag": "t"})
-        assert client._apply_call_group_defaults(*given) == given
+        assert client._apply_call_group_defaults(*given) == (*given, {"retrievalSize": 20})
 
     @pytest.mark.mocked
     def test_build_call_group_request_optional_fields(self, instana_credentials):
