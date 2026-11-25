@@ -12,16 +12,8 @@ from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.timestamp_utils import convert_nested_datetime_param
-from src.core.utils import (
-    WEBSITE_BEACON_TYPE_MAP,
-    BaseInstanaClient,
-    normalize_beacon_type,
-    register_as_tool,
-)
-from src.core.validation import (
-    VALID_WEBSITE_BEACON_TYPES,
-    StructureValidator,
-)
+from src.core.utils import BaseInstanaClient, WEBSITE_BEACON_TYPE_MAP, normalize_beacon_type, register_as_tool
+from src.core.validation import ENTITY_GUIDANCE_EUM, StructureValidator, VALID_WEBSITE_BEACON_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +90,7 @@ ANALYZE (resource_type="analyze"):
     Aggregations: SUM, MEAN, MAX, MIN, P25, P50, P75, P90, P95, P98, P99, P99_9, P99_99, DISTINCT_COUNT, SUM_POSITIVE, PER_SECOND, INCREASE
     Operators: EQUALS, NOT_EQUAL, CONTAINS, NOT_CONTAIN, STARTS_WITH, ENDS_WITH, NOT_STARTS_WITH, NOT_ENDS_WITH, GREATER_THAN, GREATER_OR_EQUAL_THAN, LESS_THAN, LESS_OR_EQUAL_THAN, NOT_EMPTY, IS_EMPTY, NOT_BLANK, IS_BLANK, REGEX_MATCH
 
+    group: `group` requires `groupbyTag` AND `groupbyTagEntity`; use lowercase `b`. Example: {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
     tag_filter_expression: CRITICAL - Entity field REQUIRED for ALL tag filters. ALWAYS set "entity": "NOT_APPLICABLE" for website beacon tags.
     time_frame: {"to": <timestamp_or_datetime>, "windowSize": <milliseconds>} - Default: 3600000 (1 hour)
         to: Unix timestamp (ms) OR datetime string (e.g., "19 March 2026, 2:47 PM|IST")
@@ -166,7 +159,7 @@ Returns:
 
 Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"beacon_type": "PAGELOAD", "use_case": "GROUPING"}
-    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
+    resource_type="analyze", operation="get_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "PAGELOAD"}
     resource_type="analyze", operation="get_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "PAGELOAD", "pagination": {"retrievalSize": 50}}
     resource_type="catalog", operation="get_metrics"
     resource_type="configuration", operation="get_all"
@@ -311,7 +304,7 @@ Examples:
             (StructureValidator.validate_beacon_type, beacon_type,
                 {"valid_types": VALID_WEBSITE_BEACON_TYPES}),
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_time_frame, time_frame, {}),
             (StructureValidator.validate_order, order, {}),
