@@ -40,15 +40,6 @@ Operations: `get_events`, `get_event`, `get_events_by_ids`, `get_kubernetes_info
 
 Resource types `catalog` (`get_actions`, `get_action_details`, `get_action_matches`, `get_action_matches_by_id_and_time_window`, `get_action_types`, `get_action_tags`) and `history` (`list`, `get_details`). All operations are read-only and need no additional permissions. The tool cannot configure policies, run actions, or delete action history, so the related Automation permissions are not required.
 
-#### manage_websites
-
-| Category | Permission | Required | Operations |
-| :--- | :--- | :---: | :--- |
-| **Websites** | Website monitoring configuration | `Yes` | `advanced_config`: `get_geo_config`, `get_ip_masking`, `get_geo_rules` |
-| **Websites** | Configuration of Smart Alerts for websites | `Yes` | `alert`: `find_active_website_alert_configs`, `find_website_alert_config` |
-
-`analyze`, `catalog`, and `configuration` (`get_all`, `get`) operations need no additional permissions.
-
 #### manage_mobile_apps
 
 | Category | Permission | Required | Operations |
@@ -92,6 +83,17 @@ These tools can create, update, or delete Instana configuration. The tables show
 | **Applications** | Configuration of global Smart Alerts for application | `Yes` (write operations only) | `global_alert_config`: `create`, `update`, `delete`, `enable`, `disable`, `restore` |
 
 `metrics`, `analyze`, `catalog`, `resources`, and the read operations of `alert_config` / `global_alert_config` (`find_active`, `find`, `find_versions`) need no additional permissions. Subtrace and PII configuration are not exposed by this tool.
+
+#### manage_websites
+
+| Category | Permission | Required | Operations |
+| :--- | :--- | :---: | :--- |
+| **Websites** | Website monitoring configuration | `Yes` | `advanced_config`: `get_geo_config`, `get_ip_masking`, `get_geo_rules` |
+| **Websites** | Create, edit, and delete website conversion goals for business impact | `No` |
+| **Websites** | Configuration of Smart Alerts for websites | `Yes` (alert write operations only) |
+| **Global functions** | Configuration of alert channels | `Yes` (when `create`/`update` set alert channels) |
+
+> Before `create` or `update` sends alert channel IDs (`alertChannelIds` or `alertChannels`), the tool looks the IDs up to confirm they exist. That lookup needs the API permission `canConfigureIntegrations`. If the lookup is denied on `create`, the request is not sent. On `update`, a denied lookup (403) does not block the request: the update is sent and the result carries a `warning` that the channel IDs were not verified.
 
 #### manage_custom_dashboards
 

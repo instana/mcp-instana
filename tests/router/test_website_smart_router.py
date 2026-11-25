@@ -890,6 +890,376 @@ class TestWebsiteSmartRouterTool(unittest.TestCase):
         self.assertIn("results", result)
         self.assertFalse(result.get("elicitation_needed"))
 
+
+    # --- Alert create / update / lifecycle operations ---
+
+    VALID_ALERT_PAYLOAD = {
+        "name": "Slow page loads",
+        "description": "P90 load time high",
+        "websiteId": "site-1",
+        "rules": [{
+            "rule": {"alertType": "slowness", "metricName": "onLoadTime", "aggregation": "P90"},
+            "thresholdOperator": ">",
+            "thresholds": {"CRITICAL": {"type": "staticThreshold", "value": 5000}},
+        }],
+    }
+
+    def _run_alert(self, operation, params):
+        return asyncio.run(self.router.manage_websites(
+            resource_type="alert", operation=operation, params=params,
+        ))
+
+    def test_alert_new_operations_are_advertised(self):
+        description = WebsiteSmartRouterMCPTool.manage_websites._mcp_description
+        for op in ("create", "update", "delete", "enable", "disable", "restore", "find_versions"):
+            self.assertIn(op, description)
+
+    def test_alert_create_success_forwards_payload(self):
+        captured = {}
+
+        async def mock_create(*args, **kwargs):
+            captured.update(kwargs)
+            return {"id": "alert-new"}
+
+        self.mock_alert_client.create_website_alert_config = mock_create
+
+        result = self._run_alert("create", {"payload": self.VALID_ALERT_PAYLOAD})
+
+        self.assertEqual(result["results"], {"id": "alert-new"})
+        self.assertEqual(captured["payload"], self.VALID_ALERT_PAYLOAD)
+        self.assertEqual(captured["tool_name"], "manage_websites")
+
+    def test_alert_create_accepts_json_string_payload(self):
+        import json
+
+        async def mock_create(*args, **kwargs):
+            self.assertEqual(kwargs["payload"], self.VALID_ALERT_PAYLOAD)
+            return {"id": "alert-new"}
+
+        self.mock_alert_client.create_website_alert_config = mock_create
+
+        result = self._run_alert("create", {"payload": json.dumps(self.VALID_ALERT_PAYLOAD)})
+
+        self.assertIn("results", result)
+
+    def test_alert_create_missing_payload(self):
+        result = self._run_alert("create", {})
+
+        self.assertTrue(result.get("elicitation_needed"))
+        self.assertTrue(any(e["field"] == "payload" for e in result["api_error"]))
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+
+    def test_alert_create_missing_required_fields(self):
+        result = self._run_alert("create", {"payload": {"name": "only a name"}})
+
+        self.assertEqual(result["reason"], "invalid_payload")
+        fields = {e["field"] for e in result["api_error"]}
+        self.assertTrue({"description", "websiteId", "rules"} <= fields)
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+
+    def test_alert_create_rejects_legacy_top_level_fields(self):
+        payload = {**self.VALID_ALERT_PAYLOAD, "rule": {}, "threshold": {}, "severity": 10}
+
+        result = self._run_alert("create", {"payload": payload})
+
+        self.assertEqual(result["reason"], "invalid_payload")
+        fields = {e["field"] for e in result["api_error"]}
+        self.assertTrue({"rule", "threshold", "severity"} <= fields)
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+
+    def test_alert_create_rejects_both_channel_fields(self):
+        payload = {**self.VALID_ALERT_PAYLOAD, "alertChannelIds": ["c1"], "alertChannels": {"CRITICAL": ["c1"]}}
+
+        result = self._run_alert("create", {"payload": payload})
+
+        self.assertEqual(result["reason"], "invalid_payload")
+        self.assertTrue(any(e["field"] == "alertChannels" for e in result["api_error"]))
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+
+    def test_alert_rejects_unknown_severity_channel_key(self):
+        payload = {**self.VALID_ALERT_PAYLOAD, "alertChannels": {"MAJOR": ["c1"]}}
+
+        for operation, extra in (("create", {}), ("update", {"id": "alert-1"})):
+            with self.subTest(operation=operation):
+                result = self._run_alert(operation, {"payload": payload, **extra})
+
+                self.assertEqual(result["reason"], "invalid_payload")
+
+    def test_alert_update_allows_both_channel_fields(self):
+        async def mock_update(*args, **kwargs):
+            return {"id": "alert-1"}
+
+        self.mock_alert_client.update_website_alert_config = mock_update
+        payload = {**self.VALID_ALERT_PAYLOAD, "alertChannelIds": ["c1"], "alertChannels": {"CRITICAL": ["c1"]}}
+
+        result = self._run_alert("update", {"id": "alert-1", "payload": payload})
+
+        self.assertEqual(result["results"], {"id": "alert-1"})
+
+    def test_alert_client_error_is_returned_at_top_level(self):
+        async def mock_delete(*args, **kwargs):
+            return {"error": "API error (status 403): denied", "status_code": 403}
+
+        self.mock_alert_client.delete_website_alert_config = mock_delete
+
+        result = self._run_alert("delete", {"id": "alert-1"})
+
+        self.assertEqual(result["error"], "API error (status 403): denied")
+        self.assertEqual(result["operation"], "delete")
+        self.assertNotIn("results", result)
+
+    def test_alert_timeout_warning_is_returned_at_top_level(self):
+        async def mock_disable(*args, **kwargs):
+            return {"error": "timed out", "timeout_seconds": 1, "warning": "outcome unknown"}
+
+        self.mock_alert_client.disable_website_alert_config = mock_disable
+
+        result = self._run_alert("disable", {"id": "alert-1"})
+
+        self.assertEqual(result["warning"], "outcome unknown")
+
+    def test_alert_rejects_non_positive_and_malformed_created(self):
+        for bad in ("-5", "--5", "0", -1):
+            with self.subTest(created=bad):
+                result = self._run_alert("restore", {"id": "alert-1", "created": bad})
+
+                self.assertTrue(any(e["field"] == "created" for e in result["api_error"]))
+
+    def test_alert_restore_accepts_integral_float_created(self):
+        captured = {}
+
+        async def mock_restore(*args, **kwargs):
+            captured.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_client.restore_website_alert_config = mock_restore
+
+        self._run_alert("restore", {"id": "alert-1", "created": 1.7e12})
+
+        self.assertEqual(captured["created"], 1700000000000)
+
+    def test_alert_invalid_numeric_params_use_invalid_param_reason(self):
+        restore = self._run_alert("restore", {"id": "alert-1", "created": "-5"})
+        find = self._run_alert("find_website_alert_config", {"id": "alert-1", "valid_on": "yesterday"})
+        missing = self._run_alert("restore", {"id": "alert-1"})
+
+        self.assertEqual(restore["reason"], "invalid_param")
+        self.assertEqual(find["reason"], "invalid_param")
+        self.assertEqual(missing["reason"], "missing_required_params")
+
+    def test_router_error_log_omits_payload(self):
+        self.mock_alert_client.create_website_alert_config = MagicMock(side_effect=RuntimeError("boom"))
+
+        # Patch the module logger: assertLogs breaks when another test module mocks `logging`.
+        with patch("src.router.website_smart_router.logger") as mock_logger:
+            result = self._run_alert("create", {"payload": {**self.VALID_ALERT_PAYLOAD, "description": "SECRET-TEXT"}})
+
+        self.assertIn("error", result)
+        mock_logger.error.assert_called_once()
+        self.assertNotIn("SECRET-TEXT", str(mock_logger.error.call_args))
+
+    def test_alert_create_rejects_bad_rules_shape(self):
+        for bad_rules in (
+            [self.VALID_ALERT_PAYLOAD["rules"][0], self.VALID_ALERT_PAYLOAD["rules"][0]],
+            [{"rule": {}, "thresholds": {"INFO": {"type": "staticThreshold", "value": 1}}}],
+            [{"rule": {}, "thresholds": {}}],
+            [{"rule": {}}],
+        ):
+            with self.subTest(rules=bad_rules):
+                result = self._run_alert("create", {"payload": {**self.VALID_ALERT_PAYLOAD, "rules": bad_rules}})
+                self.assertEqual(result["reason"], "invalid_payload")
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+
+    def test_alert_update_success_forwards_id_and_payload(self):
+        captured = {}
+        payload = {**self.VALID_ALERT_PAYLOAD, "name": "Renamed"}
+
+        async def mock_update(*args, **kwargs):
+            captured.update(kwargs)
+            return {"id": "alert-1", "name": "Renamed"}
+
+        self.mock_alert_client.update_website_alert_config = mock_update
+
+        result = self._run_alert("update", {"id": "alert-1", "payload": payload})
+
+        self.assertEqual(result["results"]["name"], "Renamed")
+        self.assertEqual(captured["id"], "alert-1")
+        self.assertEqual(captured["payload"], payload)
+
+    def test_alert_update_partial_payload_is_rejected(self):
+        result = self._run_alert("update", {"id": "alert-1", "payload": {"granularity": 300000}})
+
+        self.assertEqual(result["reason"], "invalid_payload")
+        fields = {e["field"] for e in result["api_error"]}
+        self.assertTrue({"name", "description", "websiteId", "rules"} <= fields)
+        self.mock_alert_client.update_website_alert_config.assert_not_called()
+
+    def test_alert_update_missing_id(self):
+        result = self._run_alert("update", {"payload": {"name": "x"}})
+
+        self.assertTrue(any(e["field"] == "id" for e in result["api_error"]))
+        self.mock_alert_client.update_website_alert_config.assert_not_called()
+
+    def test_alert_update_missing_payload(self):
+        result = self._run_alert("update", {"id": "alert-1"})
+
+        self.assertTrue(any(e["field"] == "payload" for e in result["api_error"]))
+        self.mock_alert_client.update_website_alert_config.assert_not_called()
+
+    def test_alert_update_accepts_legacy_top_level_fields_for_client_to_drop(self):
+        captured = {}
+
+        async def mock_update(*args, **kwargs):
+            captured.update(kwargs)
+            return {"id": "alert-1"}
+
+        self.mock_alert_client.update_website_alert_config = mock_update
+        payload = {**self.VALID_ALERT_PAYLOAD, "rule": {}, "threshold": {}, "severity": 5}
+
+        result = self._run_alert("update", {"id": "alert-1", "payload": payload})
+
+        self.assertNotIn("elicitation_needed", result)
+        self.assertEqual(captured["payload"], payload)
+
+    def test_alert_id_only_operations_forward_id(self):
+        methods = {
+            "delete": "delete_website_alert_config",
+            "enable": "enable_website_alert_config",
+            "disable": "disable_website_alert_config",
+            "find_versions": "find_website_alert_config_versions",
+        }
+        for operation, method in methods.items():
+            with self.subTest(operation=operation):
+                captured = {}
+
+                async def mock_call(*args, _captured=captured, **kwargs):
+                    _captured.update(kwargs)
+                    return {"success": True}
+
+                setattr(self.mock_alert_client, method, mock_call)
+
+                result = self._run_alert(operation, {"id": "alert-1"})
+
+                self.assertEqual(result["operation"], operation)
+                self.assertEqual(result["results"], {"success": True})
+                self.assertEqual(captured["id"], "alert-1")
+
+    def test_alert_id_only_operations_missing_id(self):
+        for operation in ("delete", "enable", "disable", "find_versions"):
+            with self.subTest(operation=operation):
+                result = self._run_alert(operation, {})
+
+                self.assertTrue(result.get("elicitation_needed"))
+                self.assertTrue(any(e["field"] == "id" for e in result["api_error"]))
+
+    def test_alert_restore_success(self):
+        captured = {}
+
+        async def mock_restore(*args, **kwargs):
+            captured.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_client.restore_website_alert_config = mock_restore
+
+        result = self._run_alert("restore", {"id": "alert-1", "created": 1700000000000})
+
+        self.assertEqual(result["results"], {"success": True})
+        self.assertEqual(captured["id"], "alert-1")
+        self.assertEqual(captured["created"], 1700000000000)
+
+    def test_alert_restore_missing_id_and_created(self):
+        no_id = self._run_alert("restore", {"created": 1})
+        no_created = self._run_alert("restore", {"id": "alert-1"})
+
+        self.assertTrue(any(e["field"] == "id" for e in no_id["api_error"]))
+        self.assertTrue(any(e["field"] == "created" for e in no_created["api_error"]))
+        self.mock_alert_client.restore_website_alert_config.assert_not_called()
+
+    def test_alert_client_exception_is_caught_by_router(self):
+        async def mock_error(*args, **kwargs):
+            raise Exception("boom")
+
+        self.mock_alert_client.delete_website_alert_config = mock_error
+
+        result = self._run_alert("delete", {"id": "alert-1"})
+
+        self.assertIn("Smart router error", result["error"])
+
+    def test_alert_create_and_update_reject_non_dict_payload(self):
+        for operation in ("create", "update"):
+            for bad in ("[1]", "5", [1, 2]):
+                with self.subTest(operation=operation, payload=bad):
+                    result = self._run_alert(operation, {"id": "alert-1", "payload": bad})
+
+                    self.assertTrue(result.get("elicitation_needed"), result)
+                    self.assertTrue(any(e["field"] == "payload" for e in result["api_error"]))
+        self.mock_alert_client.create_website_alert_config.assert_not_called()
+        self.mock_alert_client.update_website_alert_config.assert_not_called()
+
+    def test_alert_rules_item_not_an_object_is_reported_as_such(self):
+        payload = {**self.VALID_ALERT_PAYLOAD, "rules": ["x"]}
+
+        result = self._run_alert("create", {"payload": payload})
+
+        self.assertEqual([e["field"] for e in result["api_error"]], ["rules[0]"])
+
+    def test_alert_restore_coerces_numeric_string_created(self):
+        captured = {}
+
+        async def mock_restore(*args, **kwargs):
+            captured.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_client.restore_website_alert_config = mock_restore
+
+        self._run_alert("restore", {"id": "alert-1", "created": "1700000000000"})
+
+        self.assertEqual(captured["created"], 1700000000000)
+        self.assertIsInstance(captured["created"], int)
+
+    def test_alert_restore_rejects_non_numeric_created(self):
+        for bad in ("abc", True, 1.5, []):
+            with self.subTest(created=bad):
+                result = self._run_alert("restore", {"id": "alert-1", "created": bad})
+
+                self.assertTrue(any(e["field"] == "created" for e in result["api_error"]))
+        self.mock_alert_client.restore_website_alert_config.assert_not_called()
+
+    def test_alert_numeric_id_is_coerced_to_str(self):
+        captured = {}
+
+        async def mock_delete(*args, **kwargs):
+            captured.update(kwargs)
+            return {"success": True}
+
+        self.mock_alert_client.delete_website_alert_config = mock_delete
+
+        self._run_alert("delete", {"id": 123})
+
+        self.assertEqual(captured["id"], "123")
+
+    def test_alert_find_coerces_valid_on_and_rejects_garbage(self):
+        captured = {}
+
+        async def mock_find(*args, **kwargs):
+            captured.update(kwargs)
+            return {"id": "alert-1"}
+
+        self.mock_alert_client.find_website_alert_config = mock_find
+
+        self._run_alert("find_website_alert_config", {"id": "alert-1", "valid_on": "1742349976000"})
+        bad = self._run_alert("find_website_alert_config", {"id": "alert-1", "valid_on": "yesterday"})
+
+        self.assertEqual(captured["valid_on"], 1742349976000)
+        self.assertTrue(any(e["field"] == "valid_on" for e in bad["api_error"]))
+
+    def test_alert_description_warns_about_writes(self):
+        description = WebsiteSmartRouterMCPTool.manage_websites._mcp_description
+
+        self.assertIn("Confirm with the user", description)
+        self.assertIn("outcome is unknown", description)
+
+
     # --- _handle_catalog get_tag_catalog guards ---
 
     def test_catalog_tag_catalog_missing_use_case_rejected(self):
