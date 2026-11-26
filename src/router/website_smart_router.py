@@ -14,8 +14,8 @@ from mcp.types import ToolAnnotations
 from src.core.elicitation import missing_param
 from src.core.timestamp_utils import convert_nested_datetime_param
 from src.core.utils import (
-    BaseInstanaClient,
     WEBSITE_BEACON_TYPE_MAP,
+    BaseInstanaClient,
     normalize_beacon_type,
     parse_payload,
     register_as_tool,
@@ -113,10 +113,10 @@ class WebsiteSmartRouterMCPTool(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
         # Lazy import to avoid circular dependencies
+        from src.website.website_alert import WebsiteAlertMCPTools
         from src.website.website_analyze import WebsiteAnalyzeMCPTools
         from src.website.website_catalog import WebsiteCatalogMCPTools
         from src.website.website_configuration import WebsiteConfigurationMCPTools
-        from src.website.website_alert import WebsiteAlertMCPTools
 
         # Initialize the website clients
         self.website_analyze_client = WebsiteAnalyzeMCPTools(read_token, base_url)
@@ -202,7 +202,6 @@ ALERT (resource_type="alert"):
     find_active_website_alert_configs - Get all alert configurations for a website
         - website_id: Website ID to get alert configs for (required)
         - alert_ids: Optional list of specific alert IDs to filter (optional)
-    
     find_website_alert_config - Get a specific alert configuration by ID
         - id: Specific alert configuration ID to retrieve (required)
         - valid_on: Unix timestamp (ms) to retrieve the configuration active at that time (optional, default is latest active version)
@@ -689,7 +688,7 @@ Examples:
             "website_id": website_id if website_id else None,
             "results": result
         }
-    
+
     @staticmethod
     def _check_legacy_fields(operation: str, payload: Dict[str, Any]) -> List[Dict[str, str]]:
         """Reject legacy single-rule fields on create (on update the client drops them)."""

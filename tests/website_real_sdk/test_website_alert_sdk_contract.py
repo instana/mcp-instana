@@ -56,6 +56,6 @@ _SCRIPT = textwrap.dedent(
 
 def test_raw_call_matches_real_sdk_serializer():
     result = subprocess.run(
-        [sys.executable, "-c", _SCRIPT], cwd=REPO_ROOT, capture_output=True, text=True, timeout=60
+        [sys.executable, "-c", _SCRIPT], cwd=REPO_ROOT, capture_output=True, text=True, timeout=60, check=False
     )
     assert result.returncode == 0 and "OK" in result.stdout, result.stderr or result.stdout
