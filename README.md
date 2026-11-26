@@ -508,6 +508,7 @@ uv sync
 | :--- | :--- |
 | [Bob IDE](./docs/mcp-clients/bob-ide.md)| `streamable http`, `stdio` | 
 | [Bob CLI](./docs/mcp-clients/bob-cli.md) | `streamable http`, `stdio` |
+| [ChatGPT Desktop](./docs/mcp-clients/chatgpt-desktop.md) |  `streamable http`, `stdio` |
 | [Claude Desktop](./docs/mcp-clients/claude-desktop.md) |  `streamable http`, `stdio` | 
 | [Cursor IDE](./docs/mcp-clients/cursor-ide.md) |  `streamable http`, `stdio` | 
 | [Kiro IDE](./docs/mcp-clients/kiro-ide.md)| `streamable http`, `stdio` |
