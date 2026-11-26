@@ -40,17 +40,6 @@ Operations: `get_events`, `get_event`, `get_events_by_ids`, `get_kubernetes_info
 
 Resource types `catalog` (`get_actions`, `get_action_details`, `get_action_matches`, `get_action_matches_by_id_and_time_window`, `get_action_types`, `get_action_tags`) and `history` (`list`, `get_details`). All operations are read-only and need no additional permissions. The tool cannot configure policies, run actions, or delete action history, so the related Automation permissions are not required.
 
-#### manage_mobile_apps
-
-| Category | Permission | Required | Operations |
-| :--- | :--- | :---: | :--- |
-| **Mobile app monitoring** | Mobile app monitoring configuration | `Yes` | `advanced_config`: `get_geo_config`, `get_ip_masking`, `get_geo_rules` |
-| **Mobile app monitoring** | Configuration of Smart Alerts for mobile apps | `Yes` | `alert`: `find_active_mobile_app_alert_configs`, `find_mobile_app_alert_config` |
-
-`analyze`, `catalog`, `configuration` (`get_all`, `get`), and `session` need no additional permissions.
-
-> **Note:** The `advanced_config` source-map operations (`get_source_map_upload_config`, `get_mobile_app_source_map_upload_config_by_id`) are currently unavailable due to an authentication limitation in the tool itself. They will return an error regardless of token permissions.
-
 #### manage_alert_channels
 
 This tool is read-only (`get_overview`, `get`) and masks all secrets in its responses.
@@ -94,6 +83,18 @@ These tools can create, update, or delete Instana configuration. The tables show
 | **Global functions** | Configuration of alert channels | `Yes` (when `create`/`update` set alert channels) |
 
 > Before `create` or `update` sends alert channel IDs (`alertChannelIds` or `alertChannels`), the tool looks the IDs up to confirm they exist. That lookup needs the API permission `canConfigureIntegrations`. If the lookup is denied on `create`, the request is not sent. On `update`, a denied lookup (403) does not block the request: the update is sent and the result carries a `warning` that the channel IDs were not verified.
+
+#### manage_mobile_apps
+
+| Category | Permission | Required | Operations |
+| :--- | :--- | :---: | :--- |
+| **Mobile app monitoring** | Mobile app monitoring configuration | `Yes` | `advanced_config`: `get_geo_config`, `get_ip_masking`, `get_geo_rules` |
+| **Mobile app monitoring** | Configuration of Smart Alerts for mobile apps | `Yes` | `alert`: `find_active_mobile_app_alert_configs`, `find_mobile_app_alert_config`, `find_versions`, `create`, `update`, `delete`, `enable`, `disable`, `restore` |
+| **Global functions** | Configuration of alert channels | `Yes` (when `create`/`update` set alert channels) | `alert`: `create`, `update` |
+
+`analyze`, `catalog`, `configuration` (`get_all`, `get`), and `session` need no additional permissions.
+
+> Before `create` or `update` sends alert channel IDs (`alertChannelIds` or `alertChannels`), the tool looks the IDs up to confirm they exist. That lookup needs the API permission `canConfigureIntegrations`. If the lookup is denied, the request is not sent.
 
 #### manage_custom_dashboards
 

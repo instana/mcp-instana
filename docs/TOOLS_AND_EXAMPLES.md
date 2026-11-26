@@ -1195,12 +1195,19 @@ Monitor mobile app monitoring data including session starts, HTTP requests, erro
 | `get_source_map_upload_config` | Get Source Map Upload Configuration |
 | `get_mobile_app_source_map_upload_config_by_id` | Get Source Map Upload Configuration by ID |
 
-**alert**: Query active and version-specific mobile app alert configurations (read-only)
+**alert**: Read and manage mobile app smart alert configurations
 
 | Operation | Description |
 |---|---|
 | `find_active_mobile_app_alert_configs` | Get all active alert configurations for a mobile app |
 | `find_mobile_app_alert_config` | Get smart alert configuration by ID |
+| `find_versions` | List every version of an alert configuration |
+| `create` | Create an alert configuration |
+| `update` | Update an alert configuration |
+| `delete` | Delete an alert configuration |
+| `enable` | Enable an alert configuration |
+| `disable` | Disable an alert configuration |
+| `restore` | Restore an alert configuration to a historical version |
 
 **session**: Retrieve session beacons and paginated session replay action beacons
 
@@ -1257,6 +1264,24 @@ Show me all active alert configurations for mobile app ID "mobile-app-123"
 
 ```
 Get source map upload configuration details for mobile app "Robot Shop Mobile"
+```
+
+#### Mobile App Alert Configuration
+
+```
+Create a warning alert on mobile app "mobile-app-123" when P90 HTTP latency exceeds 2 seconds and a critical alert at 4 seconds
+```
+
+```
+Rename alert "alert-123" and change its granularity to 5 minutes
+```
+
+```
+Disable alert "alert-123", then show me its version history
+```
+
+```
+Restore alert "alert-123" to the version created at 1700000000000
 ```
 
 #### Session Replay
