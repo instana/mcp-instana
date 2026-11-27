@@ -682,12 +682,19 @@ Monitor real user monitoring (RUM) data including page loads, resource loads, er
 | `get_ip_masking` | Get IP Masking Configuration |
 | `get_geo_rules` | Get Geo Mapping Rules |
 
-**alert**: Query active and version-specific website alert configurations (read-only)
+**alert**: Read and manage website smart alert configurations
 
 | Operation | Description |
 |---|---|
 | `find_active_website_alert_configs` | Get all active alert configurations for a website |
 | `find_website_alert_config` | Get smart alert configuration by ID |
+| `find_versions` | List every version of an alert configuration |
+| `create` | Create an alert configuration |
+| `update` | Update an alert configuration |
+| `delete` | Delete an alert configuration |
+| `enable` | Enable an alert configuration |
+| `disable` | Disable an alert configuration |
+| `restore` | Restore an alert configuration to a historical version |
 
 ### Example Prompts
 
@@ -755,6 +762,22 @@ Show me all active alert configurations for website ID "website-abc123"
 
 ```
 Get alert configuration details for alert ID "alert-123" valid on timestamp 1742349976000
+```
+
+```
+Create a warning alert on website "website-abc123" when P90 page load time exceeds 3 seconds and a critical alert at 5 seconds
+```
+
+```
+Rename alert "alert-123" and change its granularity to 5 minutes
+```
+
+```
+Disable alert "alert-123", then show me its version history
+```
+
+```
+Restore alert "alert-123" to the version created at 1700000000000
 ```
 
 ---
