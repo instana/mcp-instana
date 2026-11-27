@@ -202,7 +202,7 @@ class TestMobileAppSmartRouterE2E:
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_alert_invalid_operation(self, router):
-        result = await router.manage_mobile_apps(resource_type="alert", operation="delete")
+        result = await router.manage_mobile_apps(resource_type="alert", operation="bogus_operation")
         assert result["elicitation_needed"] is True
         assert result["reason"] == "invalid_operation"
 
