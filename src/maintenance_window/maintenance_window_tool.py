@@ -95,7 +95,7 @@ from typing import Any, Dict, List, Optional
 from instana_client.api.maintenance_configuration_api import MaintenanceConfigurationApi
 from instana_client.models.maintenance_config_v2 import MaintenanceConfigV2
 
-from src.core.timestamp_utils import get_current_timestamp
+from src.core.timestamp_utils import convert_datetime_param, get_current_timestamp
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
@@ -442,6 +442,33 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.info(f"RRULE parameter: {rrule}")
             logger.info(f"Until Date parameter: {until_date}")
 
+    _RELATIVE_TIME_RE = re.compile(
+        r"^\s*(?:in\s+)?(\d+)\s*(minutes?|mins?|hours?|hrs?|days?)(?:\s+from\s+now)?\s*$", re.IGNORECASE
+    )
+
+    def _parse_time_string(self, value: str) -> Optional[int]:
+        """Convert a non-numeric time string to Unix ms, or None if unparseable.
+
+        Supports "now", relative times ("in 2 hours", "30 minutes from now"),
+        ISO strings ("2026-06-10T10:00:00Z") and "10 March 2026, 2:00 PM|IST".
+        """
+        text = value.strip()
+        now_ms = int(datetime.now().timestamp() * 1000)
+        if text.lower() == "now":
+            return now_ms
+        match = self._RELATIVE_TIME_RE.match(text)
+        if match:
+            amount, unit = int(match.group(1)), match.group(2).lower()
+            if unit.startswith("min"):
+                delta = timedelta(minutes=amount)
+            elif unit.startswith(("hour", "hr")):
+                delta = timedelta(hours=amount)
+            else:
+                delta = timedelta(days=amount)
+            return now_ms + int(delta.total_seconds() * 1000)
+        converted = convert_datetime_param(text, "time")
+        return converted["value"] if "error" not in converted else None
+
     def _convert_string_parameters(self, start_time: Optional[Any], end_time: Optional[Any],
                                    duration_minutes: Optional[Any], duration_hours: Optional[Any],
                                    duration_days: Optional[Any]) -> Dict[str, Any]:
@@ -460,6 +487,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 try:
                     converted_values.append(int(param_value))
                 except ValueError:
+                    if param_name in ("start_time", "end_time"):
+                        parsed = self._parse_time_string(param_value)
+                        if parsed is not None:
+                            converted_values.append(parsed)
+                            continue
                     expected = description + (f" (e.g., {example})" if example else "")
                     return {
                         "elicitation_needed": True,
