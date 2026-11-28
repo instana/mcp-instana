@@ -3,6 +3,7 @@ Unit tests for the LogAlertConfigurationMCPTools class
 """
 
 import asyncio
+import logging
 import os
 import sys
 import unittest
@@ -11,11 +12,6 @@ from unittest.mock import MagicMock, patch
 
 # Add src to path before any imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-# Mock the logger before importing any modules that use it
-mock_logger = MagicMock()
-sys.modules['logging'] = MagicMock()
-sys.modules['logging'].getLogger = MagicMock(return_value=mock_logger)
 
 # Create a mock for the with_header_auth decorator
 def mock_with_header_auth(api_class, allow_mock=False):
@@ -35,99 +31,49 @@ def mock_with_header_auth(api_class, allow_mock=False):
         return wrapper
     return decorator
 
+# Save original modules to restore after import
+_instana_module_names = [
+    'instana_client',
+    'instana_client.api',
+    'instana_client.api.log_alert_configuration_api',
+    'instana_client.configuration',
+    'instana_client.api_client',
+    'instana_client.models',
+    'instana_client.models.log_alert_config',
+]
+_original_instana_modules = {name: sys.modules.get(name) for name in _instana_module_names}
+
 # Create mock modules and classes
-sys.modules['instana_client'] = MagicMock()
-sys.modules['instana_client.api'] = MagicMock()
-sys.modules['instana_client.api.infrastructure_topology_api'] = MagicMock()
-sys.modules['instana_client.api.infrastructure_resources_api'] = MagicMock()
-sys.modules['instana_client.api.infrastructure_catalog_api'] = MagicMock()
-sys.modules['instana_client.api.infrastructure_analyze_api'] = MagicMock()
-sys.modules['instana_client.api.application_resources_api'] = MagicMock()
-sys.modules['instana_client.api.application_metrics_api'] = MagicMock()
-sys.modules['instana_client.api.application_alert_configuration_api'] = MagicMock()
-sys.modules['instana_client.api.application_catalog_api'] = MagicMock()
-sys.modules['instana_client.api.application_analyze_api'] = MagicMock()
-sys.modules['instana_client.api.events_api'] = MagicMock()
-sys.modules['instana_client.api.log_alert_configuration_api'] = MagicMock()
-sys.modules['instana_client.configuration'] = MagicMock()
-sys.modules['instana_client.api_client'] = MagicMock()
-sys.modules['instana_client.models'] = MagicMock()
-sys.modules['instana_client.models.log_alert_config'] = MagicMock()
-sys.modules['instana_client.models.get_available_metrics_query'] = MagicMock()
-sys.modules['instana_client.models.get_available_plugins_query'] = MagicMock()
-sys.modules['instana_client.models.get_infrastructure_query'] = MagicMock()
-sys.modules['instana_client.models.get_infrastructure_groups_query'] = MagicMock()
-sys.modules['fastmcp'] = MagicMock()
-sys.modules['fastmcp.server'] = MagicMock()
-sys.modules['fastmcp.server.dependencies'] = MagicMock()
-sys.modules['pydantic'] = MagicMock()
-sys.modules['mcp'] = MagicMock()
-sys.modules['mcp.types'] = MagicMock()
-
-# Mock the get_http_headers function
-mock_get_http_headers = MagicMock(return_value={})
-sys.modules['fastmcp.server.dependencies'].get_http_headers = mock_get_http_headers
-
-# Set up mock classes
 mock_configuration = MagicMock()
 mock_api_client = MagicMock()
-mock_analyze_api = MagicMock()
-mock_topology_api = MagicMock()
-mock_resources_api = MagicMock()
-mock_catalog_api = MagicMock()
-mock_app_resources_api = MagicMock()
-mock_app_metrics_api = MagicMock()
-mock_app_alert_config_api = MagicMock()
-mock_app_catalog_api = MagicMock()
-mock_app_analyze_api = MagicMock()
-mock_events_api = MagicMock()
 mock_log_alert_config_api = MagicMock()
 mock_log_alert_config = MagicMock()
-mock_metrics_query = MagicMock()
-mock_plugins_query = MagicMock()
-mock_infra_query = MagicMock()
-mock_groups_query = MagicMock()
 
-# Add __name__ attribute to mock classes
-mock_analyze_api.__name__ = "InfrastructureAnalyzeApi"
-mock_topology_api.__name__ = "InfrastructureTopologyApi"
-mock_resources_api.__name__ = "InfrastructureResourcesApi"
-mock_catalog_api.__name__ = "InfrastructureCatalogApi"
-mock_app_resources_api.__name__ = "ApplicationResourcesApi"
-mock_app_metrics_api.__name__ = "ApplicationMetricsApi"
-mock_app_alert_config_api.__name__ = "ApplicationAlertConfigurationApi"
-mock_app_catalog_api.__name__ = "ApplicationCatalogApi"
-mock_app_analyze_api.__name__ = "ApplicationAnalyzeApi"
-mock_events_api.__name__ = "EventsApi"
 mock_log_alert_config_api.__name__ = "LogAlertConfigurationApi"
 mock_log_alert_config.__name__ = "LogAlertConfig"
 
-sys.modules['instana_client.configuration'].Configuration = mock_configuration
-sys.modules['instana_client.api_client'].ApiClient = mock_api_client
-sys.modules['instana_client.api.infrastructure_analyze_api'].InfrastructureAnalyzeApi = mock_analyze_api
-sys.modules['instana_client.api.infrastructure_topology_api'].InfrastructureTopologyApi = mock_topology_api
-sys.modules['instana_client.api.infrastructure_resources_api'].InfrastructureResourcesApi = mock_resources_api
-sys.modules['instana_client.api.infrastructure_catalog_api'].InfrastructureCatalogApi = mock_catalog_api
-sys.modules['instana_client.api.application_resources_api'].ApplicationResourcesApi = mock_app_resources_api
-sys.modules['instana_client.api.application_metrics_api'].ApplicationMetricsApi = mock_app_metrics_api
-sys.modules['instana_client.api.application_alert_configuration_api'].ApplicationAlertConfigurationApi = mock_app_alert_config_api
-sys.modules['instana_client.api.application_catalog_api'].ApplicationCatalogApi = mock_app_catalog_api
-sys.modules['instana_client.api.application_analyze_api'].ApplicationAnalyzeApi = mock_app_analyze_api
-sys.modules['instana_client.api.events_api'].EventsApi = mock_events_api
-sys.modules['instana_client.api.log_alert_configuration_api'].LogAlertConfigurationApi = mock_log_alert_config_api
-sys.modules['instana_client.models.log_alert_config'].LogAlertConfig = mock_log_alert_config
-sys.modules['instana_client.models.get_available_metrics_query'].GetAvailableMetricsQuery = mock_metrics_query
-sys.modules['instana_client.models.get_available_plugins_query'].GetAvailablePluginsQuery = mock_plugins_query
-sys.modules['instana_client.models.get_infrastructure_query'].GetInfrastructureQuery = mock_infra_query
-sys.modules['instana_client.models.get_infrastructure_groups_query'].GetInfrastructureGroupsQuery = mock_groups_query
+mock_instana_client = MagicMock()
+mock_instana_api_pkg = MagicMock()
+mock_instana_models_pkg = MagicMock()
+mock_instana_configuration_pkg = MagicMock()
+mock_instana_api_client_pkg = MagicMock()
+mock_instana_log_alert_api_pkg = MagicMock()
+mock_instana_log_alert_model_pkg = MagicMock()
 
-# Mock the ApplicationAlertConfig import
-mock_application_alert_config_instance = MagicMock()
-mock_application_alert_config_instance.to_dict.return_value = {"id": "new_alert_id", "name": "Test Alert"}
-mock_application_alert_config = MagicMock()
-mock_application_alert_config.return_value = mock_application_alert_config_instance
+mock_instana_configuration_pkg.Configuration = mock_configuration
+mock_instana_api_client_pkg.ApiClient = mock_api_client
+mock_instana_log_alert_api_pkg.LogAlertConfigurationApi = mock_log_alert_config_api
+mock_instana_log_alert_model_pkg.LogAlertConfig = mock_log_alert_config
 
-# Mock the LogAlertConfig import
+sys.modules['instana_client'] = mock_instana_client
+sys.modules['instana_client.api'] = mock_instana_api_pkg
+sys.modules['instana_client.api.log_alert_configuration_api'] = mock_instana_log_alert_api_pkg
+sys.modules['instana_client.configuration'] = mock_instana_configuration_pkg
+sys.modules['instana_client.api_client'] = mock_instana_api_client_pkg
+sys.modules['instana_client.models'] = mock_instana_models_pkg
+sys.modules['instana_client.models.log_alert_config'] = mock_instana_log_alert_model_pkg
+
+# Mock the LogAlertConfig instance returned on instantiation
 mock_log_alert_config_instance = MagicMock()
 mock_log_alert_config_instance.to_dict.return_value = {"id": "test_alert_id", "name": "Test Alert"}
 mock_log_alert_config.return_value = mock_log_alert_config_instance
@@ -136,6 +82,13 @@ mock_log_alert_config.return_value = mock_log_alert_config_instance
 with patch('src.core.utils.with_header_auth', mock_with_header_auth):
     # Import the class to test first
     from src.log.log_alert_configuration import LogAlertConfigurationMCPTools
+
+# Restore original modules
+for _mod_name, _orig_mod in _original_instana_modules.items():
+    if _orig_mod is not None:
+        sys.modules[_mod_name] = _orig_mod
+    else:
+        sys.modules.pop(_mod_name, None)
 
 class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     """Test the LogAlertConfigurationMCPTools class"""
@@ -148,7 +101,6 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         mock_api_client.reset_mock()
         mock_log_alert_config_api.reset_mock()
         mock_log_alert_config.reset_mock()
-        mock_logger.reset_mock()  # Reset the logger mock
 
         # Reset the side_effect to None for normal operation
         mock_log_alert_config.side_effect = None
@@ -157,7 +109,6 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         self.mock_configuration = mock_configuration
         self.mock_api_client = mock_api_client
         self.log_alert_config_api = mock_log_alert_config_api
-        self.mock_logger = mock_logger  # Store reference to the logger mock
 
         # Create the client
         self.read_token = "test_token"
@@ -341,6 +292,24 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         self.assertIn("Failed to enable log alert configuration", result["error"])
         self.assertIn("Test error", result["error"])
 
+    def test_find_log_alert_configs_http_error(self):
+        """A non-2xx raw response is returned as an HTTP error, not parsed as data"""
+        mock_response = MagicMock()
+        mock_response.status = 401
+        mock_response.data = b'{"errors": ["unauthorized"]}'
+        api = self.client.log_alert_api
+        api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
+        api.find_log_alert_config_without_preload_content = MagicMock(return_value=mock_response)
+        api.find_log_alert_config_versions_without_preload_content = MagicMock(return_value=mock_response)
+
+        for result in (
+            asyncio.run(self.client.find_active_log_alert_configs()),
+            asyncio.run(self.client.find_log_alert_config(id="alert1")),
+            asyncio.run(self.client.find_log_alert_config_versions(id="alert1")),
+        ):
+            self.assertEqual(result["status_code"], 401)
+            self.assertIn("HTTP 401", result["error"])
+
     def test_find_active_log_alert_configs_success(self):
         """Test find_active_log_alert_configs with a successful response"""
         # Set up the mock response
@@ -360,6 +329,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
 
         # Mock response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [mock_config1.to_dict.return_value, mock_config2.to_dict.return_value]
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -391,6 +361,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
 
         # Mock response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [mock_config.to_dict.return_value]
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -434,6 +405,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         })
         # Mock response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         mock_response.data = json.dumps(mock_result.to_dict.return_value).encode('utf-8')
         self.client.log_alert_api.find_log_alert_config_without_preload_content = MagicMock(return_value=mock_response)
@@ -492,6 +464,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
 
         # Mock response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [mock_version1.to_dict.return_value, mock_version2.to_dict.return_value]
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -710,6 +683,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_active_log_alert_configs_json_decode_error(self):
         """Test find_active_log_alert_configs with JSON decode error"""
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
 
@@ -721,6 +695,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_active_log_alert_configs_attribute_error(self):
         """Test find_active_log_alert_configs with attribute error"""
         mock_response = MagicMock()
+        mock_response.status = 200
         del mock_response.data
         self.client.log_alert_api.find_active_log_alert_configs_without_preload_content = MagicMock(return_value=mock_response)
 
@@ -731,6 +706,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_log_alert_config_json_decode_error(self):
         """Test find_log_alert_config with JSON decode error"""
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_log_alert_config_without_preload_content = MagicMock(return_value=mock_response)
 
@@ -741,6 +717,7 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
     def test_find_log_alert_config_versions_json_decode_error(self):
         """Test find_log_alert_config_versions with JSON decode error"""
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.client.log_alert_api.find_log_alert_config_versions_without_preload_content = MagicMock(return_value=mock_response)
 
@@ -827,6 +804,54 @@ class TestLogAlertConfigurationMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.update_log_alert_config(id="alert1", config=config))
 
         self.assertIn("error", result)
+
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; a mutating call must not report success."""
+
+    def setUp(self):
+        self.client = LogAlertConfigurationMCPTools(read_token="test_token", base_url="https://test.instana.io")
+        self.client.log_alert_api = MagicMock()
+        patcher = patch(
+            "src.log.log_alert_configuration.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _assert_timeout_error(self, result):
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_delete_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.delete_log_alert_config(id="alert1")))
+
+    def test_disable_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.disable_log_alert_config(id="alert1")))
+
+    def test_enable_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.enable_log_alert_config(id="alert1")))
+
+    def test_restore_timeout(self):
+        self._assert_timeout_error(
+            asyncio.run(self.client.restore_log_alert_config(id="alert1", created=1625097600000))
+        )
 
 
 if __name__ == '__main__':

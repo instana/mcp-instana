@@ -207,6 +207,7 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
         # Set up the mock response for get_topology_without_preload_content
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -221,6 +222,18 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         self.assertIn("totalNodes", result["summary"])
         self.assertIn("totalEdges", result["summary"])
         self.assertEqual(result["summary"]["totalNodes"], 2)
+
+    def test_get_topology_http_error(self):
+        """A non-2xx raw response is returned as an HTTP error, not parsed as data"""
+        mock_response = MagicMock()
+        mock_response.status = 403
+        mock_response.data = b'{"errors": ["forbidden"]}'
+        self.topology_api.get_topology_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_topology())
+
+        self.assertEqual(result["status_code"], 403)
+        self.assertIn("HTTP 403", result["error"])
 
     def test_get_topology_error(self):
         """Test get_topology error handling"""
@@ -237,6 +250,7 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
     def test_get_topology_invalid_json(self):
         """Test get_topology handles invalid JSON response"""
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -248,6 +262,7 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
     def test_get_topology_data_without_nodes(self):
         """Test get_topology returns summary when no nodes are present"""
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'{"data": "raw topology"}'
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -255,14 +270,6 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
 
         self.assertIn("summary", result)
         self.assertTrue(result.get("rawDataAvailable", False))
-
-    def test_debug_print_logs_debug(self):
-        """Test debug_print writes a debug log entry"""
-        from src.infrastructure.infrastructure_topology import debug_print
-
-        with patch('src.infrastructure.infrastructure_topology.logger') as mock_logger:
-            debug_print('hello', 'world')
-            mock_logger.debug.assert_called_once()
 
     def test_get_related_hosts_missing_snapshot_id(self):
         """Test get_related_hosts with missing snapshot_id"""
@@ -289,6 +296,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result.to_dict()).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -304,6 +313,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -323,6 +334,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -343,6 +356,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -362,6 +377,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -384,6 +401,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -398,6 +417,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         mock_result = {"nodes": nodes, "edges": []}
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -412,6 +433,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         mock_result = {"unexpected": "format"}
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -427,6 +450,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -443,6 +468,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 
@@ -462,6 +489,8 @@ class TestInfrastructureTopologyMCPTools(unittest.TestCase):
         }
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         mock_response.data = json.dumps(mock_result).encode('utf-8')
         self.topology_api.get_topology_without_preload_content.return_value = mock_response
 

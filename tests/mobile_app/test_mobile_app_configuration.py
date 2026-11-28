@@ -379,6 +379,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         self.client.config_api.get_mobile_app_geo_mapping_rules.return_value = None
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US\n10.0.0.1,UK"
         self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content.return_value = mock_response
 
@@ -397,6 +398,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         )
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -416,6 +418,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(return_value=None)
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"Some non-CSV data"
         self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -448,6 +451,36 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
         self.assertIn("error", result[0])
+
+    def test_get_mobile_app_geo_mapping_rules_primary_timeout_dict_surfaces_error(self):
+        """A timeout dict from the primary call is an error, not CSV rows, and is not retried"""
+        timeout = {"error": "Instana API call timed out after 1s (get_mobile_app_geo_mapping_rules)."}
+        self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(return_value=timeout)
+        self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content = Mock()
+
+        result = asyncio.run(self.client.get_mobile_app_geo_mapping_rules("mob1"))
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertIn("timed out", result[0]["error"])
+        self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content.assert_not_called()
+
+    def test_get_mobile_app_geo_mapping_rules_raw_http_error_not_retried(self):
+        """A non-2xx raw response raises once; the raw call must not run a second time"""
+        self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(return_value=None)
+        bad_response = Mock()
+        bad_response.status = 500
+        bad_response.data = b"boom"
+        raw = Mock(return_value=bad_response)
+        self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content = raw
+
+        result = asyncio.run(self.client.get_mobile_app_geo_mapping_rules("mob1"))
+
+        self.assertIsInstance(result, list)
+        self.assertIn("error", result[0])
+        self.assertEqual(raw.call_count, 1)
+
+
 
     def test_execute_mobile_app_operation_get_all(self):
         self.client.get_all_mobile_apps = AsyncMock(return_value={"results": []})
@@ -853,6 +886,7 @@ class TestMobileAppConfigurationMCPTools(unittest.TestCase):
         """Test execute_advanced_config_operation with get_geo_rules"""
         self.client.config_api.get_mobile_app_geo_mapping_rules = Mock(return_value=None)
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         self.client.config_api.get_mobile_app_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response

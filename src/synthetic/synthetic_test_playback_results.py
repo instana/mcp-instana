@@ -42,25 +42,6 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         """Initialize the Synthetic Test Playback Results MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    @staticmethod
-    def _normalize_tag_filter_key(payload: Any) -> Any:
-        """
-        Normalise the TagFilterExpression key in a payload dictionary.
-
-        The SDK model uses 'tagFilterExpression' (lowercase t) as the JSON alias,
-        but callers (including LLM-generated tool calls) often pass
-        'TagFilterExpression' (capital T).  When the capital-T variant is present
-        and the lowercase variant is absent, rename the key so that
-        GetTestResultList / GetTestResultAnalytic.from_dict() picks it up
-        correctly and includes the filter in the outgoing request.
-        """
-        if not isinstance(payload, dict):
-            return payload
-        if "TagFilterExpression" in payload and "tagFilterExpression" not in payload:
-            payload = dict(payload)  # shallow copy — avoid mutating caller's dict
-            payload["tagFilterExpression"] = payload.pop("TagFilterExpression")
-        return payload
-
     async def execute_playback_operation(
         self,
         operation: str,
@@ -91,27 +72,27 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             if operation == "get_synthetic_result":
                 return await self.get_synthetic_result(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    payload=params.get("payload"), ctx=ctx,
                     resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_analytic":
                 return await self.get_synthetic_result_analytic(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    payload=params.get("payload"), ctx=ctx,
                     resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_list":
                 return await self.get_synthetic_result_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    payload=params.get("payload"), ctx=ctx,
                     resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_location_summary_list":
                 return await self.get_location_summary_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    payload=params.get("payload"), ctx=ctx,
                     resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_test_summary_list":
                 return await self.get_test_summary_list(
-                    payload=self._normalize_tag_filter_key(params.get("payload")), ctx=ctx,
+                    payload=params.get("payload"), ctx=ctx,
                     resource_type=resource_type, tool_name=tool_name,
                 )
             elif operation == "get_synthetic_result_metadata":
@@ -183,7 +164,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_synthetic_result] called")
 
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 logger.warning("[get_synthetic_result] Payload parse error: %s", request_body.get("error"))
                 return request_body
@@ -215,8 +196,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic test playback results", logger)
+            if (err := self.check_response_status(response, "get synthetic test playback results", logger)):
+                return err
 
             logger.debug("[get_synthetic_result] Returning result")
             return json.loads(decode_response(response))
@@ -258,7 +239,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "to": 0,
                             "windowSize": 144000000
                         },
-                        "TagFilterExpression": {
+                        "tagFilterExpression": {
                             "type": "EXPRESSION",
                             "logicalOperator": "OR",
                             "elements": [
@@ -287,7 +268,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_synthetic_result_analytic] called")
 
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 logger.warning("[get_synthetic_result_analytic] Payload parse error: %s", request_body.get("error"))
                 return request_body
@@ -318,8 +299,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic test playback results analytic", logger)
+            if (err := self.check_response_status(response, "get synthetic test playback results analytic", logger)):
+                return err
 
             logger.debug("[get_synthetic_result_analytic] Returning result")
             return json.loads(decode_response(response))
@@ -361,7 +342,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "to": 0,
                             "windowSize": 144000000
                         },
-                        "TagFilterExpression": {
+                        "tagFilterExpression": {
                             "type": "EXPRESSION",
                             "logicalOperator": "OR",
                             "elements": [
@@ -389,7 +370,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_synthetic_result_list] called")
 
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 logger.warning("[get_synthetic_result_list] Payload parse error: %s", request_body.get("error"))
                 return request_body
@@ -420,8 +401,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic test playback results list", logger)
+            if (err := self.check_response_status(response, "get synthetic test playback results list", logger)):
+                return err
 
             logger.debug("[get_synthetic_result_list] Returning result")
             return json.loads(decode_response(response))
@@ -463,7 +444,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_location_summary_list] called")
 
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 logger.warning("[get_location_summary_list] Payload parse error: %s", request_body.get("error"))
                 return request_body
@@ -493,8 +474,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get location summary list", logger)
+            if (err := self.check_response_status(response, "get location summary list", logger)):
+                return err
 
             logger.debug("[get_location_summary_list] Returning result")
             return json.loads(decode_response(response))
@@ -527,7 +508,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                             "granularity": 600
                             }
                         ],
-                        "TagFilterExpression": {
+                        "tagFilterExpression": {
                             "type": "EXPRESSION",
                             "elements": [
                             {
@@ -556,7 +537,7 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
         try:
             logger.debug("[get_test_summary_list] called")
 
-            request_body = parse_payload(payload)
+            request_body = StructureValidator.normalize_tag_filter_key(parse_payload(payload))
             if "error" in request_body:
                 logger.warning("[get_test_summary_list] Payload parse error: %s", request_body.get("error"))
                 return request_body
@@ -588,8 +569,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get test summary list", logger)
+            if (err := self.check_response_status(response, "get test summary list", logger)):
+                return err
 
             logger.debug("[get_test_summary_list] Returning result")
             return json.loads(decode_response(response))
@@ -640,8 +621,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic result metadata", logger)
+            if (err := self.check_response_status(response, "get synthetic result metadata", logger)):
+                return err
 
             logger.debug("[get_synthetic_result_metadata] Returning metadata for testid=%s, testresultid=%s", testid, testresultid)
             return json.loads(decode_response(response))
@@ -701,8 +682,8 @@ class SyntheticTestPlaybackResultsMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get synthetic result detail data", logger)
+            if (err := self.check_response_status(response, "get synthetic result detail data", logger)):
+                return err
 
             logger.debug("[get_synthetic_result_detail_data] Returning detail data for testid=%s, testresultid=%s, detail_type=%s, name=%s", testid, testresultid, detail_type, name)
             return json.loads(decode_response(response))

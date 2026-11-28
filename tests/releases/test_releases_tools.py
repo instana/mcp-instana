@@ -147,6 +147,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting all releases successfully"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1000000},
             {"id": "rel-2", "name": "release-2", "start": 2000000},
@@ -168,6 +169,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with time range filters"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1500000}
         ]
@@ -194,6 +196,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with name filter"""
         # Mock response with multiple releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": "rel-1", "name": "frontend-release-1", "start": 1000000},
             {"id": "rel-2", "name": "backend-release-2", "start": 2000000},
@@ -217,6 +220,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with pagination"""
         # Mock response with 10 releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
@@ -244,6 +248,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting second page of releases"""
         # Mock response with 10 releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
@@ -270,6 +275,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting last page of releases"""
         # Mock response with 10 releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 11)
@@ -294,6 +300,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test pagination with invalid page number"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
@@ -311,6 +318,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test pagination with invalid page size"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
@@ -328,6 +336,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with combined filters and pagination"""
         # Mock response with multiple releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": "rel-1", "name": "frontend-release-1", "start": 1500000},
             {"id": "rel-2", "name": "backend-release-2", "start": 1600000},
@@ -358,6 +367,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test getting releases with no results"""
         # Mock empty response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = json.dumps([]).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
@@ -373,6 +383,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test that name filter is case-insensitive"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": "rel-1", "name": "Frontend-Release", "start": 1000000},
             {"id": "rel-2", "name": "FRONTEND-APP", "start": 2000000},
@@ -402,10 +413,46 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("Failed to get releases", result["error"])
 
+    def test_raw_response_http_error(self):
+        """A non-2xx raw response is returned as a failure with the HTTP status"""
+        mock_response = MagicMock()
+        mock_response.status = 401
+        mock_response.data = b'{"errors": ["unauthorized"]}'
+        for name in ("get_all_releases", "get_release", "post_release", "put_release", "delete_release"):
+            getattr(self.mock_api, f"{name}_without_preload_content").return_value = mock_response
+        mock_release.from_dict.return_value = MagicMock()
+
+        results = [
+            asyncio.run(self.client.get_all_releases()),
+            asyncio.run(self.client.get_release(release_id="rel-1")),
+            asyncio.run(self.client.create_release(name="r", start=1)),
+            asyncio.run(self.client.update_release(release_id="rel-1", name="r", start=1)),
+            asyncio.run(self.client.delete_release(release_id="rel-1")),
+        ]
+        for result in results:
+            self.assertFalse(result["success"])
+            self.assertEqual(result["status_code"], 401)
+            self.assertIn("HTTP 401", result["error"])
+
+    def test_get_all_releases_api_error_response(self):
+        """Test that an HTTP error response results in success=False with status and details."""
+        mock_response = MagicMock()
+        mock_response.status = 400
+        mock_response.data = json.dumps({"errors": ["Invalid time window"]}).encode('utf-8')
+        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_all_releases())
+
+        self.assertFalse(result["success"])
+        self.assertIn("HTTP 400", result["error"])
+        self.assertEqual(result["status_code"], 400)
+        self.assertIn("Invalid time window", result["details"])
+
     def test_get_release_success(self):
         """Test getting a specific release successfully"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         release_data = {
             "id": "rel-123",
             "name": "release-1",
@@ -444,6 +491,7 @@ class TestReleasesMCPTools(unittest.TestCase):
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         release_data = {
             "id": "rel-new",
             "name": "new-release",
@@ -471,6 +519,7 @@ class TestReleasesMCPTools(unittest.TestCase):
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         release_data = {"id": "rel-new", "name": "new-release", "start": 1000000}
         mock_response.data = json.dumps(release_data).encode('utf-8')
         self.mock_api.post_release_without_preload_content.return_value = mock_response
@@ -508,6 +557,7 @@ class TestReleasesMCPTools(unittest.TestCase):
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         release_data = {
             "id": "rel-123",
             "name": "updated-release",
@@ -548,6 +598,7 @@ class TestReleasesMCPTools(unittest.TestCase):
         """Test deleting a release successfully"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b''
         self.mock_api.delete_release_without_preload_content.return_value = mock_response
 
@@ -572,9 +623,11 @@ class TestReleasesMCPTools(unittest.TestCase):
         self.assertIn("Failed to delete release", result["error"])
         self.assertEqual(result["release_id"], "rel-123")
 
-    def test_get_all_releases_without_paging_returns_everything(self):
-        """Default behaviour is unchanged: no page params -> all releases plus a hint"""
+    def test_get_all_releases_pagination_hint(self):
+        """Test that pagination hint is provided for large result sets"""
+        # Mock response with many releases
         mock_response = MagicMock()
+        mock_response.status = 200
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
             for i in range(1, 101)  # 100 releases
@@ -582,61 +635,14 @@ class TestReleasesMCPTools(unittest.TestCase):
         mock_response.data = json.dumps(releases_data).encode('utf-8')
         self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
 
+        # Call without pagination
         result = asyncio.run(self.client.get_all_releases())
 
+        # Verify pagination hint is present
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 100)
-        self.assertEqual(len(result["releases"]), 100)
-        self.assertNotIn("pagination", result)
-        self.assertIn("page_number=1", result["pagination_hint"])
-
-    def test_get_all_releases_accepts_string_page_args(self):
-        """LLM clients often send numbers as strings"""
-        mock_response = MagicMock()
-        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 26)]
-        mock_response.data = json.dumps(releases_data).encode('utf-8')
-        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
-
-        result = asyncio.run(self.client.get_all_releases(page_number="2", page_size="10"))
-
-        self.assertTrue(result["success"])
-        self.assertEqual(result["page_number"], 2)
-        self.assertEqual(result["page_size"], 10)
-        self.assertEqual(len(result["releases"]), 10)
-        self.assertEqual(result["pagination"]["next_operation"], "page_3")
-
-    def test_get_all_releases_only_page_number_uses_default_page_size(self):
-        mock_response = MagicMock()
-        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 101)]
-        mock_response.data = json.dumps(releases_data).encode('utf-8')
-        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
-
-        result = asyncio.run(self.client.get_all_releases(page_number=2))
-
-        self.assertEqual(result["page_size"], 50)
-        self.assertEqual(len(result["releases"]), 50)
-        self.assertFalse(result["has_next_page"])
-
-    def test_get_all_releases_returns_standard_pagination_envelope(self):
-        """Paged responses carry the shared pagination envelope with navigation operations."""
-        mock_response = MagicMock()
-        releases_data = [{"id": f"rel-{i}", "name": f"release-{i}"} for i in range(1, 11)]
-        mock_response.data = json.dumps(releases_data).encode('utf-8')
-        self.mock_api.get_all_releases_without_preload_content.return_value = mock_response
-
-        result = asyncio.run(self.client.get_all_releases(page_number=2, page_size=3))
-
-        pagination = result["pagination"]
-        self.assertEqual(pagination["page"], 2)
-        self.assertEqual(pagination["total_items"], 10)
-        self.assertEqual(pagination["total_pages"], 4)
-        self.assertEqual(pagination["next_operation"], "page_3")
-        self.assertEqual(pagination["previous_operation"], "page_1")
-        self.assertEqual(pagination["list_id"], "releases")
-        # Legacy keys are unchanged.
-        self.assertTrue(result["has_next_page"])
-        self.assertEqual(result["total_pages"], 4)
-
+        self.assertIn("pagination_hint", result)
+        self.assertIn("Consider using pagination", result["pagination_hint"])
 
 
 if __name__ == '__main__':

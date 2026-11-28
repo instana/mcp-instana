@@ -79,15 +79,6 @@ sys.modules['instana_client.configuration'].Configuration = mock_configuration
 sys.modules['instana_client.api_client'].ApiClient = mock_api_client
 sys.modules['instana_client.api.events_api'].EventsApi = mock_events_api
 
-def create_agent_monitoring_events_client(read_token: str, base_url: str):
-    with patch('src.core.utils.with_header_auth', mock_with_header_auth):
-        module = importlib.import_module('src.event.events_tools')
-        module = importlib.reload(module)
-        return module.AgentMonitoringEventsMCPTools(
-            read_token=read_token,
-            base_url=base_url,
-        )
-
 def make_streaming_response(body: bytes, status: int = 200):
     """Return a mock HTTPResponse whose .read(n) yields chunks like a real stream.
 
@@ -134,10 +125,15 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         # Create the client
         self.read_token = "test_token"
         self.base_url = "https://test.instana.io"
-        self.client = create_agent_monitoring_events_client(
-            read_token=self.read_token,
-            base_url=self.base_url,
-        )
+        from src.event.events_tools import AgentMonitoringEventsMCPTools
+        with patch('src.core.utils.with_header_auth', mock_with_header_auth):
+            import importlib as _importlib
+            _module = _importlib.import_module('src.event.events_tools')
+            _module = _importlib.reload(_module)
+            self.client = _module.AgentMonitoringEventsMCPTools(
+                read_token=self.read_token,
+                base_url=self.base_url,
+            )
 
         # Set up the client's API attribute
         self.client.events_api = self.events_api
@@ -1631,6 +1627,17 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertIn("from_time", result)
         self.assertIn("to_time", result)
 
+    def test_convert_time_range_to_window_size_values(self):
+        """Behaviour is preserved through the delegating wrapper."""
+        self.assertEqual(
+            self.client._convert_time_range_to_window_size("last 2 hours"),
+            2 * 60 * 60 * 1000,
+        )
+        self.assertEqual(
+            self.client._convert_time_range_to_window_size("gibberish"),
+            10 * 60 * 1000,
+        )
+
     def test_extract_event_filters_returns_only_allowed_keys(self):
         """_extract_event_filters should whitelist keys and apply defaults."""
         raw = {
@@ -2186,6 +2193,20 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         self.assertEqual(result["failed_retrievals"], 1)
         self.assertEqual(result["successful_retrievals"], 0)
 
+    def test_get_events_by_ids_fallback_206_is_reported_as_failure(self):
+        """A 206 has an undefined body in the spec, so the fallback must not parse it."""
+        self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
+
+        mock_response = MagicMock()
+        mock_response.status = 206
+        mock_response.data = b'[{"eventId": "e1"}]'
+        self.events_api.get_events_by_ids_without_preload_content.return_value = mock_response
+
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
+
+        self.assertEqual(result["failed_retrievals"], 1)
+        self.assertEqual(result["successful_retrievals"], 0)
+
     def test_get_events_by_ids_fallback_json_error(self):
         """get_events_by_ids fallback should handle JSON parse errors."""
         self.events_api.get_events_by_ids.side_effect = Exception("Batch API failure")
@@ -2222,6 +2243,72 @@ class TestAgentMonitoringEventsMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1"]))
 
         self.assertEqual(result["failed_retrievals"], 1)
+
+
+    # -------------------------------------------------------------------------
+    # Tests for entity_label filtering — get_kubernetes_info_events
+    # -------------------------------------------------------------------------
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; it must not be analysed as event data."""
+
+    def setUp(self):
+        self.events_api = MagicMock()
+        with patch('src.core.utils.with_header_auth', mock_with_header_auth):
+            import importlib as _importlib
+            _module = _importlib.import_module('src.event.events_tools')
+            _module = _importlib.reload(_module)
+            self.client = _module.AgentMonitoringEventsMCPTools(
+                read_token="test_token",
+                base_url="https://test.instana.io",
+            )
+        self.client.events_api = self.events_api
+        patcher = patch(
+            "src.event.events_tools.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _assert_timeout_error(self, result):
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("events", result)
+        self.assertNotIn("analysis", result)
+
+    def test_get_kubernetes_info_events_timeout(self):
+        result = asyncio.run(self.client.get_kubernetes_info_events())
+
+        self._assert_timeout_error(result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_get_agent_monitoring_events_timeout(self):
+        result = asyncio.run(self.client.get_agent_monitoring_events())
+
+        self._assert_timeout_error(result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_get_events_by_ids_batch_timeout_skips_per_event_fallback(self):
+        result = asyncio.run(self.client.get_events_by_ids(event_ids=["e1", "e2", "e3"]))
+
+        self._assert_timeout_error(result)
+        # Only the batch call ran; a timeout must not trigger one more call per event ID.
+        self.mock_keepalive.assert_called_once()
+        self.events_api.get_events_by_ids_without_preload_content.assert_not_called()
 
 
 if __name__ == '__main__':

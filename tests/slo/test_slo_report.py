@@ -477,6 +477,42 @@ class TestSLOReportMCPTools(unittest.TestCase):
         asyncio.run(run_test())
 
 
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; it must not be read as a response."""
+
+    def setUp(self):
+        self.client = SLOReportMCPTools(read_token="test_token", base_url="https://test.instana.com")
+        self.client.report_api = MagicMock()
+        patcher = patch(
+            "src.slo.slo_report.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_get_slo_report_timeout_returns_timeout_error(self):
+        result = asyncio.run(self.client.get_slo_report(slo_id="slo-123"))
+
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("status_code", result)
+        self.mock_keepalive.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
 

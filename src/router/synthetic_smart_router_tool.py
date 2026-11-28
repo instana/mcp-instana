@@ -188,25 +188,25 @@ TEST_PLAYBACK (resource_type="test_playback"):
                 get_location_summary_list, get_test_summary_list, get_synthetic_result_metadata,
                 get_synthetic_result_detail_data
     All operations use payload param except metadata/detail which use flat params.
-    ALL TagFilterExpression filters require "entity": "NOT_APPLICABLE".
+    ALL tagFilterExpression filters require "entity": "NOT_APPLICABLE".
 
     get_synthetic_result - Aggregated metrics. Uses "metrics" key.
         payload: {metrics, timeFrame, pagination, order}
 
     get_synthetic_result_analytic - Per-test reduction. Uses "syntheticMetrics" key.
         analyticFunction="LAST_VALUE" returns the most recent run per test.
-        payload: {syntheticMetrics, analyticFunction, timeFrame, pagination, order, TagFilterExpression}
+        payload: {syntheticMetrics, analyticFunction, timeFrame, pagination, order, tagFilterExpression}
 
     get_synthetic_result_list - One row per run, no aggregation. Uses "syntheticMetrics" key.
         For metricsStatus filter use "numberValue": 1 (pass) / 0 (fail) — NOT plain "value".
-        payload: {syntheticMetrics, timeFrame, pagination, order, TagFilterExpression}
+        payload: {syntheticMetrics, timeFrame, pagination, order, tagFilterExpression}
 
     get_location_summary_list - PoP metadata only (id, label, status, linkedTests). No success rates.
         Use get_test_summary_list for health data. payload: {timeFrame, pagination}
 
     get_test_summary_list - Health, errors, and per-location pass rates in one call. Use for all health/failure/error questions.
         Each item has locationStatusList: [{locationId, successRate, totalTestRuns, successRuns, locationDisplayLabel, locationType}].
-        Uses "metrics" key. payload: {metrics: [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}], timeFrame, pagination, TagFilterExpression}
+        Uses "metrics" key. payload: {metrics: [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}], timeFrame, pagination, tagFilterExpression}
 
     get_synthetic_result_metadata - Discover available detail file types. params (flat): {testid, testresultid, start_time}
 
@@ -309,7 +309,7 @@ Examples:
     resource_type="settings", operation="get_location_by_id", params={"location_name": "ap-south-1(Mumbai)"}
     # test_playback
     resource_type="test_playback", operation="get_synthetic_result_analytic", params={"payload": {"syntheticMetrics": ["synthetic.metricsResponseTime", "synthetic.metricsStatus"], "analyticFunction": "LAST_VALUE", "timeFrame": {"to": 0, "windowSize": 144000000}}}
-    resource_type="test_playback", operation="get_synthetic_result_list", params={"payload": {"syntheticMetrics": ["synthetic.metricsStatus", "synthetic.errors"], "timeFrame": {"to": 0, "windowSize": 3600000}, "TagFilterExpression": {"type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "stringValue": "<location_id>"}}}
+    resource_type="test_playback", operation="get_synthetic_result_list", params={"payload": {"syntheticMetrics": ["synthetic.metricsStatus", "synthetic.errors"], "timeFrame": {"to": 0, "windowSize": 3600000}, "tagFilterExpression": {"type": "TAG_FILTER", "name": "synthetic.locationId", "operator": "EQUALS", "entity": "NOT_APPLICABLE", "stringValue": "<location_id>"}}}
     resource_type="test_playback", operation="get_test_summary_list", params={"payload": {"metrics": [{"metric": "success_rate", "aggregation": "MEAN", "granularity": 600}], "timeFrame": {"to": 0, "windowSize": 1800000}}}
     resource_type="test_playback", operation="get_synthetic_result_metadata", params={"testid": "abc123", "testresultid": "res456"}
     resource_type="test_playback", operation="get_synthetic_result_detail_data", params={"testid": "abc123", "testresultid": "res456", "detail_type": "HAR"}

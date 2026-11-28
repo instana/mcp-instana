@@ -33,6 +33,7 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -183,8 +184,8 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
-            if response_data.status != 200:
-                return self.handle_api_error_response(response_data, "get snapshot", logger)
+            if (err := self.check_response_status(response_data, "get snapshot", logger)):
+                return err
 
             response_text = decode_response(response_data)
             try:
@@ -371,7 +372,9 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
 
     def _parse_snapshots_response(self, response, detailed: bool) -> Dict[str, Any]:
         """Parse a raw HTTP response from post_snapshots and return the result dict."""
-        if response.status != 200:
+        if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+            return response
+        if not is_success_status(response):
             return {
                 "error": f"SDK returned status {response.status}",
                 "details": response.data.decode('utf-8') if response.data else None,
@@ -440,7 +443,8 @@ class InfrastructureResourcesMCPTools(BaseInstanaClient):
                 ),
                 ctx=ctx, operation_name="post_snapshots",
             )
-            logger.debug(f"SDK response status: {response.status}")
+            if not isinstance(response, dict):  # dict is the timeout error from sdk_call_with_keepalive
+                logger.debug(f"SDK response status: {response.status}")
             return self._parse_snapshots_response(response, detailed)
 
         except Exception as e:

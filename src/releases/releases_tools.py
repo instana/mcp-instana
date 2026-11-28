@@ -93,6 +93,9 @@ class ReleasesMCPTools(BaseInstanaClient):
             # Map our parameter names to API parameter names (var_from, to)
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_releases_without_preload_content, var_from=from_time, to=to_time), ctx=ctx, operation_name="get_all_releases", resource_type=resource_type, tool_name=tool_name)
 
+            if (err := self.check_response_status(response, "get all releases", logger)):
+                return {"success": False, **err}
+
             # Read and parse the response
             response_data = response.data
             all_releases = json.loads(response_data) if response_data else []
@@ -112,6 +115,7 @@ class ReleasesMCPTools(BaseInstanaClient):
             if page_number is None and page_size is None:
                 # No pagination requested - return all results (unchanged default behaviour)
                 logger.info(f"Retrieved {total_count} releases (no pagination)")
+
                 return {
                     "success": True,
                     "count": total_count,
@@ -191,6 +195,9 @@ class ReleasesMCPTools(BaseInstanaClient):
             # Use without_preload_content to avoid pydantic validation issues
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_release_without_preload_content, release_id=release_id), ctx=ctx, operation_name="get_release", resource_type=resource_type, tool_name=tool_name)
 
+            if (err := self.check_response_status(response, "get release", logger)):
+                return {"success": False, **err, "release_id": release_id}
+
             # Read and parse the response
             response_data = response.data
             release_dict = json.loads(response_data) if response_data else None
@@ -260,6 +267,9 @@ class ReleasesMCPTools(BaseInstanaClient):
 
             # Use without_preload_content to avoid pydantic validation issues
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.post_release_without_preload_content, release=release), ctx=ctx, operation_name="post_release", resource_type=resource_type, tool_name=tool_name)
+
+            if (err := self.check_response_status(response, "create release", logger)):
+                return {"success": False, **err, "name": name}
 
             # Read and parse the response
             response_data = response.data
@@ -331,6 +341,9 @@ class ReleasesMCPTools(BaseInstanaClient):
             # Use without_preload_content to avoid pydantic validation issues
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.put_release_without_preload_content, release_id=release_id, release=release), ctx=ctx, operation_name="put_release", resource_type=resource_type, tool_name=tool_name)
 
+            if (err := self.check_response_status(response, "update release", logger)):
+                return {"success": False, **err, "release_id": release_id}
+
             # Read and parse the response
             response_data = response.data
             release_dict = json.loads(response_data) if response_data else None
@@ -374,6 +387,9 @@ class ReleasesMCPTools(BaseInstanaClient):
 
             # Use without_preload_content to avoid pydantic validation issues
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_release_without_preload_content, release_id=release_id), ctx=ctx, operation_name="delete_release", resource_type=resource_type, tool_name=tool_name)
+
+            if (err := self.check_response_status(response, "delete release", logger)):
+                return {"success": False, **err, "release_id": release_id}
 
             # Read the response (delete typically returns empty response)
             _ = response.data

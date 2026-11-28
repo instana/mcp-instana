@@ -15,7 +15,7 @@ DEFAULT_GROUP_BY_TAG_ENTITY = 'NOT_APPLICABLE'
 DEFAULT_BEACON_TYPE = 'PAGELOAD'
 DEFAULT_TIME_FRAME = {'windowSize': 3600000}
 DEFAULT_GROUP_METRICS = [{'metric': 'beaconCount', 'aggregation': 'SUM'}]
-DEFAULT_GROUP = {'groupByTag': 'beacon.page.name'}
+DEFAULT_GROUP = {'groupbyTag': 'beacon.page.name'}
 DEFAULT_EMPTY_EXPRESSION = {'type': 'EXPRESSION', 'logicalOperator': 'AND', 'elements': []}
 DEFAULT_BEACON_PAGINATION = {'retrievalSize': 20, 'offset': 0}
 
@@ -51,11 +51,13 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.core.validation import (
+    ENTITY_GUIDANCE_EUM,
     VALID_WEBSITE_BEACON_TYPES,
     StructureValidator,
 )
@@ -153,17 +155,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         )
 
     def _map_group_fields(self, group: Dict[str, str]) -> Dict[str, str]:
-        mapped_group: Dict[str, str] = {}
-        if "groupByTag" in group:
-            mapped_group["groupbyTag"] = group["groupByTag"]
-        elif "groupbyTag" in group:
-            mapped_group["groupbyTag"] = group["groupbyTag"]
-
-        if "groupByTagEntity" in group:
-            mapped_group["groupbyTagEntity"] = group["groupByTagEntity"]
-        elif "groupbyTagEntity" in group:
-            mapped_group["groupbyTagEntity"] = group["groupbyTagEntity"]
-
+        # Aliases are already normalised at the service entry; only fill defaults here.
+        mapped_group: Dict[str, str] = dict(group)
         mapped_group.setdefault("groupbyTag", DEFAULT_GROUP_BY_TAG)
         mapped_group.setdefault("groupbyTagEntity", DEFAULT_GROUP_BY_TAG_ENTITY)
         return mapped_group
@@ -300,8 +293,9 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 Example: [
                     {"metric": "beaconCount", "aggregation": "SUM", "granularity": 60}
                 ]
-            group: Grouping configuration
-                Example: {"groupByTag": "beacon.page.name"}
+            group: Grouping configuration. Requires `groupbyTag` AND `groupbyTagEntity`
+                (lowercase `b`); `groupByTag` style aliases are tolerated.
+                Example: {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"}
             tag_filter_expression: Filter expression for tags
                 Example: {
                     "type": "TAG_FILTER",
@@ -329,6 +323,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 f"beacon_type={beacon_type}, time_frame={time_frame}"
             )
 
+            group = StructureValidator.normalize_group(group)
+
             user_provided_metrics = metrics is not None
             beacon_type = beacon_type or DEFAULT_BEACON_TYPE
 
@@ -338,7 +334,7 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
 
             validation_errors = self._collect_structure_validation_errors([
                 (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-                (StructureValidator.validate_group, group, {"required": False}),
+                (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_EUM}),
                 (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
                 (StructureValidator.validate_time_frame, time_frame, {}),
                 (StructureValidator.validate_order, order, {}),
@@ -418,7 +414,9 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 logger.debug("[get_website_beacon_groups] Successfully received response from get_beacon_groups")
 
                 # Check if the response was successful
-                if response.status != 200:
+                if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response
+                if not is_success_status(response):
                     error_message = f"Failed to get website beacon groups: HTTP {response.status}"
                     logger.error(f"[get_website_beacon_groups] {error_message}")
 
@@ -688,6 +686,9 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(result, "get website beacons", logger)):
+                return err
+
             # Process results
             response_text = decode_response(result)
             result_dict = json.loads(response_text)
@@ -754,8 +755,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
                 "name": "group",
                 "description": "Grouping configuration (REQUIRED)",
                 "examples": [
-                    {"groupByTag": "beacon.page.name"},
-                    {"groupByTag": "beacon.user.country"}
+                    {"groupbyTag": "beacon.page.name", "groupbyTagEntity": "NOT_APPLICABLE"},
+                    {"groupbyTag": "beacon.user.country", "groupbyTagEntity": "NOT_APPLICABLE"}
                 ]
             })
 
@@ -830,8 +831,8 @@ class WebsiteAnalyzeMCPTools(BaseInstanaClient):
         # Extract tag name from group
         group_tag = None
         if group:
-            # Handle both groupByTag and groupbyTag
-            group_tag = group.get("groupByTag") or group.get("groupbyTag")
+            # Group aliases are already normalised at the service entry.
+            group_tag = group.get("groupbyTag")
 
         # Combine all tags
         all_tags = filter_tags + ([group_tag] if group_tag else [])

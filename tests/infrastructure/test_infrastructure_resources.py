@@ -489,11 +489,11 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
                 "tags": [],
                 "data": {
                     "name": "my-app",
-                    "version": "1.0.3",
+                    "version": "1.0.0",
                     "description": "Test app",
                     "pid": 1234,
-                    "versions": {"node": "16.0.0", "v8": "9.0.0", "uv": "1.0.3"},
-                    "sensorVersion": "1.0.3",
+                    "versions": {"node": "16.0.0", "v8": "9.0.0", "uv": "1.0.0"},
+                    "sensorVersion": "1.0.0",
                     "dependencies": {"express": "4.0.0"},
                     "startTime": 1234567890,
                     "http": {"/api": {}},
@@ -545,6 +545,45 @@ class TestInfrastructureResourcesMCPTools(unittest.TestCase):
         result = asyncio.run(self.client.post_snapshots(snapshot_ids=['snap1']))
 
         self.assertTrue("error" in result or result.get("elicitation_needed"))
+
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; it must not be read as a response."""
+
+    def setUp(self):
+        self.client = create_infrastructure_resources_client(
+            read_token="test_token",
+            base_url="https://test.instana.io",
+        )
+        self.client.resources_api = MagicMock()
+        patcher = patch(
+            "src.infrastructure.infrastructure_resources.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_post_snapshots_timeout_returns_timeout_error(self):
+        result = asyncio.run(self.client.post_snapshots(snapshot_ids=['snap1'], detailed=False))
+
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("SDK returned status", result["error"])
+        self.mock_keepalive.assert_called_once()
 
 
 if __name__ == '__main__':

@@ -22,6 +22,7 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     process_tag_catalog_response,
     project_metric_card,
     register_as_tool,
@@ -80,8 +81,8 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get mobile app tag catalog", logger)
+            if (err := self.check_response_status(response, "get mobile app tag catalog", logger)):
+                return err
 
             # Read and parse the response content
             response_text = decode_response(response)
@@ -139,7 +140,9 @@ class MobileAppCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get mobile app catalog metrics: HTTP {response.status}"
                 logger.error(f"[get_mobile_app_metric_catalog] {error_message}")
 

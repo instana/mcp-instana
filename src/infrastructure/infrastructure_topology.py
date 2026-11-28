@@ -308,6 +308,9 @@ class InfrastructureTopologyMCPTools(BaseInstanaClient):
                 response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_topology_without_preload_content, include_data=include_data), ctx=ctx, operation_name="get_topology_without_preload_content")
                 logger.debug("SDK call successful using get_topology_without_preload_content")
 
+                if (err := self.check_response_status(response, "get topology", logger)):
+                    return err
+
                 result, error = self._parse_topology_response(response)
                 if error:
                     return error

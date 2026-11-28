@@ -146,8 +146,8 @@ class MobileAppSessionMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get mobile app session beacons", logger)
+            if (err := self.check_response_status(response, "get mobile app session beacons", logger)):
+                return err
 
             # Read and parse the response content
             response_text = decode_response(response)
@@ -369,8 +369,8 @@ class MobileAppSessionReplayMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
-                return self.handle_api_error_response(response, "get mobile app session replay action beacons", logger)
+            if (err := self.check_response_status(response, "get mobile app session replay action beacons", logger)):
+                return err
 
             # Read and parse the response content
             response_text = decode_response(response)

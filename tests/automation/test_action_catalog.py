@@ -114,6 +114,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test successful get_action_matches call"""
         # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {
             "matches": [
                 {"id": "action1", "name": "Action 1", "score": 0.95},
@@ -159,6 +160,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches with string payload"""
         # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {
             "matches": [
                 {"id": "action1", "name": "Action 1", "score": 0.95}
@@ -196,10 +198,35 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         # Check that the result contains an error
         self.assertTrue("error" in result or result.get("elicitation_needed"))
 
+    def test_raw_response_http_error(self):
+        """A non-2xx raw response is returned as an HTTP error, not parsed as data"""
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.data = b'{"errors": ["boom"]}'
+        api = self.action_catalog_api
+        api.get_actions_without_preload_content.return_value = mock_response
+        api.get_action_by_id_without_preload_content.return_value = mock_response
+        api.get_action_matches_without_preload_content.return_value = mock_response
+        api.get_action_matches_by_id_and_time_window_without_preload_content.return_value = mock_response
+        tools = self.action_catalog_tools
+
+        results = [
+            asyncio.run(tools.get_actions(api_client=api)),
+            asyncio.run(tools.get_action_types(api_client=api)),
+            asyncio.run(tools.get_action_tags(api_client=api)),
+            asyncio.run(tools.get_action_details(action_id="a1", api_client=api)),
+            asyncio.run(tools.get_action_matches(payload={"name": "CPU"}, api_client=api)),
+            asyncio.run(tools.get_action_matches_by_id_and_time_window(application_id="app-1", api_client=api)),
+        ]
+        for result in results:
+            self.assertEqual(result["status_code"], 500)
+            self.assertIn("HTTP 500", result["error"])
+
     def test_get_actions_success(self):
         """Test successful get_actions call"""
         # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [
             {"id": "action1", "name": "Action 1", "type": "script"},
             {"id": "action2", "name": "Action 2", "type": "command"}
@@ -236,6 +263,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test successful get_action_details call"""
         # Mock response - the method expects a response object with data attribute
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {
             "id": "action1",
             "name": "Test Action",
@@ -274,6 +302,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test successful get_action_types call"""
         # Mock response - the method calls get_actions_without_preload_content
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [
             {"id": "action1", "name": "Action 1", "type": "script"},
             {"id": "action2", "name": "Action 2", "type": "command"},
@@ -301,6 +330,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test successful get_action_tags call"""
         # Mock response - the method calls get_actions_without_preload_content
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [
             {"id": "action1", "name": "Action 1", "tags": ["monitoring", "cpu"]},
             {"id": "action2", "name": "Action 2", "tags": ["maintenance", "memory"]},
@@ -391,6 +421,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches with target_snapshot_id"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {
             "matches": [
                 {"id": "action1", "name": "Action 1", "score": 0.95}
@@ -415,6 +446,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_action_matches_without_preload_content.return_value = mock_response
 
@@ -432,6 +464,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_actions with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
 
@@ -446,6 +479,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_details with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_action_by_id_without_preload_content.return_value = mock_response
 
@@ -461,6 +495,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_types with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
 
@@ -475,6 +510,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_tags with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_actions_without_preload_content.return_value = mock_response
 
@@ -489,6 +525,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test successful get_action_matches_by_id_and_time_window call"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [
             {
                 "score": 0.95,
@@ -567,6 +604,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches_by_id_and_time_window with snapshot_id"""
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = []
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -587,6 +625,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches_by_id_and_time_window with API error response"""
         # Mock response with error
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {"errors": ["API error occurred"]}
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -604,6 +643,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches_by_id_and_time_window with JSON decode error"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b'invalid json'
         self.action_catalog_api.get_action_matches_by_id_and_time_window_without_preload_content.return_value = mock_response
 
@@ -705,6 +745,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_actions with dict format response"""
         # Mock response with dict format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {
             "actions": [
                 {"id": "action1", "name": "Action 1", "type": "script"}
@@ -726,6 +767,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_actions with unexpected format"""
         # Mock response with unexpected format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {"unexpected": "format"}
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -743,6 +785,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_types with empty actions list"""
         # Mock response with empty list
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = []
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -760,6 +803,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_tags with empty actions list"""
         # Mock response with empty list
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = []
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -777,6 +821,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_tags with non-list format"""
         # Mock response with dict format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {"unexpected": "format"}
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')
@@ -794,6 +839,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches with list response format"""
         # Mock response with list format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = [
             {
                 "score": 0.95,
@@ -826,6 +872,7 @@ class TestActionCatalogMCPTools(unittest.TestCase):
         """Test get_action_matches_by_id_and_time_window with dict response"""
         # Mock response with dict format
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response_data = {"result": "data"}
         import json
         mock_response.data = json.dumps(mock_response_data).encode('utf-8')

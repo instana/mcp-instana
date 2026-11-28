@@ -157,6 +157,19 @@ def _result_summary(result: Any) -> str:
     return type(result).__name__
 
 
+class SdkCallTimeout(dict):
+    """Error dict returned by :func:`sdk_call_with_keepalive` when ``INSTANA_API_TIMEOUT`` fires.
+
+    It is a plain ``dict`` subclass, so existing ``isinstance(x, dict)`` checks keep
+    working. Use :func:`is_sdk_timeout` where a real result may also be a dict.
+    """
+
+
+def is_sdk_timeout(result: Any) -> bool:
+    """Return True when *result* is the timeout marker from :func:`sdk_call_with_keepalive`."""
+    return isinstance(result, SdkCallTimeout)
+
+
 async def sdk_call_with_keepalive(
     coro,
     ctx=None,
@@ -165,21 +178,19 @@ async def sdk_call_with_keepalive(
     resource_type: Optional[str] = None,
     tool_name: Optional[str] = None,
 ) -> Any:
-    """Run an SDK coroutine while sending periodic keepalive log messages.
+    """Run an SDK coroutine while logging periodic "still waiting" messages.
 
-    MCP clients connect over Server-Sent Events (SSE) or streamable HTTP.
-    Both transports rely on a persistent TCP connection that passes through
-    corporate proxies, AWS ALBs, and Cloudflare — each of which has its own
-    idle-timeout (often 60 s).  If the server sends no bytes during a long
-    Instana API call the connection is silently dropped.
+    While the SDK call is in-flight, a ticker running concurrently in an anyio
+    task group writes an INFO line to the server log every *keepalive_interval*
+    seconds, so a slow Instana API call is visible to operators as in-progress
+    rather than hung.
 
-    This helper runs the SDK coroutine and a keepalive ticker concurrently in
-    an anyio task group.  While the SDK call is in-flight, an MCP
-    ``notifications/message`` log frame is sent every *keepalive_interval*
-    seconds via ``ctx.log``.  Unlike ``ctx.report_progress`` (which requires
-    the client to include a ``progressToken``), ``ctx.log`` is an
-    unconditional push — real bytes on the wire that reset every idle timer
-    between client and server.
+    The ticker only writes to the server log; nothing is sent to the MCP
+    client.  It deliberately avoids ``ctx.log``: the MCP logging capability is
+    deprecated (SEP-2577) and every ``ctx.log`` call emits an
+    ``MCPDeprecationWarning``.  Note that this means no bytes are sent while
+    the call is in flight, so idle proxies in front of the server rely on
+    their own timeouts being longer than ``INSTANA_API_TIMEOUT``.
 
     A hard wall-clock timeout is also enforced.  When the SDK call does not
     complete within *timeout* seconds the task group is cancelled and an error
@@ -209,7 +220,7 @@ async def sdk_call_with_keepalive(
             This name is also used for debug-level log entries that bracket the
             SDK call: ``"[<name>] Starting SDK call"`` and
             ``"[<name>] SDK call completed"``.
-        keepalive_interval: Seconds between keepalive log messages (default 5).
+        keepalive_interval: Seconds between "still waiting" server log lines (default 5).
         resource_type: Optional resource type from the smart router (e.g.
             ``"events"``, ``"metrics"``).  Included in debug log lines when
             provided so that log entries can be correlated back to the
@@ -218,7 +229,8 @@ async def sdk_call_with_keepalive(
             ``"manage_events"``).  Included in debug log lines when provided.
 
     Returns:
-        The return value of ``coro``, or an error dict when the deadline fires.
+        The return value of ``coro``, or an :class:`SdkCallTimeout` (a ``dict``) when
+        the deadline fires.
     """
     effective_timeout = _api_timeout()
     prefix = _build_log_prefix(operation_name, tool_name, resource_type)
@@ -234,25 +246,12 @@ async def sdk_call_with_keepalive(
         cancel_scope.cancel()
 
     async def _run_keepalive() -> None:
-        # Only called when ctx is truthy (see task group below).
+        # Only started when ctx is truthy (see _run_with_task_group below).
         elapsed = 0
         while True:
             await anyio.sleep(keepalive_interval)
             elapsed += keepalive_interval
-            try:
-                # ctx.log → send_notification → write_stream.send() can block
-                # indefinitely on a zero-buffer channel if the message_router
-                # or SSE writer is itself blocked (common under simultaneous
-                # stateless requests).  Wrap in a short deadline so a stalled
-                # notification never prevents the SDK result from being returned.
-                with anyio.move_on_after(2):
-                    await ctx.log(
-                        f"{prefix} Waiting for Instana API response… ({elapsed}s elapsed)",
-                        level="info",
-                        logger_name=operation_name,
-                    )
-            except Exception:
-                pass  # Never allow keepalive errors to propagate.
+            logger.info("%s Waiting for Instana API response… (%ds elapsed)", prefix, elapsed)
 
     async def _run_with_task_group() -> None:
         """Run SDK + keepalive concurrently, unwrapping single-exception groups."""
@@ -278,7 +277,7 @@ async def sdk_call_with_keepalive(
             "Increase the limit with INSTANA_API_TIMEOUT env var.",
             prefix, effective_timeout,
         )
-        return {
+        return SdkCallTimeout({
             "error": (
                 f"Instana API call timed out after {effective_timeout}s "
                 f"({operation_name}). The Instana server did not respond in time. "
@@ -287,7 +286,7 @@ async def sdk_call_with_keepalive(
             "operation": operation_name,
             "resource_type": resource_type,
             "timeout_seconds": effective_timeout,
-        }
+        })
 
     if not result_holder:
         raise RuntimeError("SDK call completed without result — this should not happen")
@@ -429,6 +428,27 @@ def _resolve_stream_chunk_size(chunk_size: Optional[int] = None) -> int:
 DEFAULT_CHARSET = 'utf-8'
 
 
+def is_success_status(response, allowed=None) -> bool:
+    """Return True when *response* carries a successful HTTP status.
+
+    By default any 2xx status is a success, which mirrors the rule the
+    instana-client SDK applies in ``ApiClient.response_deserialize``. The
+    ``*_without_preload_content`` SDK variants skip that rule and never raise on
+    HTTP errors, so callers using them must check the status themselves.
+
+    Args:
+        response: Object with an integer ``status`` attribute.
+        allowed: Optional collection of status codes to accept instead of the
+            whole 2xx range (for endpoints where e.g. a 206 body is undefined).
+    """
+    status = getattr(response, "status", None)
+    if not isinstance(status, int):
+        return False
+    if allowed is not None:
+        return status in allowed
+    return 200 <= status < 300
+
+
 def _charset_from_content_type(content_type: str) -> str:
     """Return the charset parameter from a Content-Type header value, or DEFAULT_CHARSET."""
     if not isinstance(content_type, str):
@@ -563,6 +583,32 @@ class BaseInstanaClient:
             "User-Agent": f"MCP-server/{__version__}",
         }
 
+    def check_response_status(
+        self, response, operation_name: str, logger, allowed=None
+    ) -> Optional[Dict[str, Any]]:
+        """Return an error dict if *response* is not successful, else ``None``.
+
+        Intended usage::
+
+            if (err := self.check_response_status(response, "get foo", logger)):
+                return err
+
+        ``sdk_call_with_keepalive`` returns an error dict (not a response) when the
+        call times out; that dict is passed through unchanged.
+
+        See :func:`is_success_status` for the success rule and ``allowed``.
+        """
+        if is_sdk_timeout(response) or isinstance(response, dict):
+            return response
+        if is_success_status(response, allowed):
+            return None
+        if not isinstance(getattr(response, "status", None), int):
+            # Not an HTTP response at all (e.g. None) - never hand back a non-dict.
+            message = f"Failed to {operation_name}: unexpected response of type {type(response).__name__}"
+            logger.error(f"[{operation_name}] {message}")
+            return {"error": message}
+        return self.handle_api_error_response(response, operation_name, logger)
+
     def handle_api_error_response(self, response, operation_name: str, logger) -> Dict[str, Any]:
         """
         Handle API error responses in a standardized way.
@@ -589,40 +635,6 @@ class BaseInstanaClient:
         except Exception:
             return {"error": error_message, "status_code": response.status}
 
-    async def make_request(self, endpoint: str, params: Union[Dict[str, Any], None] = None, method: str = "GET", json: Union[Dict[str, Any], None] = None) -> Dict[str, Any]:
-        """Make a request to the Instana API."""
-        if endpoint is None:
-            return {"error": "Endpoint cannot be None"}
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        headers = self.get_headers()
-
-        try:
-            ssl_verify = self.ssl_verify
-            if method.upper() == "GET":
-                response = requests.get(url, headers=headers, params=params, verify=ssl_verify)
-            elif method.upper() == "POST":
-                # Use the json parameter if provided, otherwise use params
-                data_to_send = json if json is not None else params
-                response = requests.post(url, headers=headers, json=data_to_send, verify=ssl_verify)
-            elif method.upper() == "PUT":
-                data_to_send = json if json is not None else params
-                response = requests.put(url, headers=headers, json=data_to_send, verify=ssl_verify)
-            elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, params=params, verify=ssl_verify)
-            else:
-                return {"error": f"Unsupported HTTP method: {method}"}
-
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.HTTPError as err:
-            print(f"HTTP Error: {err}", file=sys.stderr)
-            return {"error": f"HTTP Error: {err}"}
-        except requests.exceptions.RequestException as err:
-            print(f"Error: {err}", file=sys.stderr)
-            return {"error": f"Error: {err}"}
-        except Exception as e:
-            print(f"Unexpected error: {e!s}", file=sys.stderr)
-            return {"error": f"Unexpected error: {e!s}"}
 
 def decode_response(response) -> str:
     """

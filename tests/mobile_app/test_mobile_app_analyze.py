@@ -56,9 +56,10 @@ from src.mobile_app.mobile_app_analyze import MobileAppAnalyzeMCPTools, clean_na
 
 
 class MockResponse:
-    def __init__(self, payload, headers=None):
+    def __init__(self, payload, headers=None, status=200):
         self.data = payload
         self.headers = headers or {}
+        self.status = status
 
 
 VALID_MOBILE_CATALOG = [
@@ -350,11 +351,53 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         result = await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.mobileApp.name"},
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
             api_client=self.mock_api,
         )
 
         self.assertIsInstance(result, dict)
+
+    @PATCH_CATALOG
+    @patch.dict(sys.modules, {"instana_client.models.tag_filter_expression_element": MagicMock()})
+    async def test_beacon_groups_alias_group_is_normalised_before_sdk(self, _mock_fetch):
+        """groupByTag/groupByTagEntity must reach the SDK model as the canonical keys."""
+        self.mock_api.get_mobile_app_beacon_groups_without_preload_content.return_value = MockResponse(
+            json.dumps({"items": [], "totalHits": 0}).encode("utf-8"),
+            {"Content-Type": "application/json"},
+        )
+        class FakeTagFilter(dict):
+            def to_dict(self):
+                return dict(self)
+
+        sys.modules["instana_client.models.tag_filter_expression_element"].TagFilterExpressionElement.from_dict = (
+            lambda data: FakeTagFilter(data)
+        )
+        model = sys.modules["instana_client.models.get_mobile_app_beacon_groups"]
+        captured = {}
+
+        class CapturingModel(FakeModel):
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                super().__init__(**kwargs)
+
+        original = model.GetMobileAppBeaconGroups
+        model.GetMobileAppBeaconGroups = CapturingModel
+        try:
+            result = await self.client.get_mobile_app_beacon_groups(
+                metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
+                group={"groupByTag": "mobileBeacon.mobileApp.name", "groupByTagEntity": "NOT_APPLICABLE"},
+                beacon_type="SESSION_START",
+                api_client=self.mock_api,
+            )
+        finally:
+            model.GetMobileAppBeaconGroups = original
+
+        self.assertNotIn("error", result)
+        self.assertNotIn("elicitation_required", result)
+        self.assertEqual(
+            captured["group"],
+            {"groupbyTag": "mobileBeacon.mobileApp.name", "groupbyTagEntity": "NOT_APPLICABLE"},
+        )
 
     @PATCH_CATALOG
     async def test_beacon_groups_success(self, _mock_fetch):
@@ -378,7 +421,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         result = await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.mobileApp.name"},
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
             beacon_type="SESSION_START",
             api_client=self.mock_api,
         )
@@ -402,7 +445,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         result = await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.mobileApp.name"},
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
             tag_filter_expression=tag_filter,
             beacon_type="SESSION_START",
             api_client=self.mock_api,
@@ -443,7 +486,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         result = await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.mobileApp.name"},
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
             beacon_type="SESSION_START",
             api_client=self.mock_api,
         )
@@ -459,7 +502,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.view.name"},
+            group={"groupbyTag": "mobileBeacon.view.name"},
             beacon_type="SESSION_START",
             api_client=self.mock_api,
         )
@@ -476,7 +519,7 @@ class TestMobileAppAnalyzeMCPTools(unittest.IsolatedAsyncioTestCase):
 
         result = await self.client.get_mobile_app_beacon_groups(
             metrics=[{"metric": "beaconCount", "aggregation": "SUM"}],
-            group={"groupByTag": "mobileBeacon.mobileApp.name"},
+            group={"groupbyTag": "mobileBeacon.mobileApp.name"},
             beacon_type="SESSION_START",
             order={"by": "beaconCount", "direction": "DESC"},
             pagination={"retrievalSize": 10},

@@ -42,7 +42,12 @@ from src.core.catalog_cache import (
     _cache_get,
     _cache_set,
 )
-from src.core.utils import decode_response, normalize_beacon_type, project_metric_card
+from src.core.utils import (
+    decode_response,
+    is_success_status,
+    normalize_beacon_type,
+    project_metric_card,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +249,9 @@ async def fetch_metric_catalog_internal(
     except Exception as e:
         return {"error": f"Failed to fetch metric catalog: {e}"}
 
-    if response.status != 200:
+    if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+        return response
+    if not is_success_status(response):
         return {"error": f"Failed to fetch metric catalog for pre-flight validation: HTTP {response.status}"}
 
     try:

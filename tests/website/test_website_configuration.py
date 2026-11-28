@@ -670,6 +670,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         self.config_api.get_website_geo_mapping_rules = Mock(return_value=None)
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US\n10.0.0.1,UK"
         self.config_api.get_website_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -693,6 +694,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         )
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         self.config_api.get_website_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -711,6 +713,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         self.config_api.get_website_geo_mapping_rules = Mock(return_value=None)
 
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"Some non-CSV data"
         self.config_api.get_website_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -742,6 +745,22 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
         self.assertIn("error", result[0])
+
+    def test_get_website_geo_mapping_rules_primary_timeout_dict_surfaces_error(self):
+        """A timeout dict from the primary call is an error, not CSV rows, and is not retried"""
+        timeout = {"error": "Instana API call timed out after 1s (get_website_geo_mapping_rules)."}
+        self.config_api.get_website_geo_mapping_rules = Mock(return_value=timeout)
+        self.config_api.get_website_geo_mapping_rules_without_preload_content = Mock()
+
+        result = asyncio.run(self.client.get_website_geo_mapping_rules(website_id="web1"))
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+        self.assertIn("error", result[0])
+        self.assertIn("timed out", result[0]["error"])
+        self.config_api.get_website_geo_mapping_rules_without_preload_content.assert_not_called()
+
+
 
     def test_set_website_geo_mapping_rules_success(self):
         """Test set_website_geo_mapping_rules with successful response"""
@@ -1500,6 +1519,7 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         """Test execute_advanced_config_operation with get_geo_rules"""
         self.config_api.get_website_geo_mapping_rules = Mock(return_value=None)
         mock_response = Mock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         self.config_api.get_website_geo_mapping_rules_without_preload_content = Mock(
             return_value=mock_response
@@ -1684,6 +1704,41 @@ class TestWebsiteConfigurationMCPTools(unittest.TestCase):
         # Should return error due to missing import
         self.assertIn("error", result)
 
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; a delete must not report success."""
+
+    def setUp(self):
+        self.client = WebsiteConfigurationMCPTools(read_token="test_token", base_url="https://test.instana.io")
+        self.client.config_api = MagicMock()
+        patcher = patch(
+            "src.website.website_configuration.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_delete_website_timeout(self):
+        result = asyncio.run(self.client.delete_website(website_id="web1"))
+
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.mock_keepalive.assert_called_once()
 
 
 if __name__ == '__main__':

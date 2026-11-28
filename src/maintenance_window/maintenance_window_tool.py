@@ -99,6 +99,7 @@ from src.core.timestamp_utils import get_current_timestamp
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_success_status,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -598,7 +599,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         Returns:
             Error dict if status indicates failure, None if successful
         """
-        if hasattr(response, 'status') and response.status not in (200, 201, 204):
+        if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+            return response
+        # Any 2xx is success (matches the SDK rule). put_maintenance_config_v2
+        # declares 200 and 202, which the previous (200, 201, 204) tuple rejected.
+        if hasattr(response, 'status') and not is_success_status(response):
             error_msg = f"HTTP {response.status} error during {operation_name}"
             logger.error(error_msg)
             return {
@@ -750,7 +755,9 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             response_data = response.data
             result = json.loads(response_data) if response_data else {}
 
-            if not result:
+            # 202 Accepted / 204 No Content legitimately carry no body; the window id
+            # is already known from the request, so continue with an empty result.
+            if not result and response.status not in (202, 204):
                 logger.error("❌ Failed to create maintenance window: Empty response")
                 return {"error": "Empty response from API"}
 
@@ -1441,14 +1448,17 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             if status_error:
                 return status_error
 
-            # Parse response
+            # Parse response (202 Accepted / 204 No Content carry no body)
             response_data = response.data
             result = json.loads(response_data) if response_data else {}
-            if not result:
+            if not result and response.status not in (202, 204):
                 return {"error": "Empty response from API"}
 
             # Fetch updated window for verification
             response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_maintenance_config_v2_without_preload_content, id=window_id), ctx=ctx, operation_name="get_maintenance_config_v2_verify", resource_type=resource_type, tool_name=tool_name)
+            status_error = self._check_response_status(response, "get updated maintenance window")
+            if status_error:
+                return status_error
             response_data = response.data
             updated_window = json.loads(response_data) if response_data else {}
 

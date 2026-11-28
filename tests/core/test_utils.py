@@ -19,6 +19,7 @@ from src.core.utils import (
     BaseInstanaClient,
     __version__,
     _make_chunk_reader,
+    is_success_status,
     register_as_tool,
     with_header_auth,
 )
@@ -866,7 +867,7 @@ class TestVersionImport(unittest.TestCase):
         # Re-import to trigger the version logic
         importlib.reload(src.core.utils)
 
-        # Check that the fallback version was used (updated to 1.0.4)
+        # Check that the fallback version was used (matches src.core.utils fallback)
         self.assertEqual(src.core.utils.__version__, "1.0.4")
 
     def test_version_used_in_headers(self):
@@ -1438,6 +1439,79 @@ class TestHandleApiErrorResponse(unittest.TestCase):
         mock_logger.error.assert_called_once()
 
 
+class TestIsSuccessStatus(unittest.TestCase):
+    """Test the is_success_status helper"""
+
+    @staticmethod
+    def _resp(status):
+        r = MagicMock()
+        r.status = status
+        return r
+
+    def test_any_2xx_is_success(self):
+        for status in (200, 201, 202, 204, 206):
+            with self.subTest(status=status):
+                self.assertTrue(is_success_status(self._resp(status)))
+
+    def test_non_2xx_is_failure(self):
+        for status in (199, 301, 400, 401, 404, 500, 503):
+            with self.subTest(status=status):
+                self.assertFalse(is_success_status(self._resp(status)))
+
+    def test_allowed_overrides_2xx_range(self):
+        self.assertTrue(is_success_status(self._resp(200), allowed={200}))
+        self.assertFalse(is_success_status(self._resp(206), allowed={200}))
+        self.assertFalse(is_success_status(self._resp(204), allowed={200}))
+
+    def test_non_int_status_is_failure(self):
+        # A bare MagicMock().status is a MagicMock, not an int.
+        self.assertFalse(is_success_status(MagicMock()))
+        self.assertFalse(is_success_status(object()))
+
+
+class TestCheckResponseStatus(unittest.TestCase):
+    """Test BaseInstanaClient.check_response_status"""
+
+    def setUp(self):
+        self.client = BaseInstanaClient(read_token="test_token", base_url="https://test.instana.io")
+        self.logger = MagicMock()
+
+    def _resp(self, status, body=b'{"errors": ["boom"]}'):
+        r = MagicMock()
+        r.status = status
+        r.headers = {}
+        r.data = body
+        return r
+
+    def test_success_returns_none(self):
+        for status in (200, 202, 204):
+            with self.subTest(status=status):
+                self.assertIsNone(self.client.check_response_status(self._resp(status), "op", self.logger))
+
+    def test_failure_returns_error_dict_with_status(self):
+        result = self.client.check_response_status(self._resp(401), "get thing", self.logger)
+        self.assertEqual(result["error"], "Failed to get thing: HTTP 401")
+        self.assertEqual(result["status_code"], 401)
+        self.assertIn("boom", result["details"])
+
+    def test_allowed_is_forwarded(self):
+        self.assertIsNone(self.client.check_response_status(self._resp(200), "op", self.logger, allowed={200}))
+        result = self.client.check_response_status(self._resp(206), "op", self.logger, allowed={200})
+        self.assertEqual(result["status_code"], 206)
+
+    def test_timeout_error_dict_is_passed_through(self):
+        timeout_dict = {"error": "Instana API call timed out after 180s (op).", "operation": "op"}
+        self.assertIs(self.client.check_response_status(timeout_dict, "op", self.logger), timeout_dict)
+
+    def test_sdk_timeout_marker_is_passed_through(self):
+        from src.core.utils import SdkCallTimeout, is_sdk_timeout
+
+        timeout = SdkCallTimeout({"error": "timed out"})
+        self.assertIsInstance(timeout, dict)
+        self.assertTrue(is_sdk_timeout(timeout))
+        self.assertFalse(is_sdk_timeout({"error": "timed out"}))
+        self.assertIs(self.client.check_response_status(timeout, "op", self.logger), timeout)
+
 
 class TestProcessTagCatalogResponse(unittest.TestCase):
     """Test the process_tag_catalog_response function"""
@@ -1680,7 +1754,7 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
         self.assertEqual(result, "events_data")
 
     def test_keepalive_log_sent_when_sdk_is_slow(self):
-        """The keepalive ticker fires at least once when the SDK call takes longer than the interval."""
+        """The ticker writes a server-side log line (not ctx.log) when the SDK call outlasts the interval."""
         from unittest.mock import AsyncMock, MagicMock
 
         from src.core.utils import sdk_call_with_keepalive
@@ -1692,11 +1766,16 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
             await asyncio.sleep(0.12)
             return "slow_result"
 
-        result = asyncio.run(
-            sdk_call_with_keepalive(slow_coro(), ctx=ctx, keepalive_interval=0.05)
-        )
+        with patch("src.core.utils.logger.info") as mock_info:
+            result = asyncio.run(
+                sdk_call_with_keepalive(slow_coro(), ctx=ctx, keepalive_interval=0.05)
+            )
         self.assertEqual(result, "slow_result")
-        ctx.log.assert_awaited()
+        self.assertTrue(
+            any("Waiting for Instana API response" in c.args[0] for c in mock_info.call_args_list)
+        )
+        # ctx.log is deprecated (SEP-2577) and must not be used.
+        ctx.log.assert_not_awaited()
 
     def test_sdk_exception_propagates_without_ctx(self):
         """SDK exceptions propagate to the caller when ctx=None."""
@@ -1797,6 +1876,8 @@ class TestSdkCallWithKeepalive(unittest.TestCase):
 
         self.assertIn("error", result)
         self.assertIn("timed out", result["error"])
+        from src.core.utils import is_sdk_timeout
+        self.assertTrue(is_sdk_timeout(result))
         self.assertEqual(result["operation"], "get_events")
         self.assertIsNone(result["resource_type"])
 

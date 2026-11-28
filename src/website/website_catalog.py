@@ -23,6 +23,7 @@ from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
     decode_response,
+    is_success_status,
     process_tag_catalog_response,
     project_metric_card,
     register_as_tool,
@@ -84,7 +85,9 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get website catalog metrics: HTTP {response.status}"
                 logger.error(f"[get_website_catalog_metrics] {error_message}")
 
@@ -223,7 +226,9 @@ class WebsiteCatalogMCPTools(BaseInstanaClient):
             )
 
             # Check if the response was successful
-            if response.status != 200:
+            if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                return response
+            if not is_success_status(response):
                 error_message = f"Failed to get website tag catalog: HTTP {response.status}"
                 logger.error(f"[get_website_tag_catalog] {error_message}")
 

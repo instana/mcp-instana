@@ -148,7 +148,9 @@ ANALYZE (resource_type="analyze"):
             - elements: Array of TAG_FILTER objects (for EXPRESSION type)
         - pagination: Pagination settings
             - retrievalSize: Number of items to retrieve (default: 200 for entities, 20 for groups)
-        - groupBy (optional, for get_entity_groups only): Array of tag names from get_tag_catalog
+        - groupBy (optional, for get_entity_groups only): Array of plain tag-name strings from get_tag_catalog,
+            e.g. ["host.name"]. This is a list of strings, unlike the Application/Log alert-config groupBy,
+            which takes [{"tagName": "<tag>"}] objects.
         - order (optional, for get_entity_groups only): Ordering settings
             - by: Field to order by (e.g., "label")
             - direction: "ASC" or "DESC"
@@ -243,7 +245,8 @@ ALERT_CONFIG (resource_type="alert_config"):
               name (string, max 256): Alert name
               description (string): Alert description
               granularity (int): Evaluation window in ms — one of: 60000, 300000, 600000, 900000, 1200000, 1800000
-              groupBy (list): Tag names to group by (can be empty [])
+              groupBy (list): Plain tag-name strings to group by, e.g. ["host.name"] (can be empty []).
+                  Not objects: the {"tagName": ...} shape is only for Application and Log alert configs.
               tagFilterExpression (dict): Entity filter — e.g. {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []}
               timeThreshold (dict): Time condition — e.g. {"type": "violationsInSequence", "timeWindow": 600000}
             OPTIONAL fields:

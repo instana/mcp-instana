@@ -81,6 +81,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1000000},
@@ -117,6 +118,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": "rel-1", "name": "release-1", "start": 1500000}
@@ -154,6 +156,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response with multiple releases
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": "rel-1", "name": "frontend-release-1", "start": 1000000},
@@ -189,6 +192,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response with 10 releases
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
@@ -228,6 +232,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response with 10 releases
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}
@@ -274,6 +279,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response with multiple releases
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": "rel-1", "name": "frontend-release-1", "start": 1500000},
@@ -315,6 +321,8 @@ class TestReleasesMCPToolsE2E:
         mock_api_client.get_all_releases_without_preload_content = MagicMock()
 
         mock_response = MagicMock()
+
+        mock_response.status = 200
         import json
         mock_response.data = json.dumps([]).encode('utf-8')
         mock_api_client.get_all_releases_without_preload_content.return_value = mock_response
@@ -373,6 +381,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         release_data = {
             "id": "rel-123",
@@ -437,6 +446,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         release_data = {
             "id": "rel-new",
@@ -472,6 +482,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         release_data = {"id": "rel-new", "name": "new-release", "start": 1000000}
         mock_response.data = json.dumps(release_data).encode('utf-8')
@@ -502,6 +513,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         release_data = {
             "id": "rel-123",
@@ -537,6 +549,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b''
         mock_api_client.delete_release_without_preload_content.return_value = mock_response
 
@@ -594,6 +607,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": "rel-1", "name": "Frontend-Release", "start": 1000000},
@@ -627,6 +641,7 @@ class TestReleasesMCPToolsE2E:
 
         # Mock response with many releases
         mock_response = MagicMock()
+        mock_response.status = 200
         import json
         releases_data = [
             {"id": f"rel-{i}", "name": f"release-{i}", "start": i * 1000000}

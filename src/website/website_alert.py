@@ -251,6 +251,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get active website alert configs", logger)):
+                return err
+
             return parse_alert_config_response(response, "website", website_id)
 
         except Exception as e:
@@ -295,6 +298,9 @@ class WebsiteAlertMCPTools(BaseInstanaClient):
                 operation_name="find_website_alert_config",
                 resource_type=resource_type, tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get website alert config", logger)):
+                return err
 
             return parse_single_alert_config_response(response)
 

@@ -21,6 +21,7 @@ except ImportError:
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_success_status,
     sdk_call_with_keepalive,
     with_header_auth,
 )
@@ -424,6 +425,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             # Call the API method
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_configs_without_preload_content, page_size=filters.get("page_size"), page=filters.get("page"), order_by=filters.get("order_by"), order_direction=filters.get("order_direction"), query=filters.get("query"), tag=filters.get("tag"), entity_type=filters.get("entity_type"), infra_entity_types=filters.get("infra_entity_types"), kubernetes_cluster_uuid=filters.get("kubernetes_cluster_uuid"), blueprint=filters.get("blueprint"), slo_ids=filters.get("slo_ids"), slo_status=filters.get("slo_status"), entity_ids=filters.get("entity_ids"), grouped=filters.get("grouped"), refresh=filters.get("refresh"), rbac_tags=filters.get("rbac_tags")), ctx=ctx, operation_name="get_all_slo_configs", resource_type=resource_type, tool_name=tool_name)
 
+            if (err := self.check_response_status(result, "get all SLO configs", logger)):
+                return err
+
             # Parse the JSON response manually
             try:
                 response_text = result.data.decode('utf-8')
@@ -481,6 +485,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
             # Call the API method
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_slo_config_by_id_without_preload_content, id=id, refresh=refresh), ctx=ctx, operation_name="get_slo_config_by_id", resource_type=resource_type, tool_name=tool_name)
+
+            if (err := self.check_response_status(result, "get SLO config", logger)):
+                return err
 
             # Parse the JSON response manually.
             try:
@@ -628,11 +635,15 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             logger.debug("Calling create_slo_config_without_preload_content")
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.create_slo_config_without_preload_content, slo_config_with_rbac_tag=config_object), ctx=ctx, operation_name="create_slo_config", resource_type=resource_type, tool_name=tool_name)
 
+            # sdk_call_with_keepalive returns an error dict (not a response) on timeout
+            if isinstance(result, dict):
+                return result
+
             # Check HTTP status code
             logger.debug(f"API response status: {result.status}")
 
             # Handle non-success status codes
-            if result.status >= 400:
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details provided"
                 logger.error(f"API returned error status {result.status}: {error_text}")
                 return {
@@ -808,7 +819,22 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
             # Call the API method
             logger.debug(f"Calling update_slo_config_without_preload_content with id: {id}")
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.update_slo_config_without_preload_content, id=id, slo_config_with_rbac_tag=config_object), ctx=ctx, operation_name="update_slo_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.update_slo_config_without_preload_content, id=id, slo_config_with_rbac_tag=config_object), ctx=ctx, operation_name="update_slo_config", resource_type=resource_type, tool_name=tool_name)
+
+            # sdk_call_with_keepalive returns an error dict (not a response) on timeout
+            if isinstance(result, dict):
+                return result
+
+            # The raw-response variant never raises on HTTP errors, so check the status
+            # here; otherwise a rejected update would be masked by the re-fetch below.
+            logger.debug(f"API response status: {result.status}")
+            if not is_success_status(result):
+                error_text = result.data.decode('utf-8') if result.data else "No error details provided"
+                logger.error(f"API returned error status {result.status}: {error_text}")
+                return {
+                    "error": f"API error (status {result.status}): {error_text}",
+                    "status_code": result.status
+                }
 
             # The update endpoint returns 204 No Content or a sparse body — re-fetch
             # the full record so the caller always gets complete, non-null data back.
@@ -846,7 +872,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_slo_config called with id: {id}")
 
             # Call the API method
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_config, id=id), ctx=ctx, operation_name="delete_slo_config", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_slo_config, id=id), ctx=ctx, operation_name="delete_slo_config", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             logger.debug("Successfully deleted SLO config")
             return {
@@ -885,6 +913,9 @@ class SLOConfigurationMCPTools(BaseInstanaClient):
 
             # Call the API method
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_all_slo_config_tags_without_preload_content, query=query, tag=tag, entity_type=entity_type), ctx=ctx, operation_name="get_all_slo_config_tags", resource_type=resource_type, tool_name=tool_name)
+
+            if (err := self.check_response_status(result, "get SLO config tags", logger)):
+                return err
 
             try:
                 response_text = result.data.decode('utf-8')

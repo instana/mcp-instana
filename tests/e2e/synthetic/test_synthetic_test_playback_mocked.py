@@ -406,26 +406,6 @@ class TestSyntheticTestPlaybackE2E:
     # _normalize_tag_filter_key
     # ------------------------------------------------------------------
 
-    @pytest.mark.mocked
-    def test_normalize_tag_filter_key_renames_capital_variant(self, instana_credentials):
-        module = _load_module()
-        original = {"TagFilterExpression": {"a": 1}, "x": 2}
-
-        normalized = module.SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key(original)
-
-        assert normalized == {"tagFilterExpression": {"a": 1}, "x": 2}
-        assert "TagFilterExpression" in original  # caller's dict is not mutated
-
-    @pytest.mark.mocked
-    def test_normalize_tag_filter_key_leaves_other_inputs_untouched(self, instana_credentials):
-        module = _load_module()
-        normalize = module.SyntheticTestPlaybackResultsMCPTools._normalize_tag_filter_key
-        both = {"TagFilterExpression": 1, "tagFilterExpression": 2}
-
-        assert normalize(both) is both
-        assert normalize("a string") == "a string"
-        assert normalize(None) is None
-
     # ------------------------------------------------------------------
     # execute_playback_operation dispatcher
     # ------------------------------------------------------------------
@@ -456,29 +436,6 @@ class TestSyntheticTestPlaybackE2E:
             )
 
         assert result == {"ok": True}
-
-    @pytest.mark.asyncio
-    @pytest.mark.mocked
-    async def test_execute_playback_operation_normalizes_tag_filter_key(self, instana_credentials):
-        module = _load_module()
-        client = module.SyntheticTestPlaybackResultsMCPTools(
-            read_token=instana_credentials["api_token"], base_url=instana_credentials["base_url"]
-        )
-        captured = {}
-
-        async def _fake(payload=None, **kwargs):
-            captured["payload"] = payload
-            return {"ok": True}
-
-        with patch.object(client, "get_synthetic_result_list", _fake):
-            result = await client.execute_playback_operation(
-                "get_synthetic_result_list",
-                {"payload": {**SYNTH_METRICS_PAYLOAD, "TagFilterExpression": TAG_FILTER}},
-            )
-
-        assert result == {"ok": True}
-        assert "tagFilterExpression" in captured["payload"]
-        assert "TagFilterExpression" not in captured["payload"]
 
     @pytest.mark.asyncio
     @pytest.mark.mocked

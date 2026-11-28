@@ -21,6 +21,8 @@ from mcp.types import ToolAnnotations
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    decode_response,
+    is_success_status,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -467,7 +469,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_website called with website_id={website_id}")
 
             # Call the delete_website method from the SDK
-            await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_website, website_id=website_id), ctx=ctx, operation_name="delete_website", resource_type=resource_type, tool_name=tool_name)
+            result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_website, website_id=website_id), ctx=ctx, operation_name="delete_website", resource_type=resource_type, tool_name=tool_name)
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             logger.debug("Website deleted successfully")
             return {"success": True, "message": f"Website {website_id} deleted successfully"}
@@ -847,21 +851,30 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                                      resource_type: Optional[str], tool_name: Optional[str]) -> str:
         """Fetch raw CSV data via the high-level SDK call, falling back to the raw-response endpoint."""
         kw = {"ctx": ctx, "resource_type": resource_type, "tool_name": tool_name}
+        result = None
         try:
             result = await sdk_call_with_keepalive(
                 call_sdk_fn(api_client.get_website_geo_mapping_rules, website_id=website_id),
                 operation_name="get_website_geo_mapping_rules", **kw,
             )
-            if result is not None:
-                return str(result)
         except Exception as api_error:
             logger.warning(f"High-level API call failed: {api_error}, trying raw response")
+
+        if isinstance(result, dict):  # timeout error dict: surface it, don't retry or CSV-parse it
+            raise RuntimeError(result.get("error", "Timed out fetching geo mapping rules"))
+        if result is not None:
+            return str(result)
 
         # Fallback: raw HTTP response (also used when the high-level call returns None)
         response = await sdk_call_with_keepalive(
             call_sdk_fn(api_client.get_website_geo_mapping_rules_without_preload_content, website_id=website_id),
             operation_name="get_website_geo_mapping_rules_without_preload_content", **kw,
         )
+        if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+            raise RuntimeError(response.get("error", "Timed out fetching geo mapping rules"))
+        if hasattr(response, "status") and not is_success_status(response):
+            # Raise so the caller reports an error instead of CSV-parsing the error body.
+            raise RuntimeError(f"HTTP {getattr(response, 'status', 'unknown')}: {decode_response(response)}")
         if hasattr(response, 'data'):
             return response.data.decode('utf-8') if isinstance(response.data, bytes) else str(response.data)
         return str(response)
@@ -1046,7 +1059,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                 response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configuration_without_preload_content, website_id=website_id, source_map_config_id=source_map_config_id), ctx=ctx, operation_name="get_website_source_map_upload_configuration_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
                 # Check response status
-                if response.status != 200:
+                if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response
+                if not is_success_status(response):
                     error_message = f"Failed to get source map configuration: HTTP {response.status}"
                     logger.error(error_message)
                     try:
@@ -1106,7 +1121,9 @@ class WebsiteConfigurationMCPTools(BaseInstanaClient):
                 response = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_website_source_map_upload_configurations_without_preload_content, website_id=website_id), ctx=ctx, operation_name="get_website_source_map_upload_configurations_without_preload_content", resource_type=resource_type, tool_name=tool_name)
 
                 # Check response status
-                if response.status != 200:
+                if isinstance(response, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return response
+                if not is_success_status(response):
                     error_message = f"Failed to get source map configurations: HTTP {response.status}"
                     logger.error(error_message)
                     try:

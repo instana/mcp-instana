@@ -91,7 +91,6 @@ import src.infrastructure.infrastructure_alert_config as _alert_mod
 
 _alert_mod = importlib.reload(_alert_mod)
 InfrastructureAlertConfigMCPTools = _alert_mod.InfrastructureAlertConfigMCPTools
-_normalize_metric_group_by = _alert_mod._normalize_metric_group_by
 
 # Restore the real decorator so later test modules see the original behaviour
 _core_utils.with_header_auth = _original_with_header_auth
@@ -538,6 +537,20 @@ class TestInfraAlertConfigOperations(unittest.TestCase):
         # No elicitation — payload was valid and SDK mock returned 201
         self.assertNotIn('elicitation_needed', result)
 
+    def test_create_empty_body_204_is_success(self):
+        """A 2xx with no body must not hit json.loads('')."""
+        resp = _mock_response(204, {})
+        resp.data = b''
+        resp.read = lambda n=-1: b''
+        self.client.alert_api.create_infra_alert_config_without_preload_content.return_value = resp
+
+        result = asyncio.run(self.client.execute_alert_config_operation(
+            operation='create', payload=VALID_PAYLOAD
+        ))
+
+        self.assertNotIn('error', result)
+        self.assertTrue(result.get('success'))
+
     def test_create_blocked_by_validation(self):
         result = asyncio.run(self.client.execute_alert_config_operation(
             operation='create', payload={}
@@ -809,134 +822,6 @@ class TestInfraAlertConfigOperations(unittest.TestCase):
             operation='restore', id='abc', created=None
         ))
         self.assertTrue(result.get('elicitation_needed'))
-
-class TestNormalizeMetricGroupBy(unittest.TestCase):
-    """Unit tests for the _normalize_metric_group_by helper."""
-
-    def test_top_level_rule_missing_metric_group_by_is_defaulted(self):
-        payload = {'rule': {'alertType': 'genericRule', 'metricName': 'cpu.sys'}}
-        _normalize_metric_group_by(payload)
-        self.assertEqual(payload['rule']['metricGroupBy'], [])
-
-    def test_top_level_rule_existing_metric_group_by_is_preserved(self):
-        payload = {'rule': {'alertType': 'genericRule', 'metricGroupBy': ['metricId']}}
-        _normalize_metric_group_by(payload)
-        self.assertEqual(payload['rule']['metricGroupBy'], ['metricId'])
-
-    def test_rules_list_entries_without_metric_group_by_are_defaulted(self):
-        payload = {
-            'rules': [
-                {'rule': {'alertType': 'genericRule', 'metricName': 'cpu.sys'}},
-                {'rule': {'alertType': 'genericRule', 'metricName': 'memory.used', 'metricGroupBy': ['metricId']}},
-            ]
-        }
-        _normalize_metric_group_by(payload)
-        self.assertEqual(payload['rules'][0]['rule']['metricGroupBy'], [])
-        self.assertEqual(payload['rules'][1]['rule']['metricGroupBy'], ['metricId'])
-
-    def test_no_rule_key_is_noop(self):
-        payload = {'name': 'Alert without rule'}
-        _normalize_metric_group_by(payload)  # must not raise
-        self.assertNotIn('rule', payload)
-
-    def test_rule_not_a_dict_is_skipped(self):
-        payload = {'rule': 'not-a-dict'}
-        _normalize_metric_group_by(payload)  # must not raise
-        self.assertEqual(payload['rule'], 'not-a-dict')
-
-    def test_rules_entry_without_inner_rule_key_is_skipped(self):
-        payload = {'rules': [{'thresholdOperator': '>='}]}
-        _normalize_metric_group_by(payload)  # must not raise
-        self.assertNotIn('rule', payload['rules'][0])
-
-    def test_rules_entry_inner_rule_not_dict_is_skipped(self):
-        payload = {'rules': [{'rule': 'not-a-dict'}]}
-        _normalize_metric_group_by(payload)  # must not raise
-        self.assertEqual(payload['rules'][0]['rule'], 'not-a-dict')
-
-
-class TestCreateUpdateWithoutMetricGroupBy(unittest.TestCase):
-    """Integration-style tests: create/update must succeed when rule.metricGroupBy is absent."""
-
-    def setUp(self):
-        self.client = _make_client()
-        self.client.alert_api = MagicMock()
-
-    def test_create_without_rule_metric_group_by_does_not_error(self):
-        """create should NOT return an error when rule.metricGroupBy is omitted."""
-        payload_no_mgb = {
-            **VALID_PAYLOAD,
-            'rule': {
-                'alertType': 'genericRule',
-                'metricName': 'cpu.sys',
-                'entityType': 'host',
-                'aggregation': 'MEAN',
-                'crossSeriesAggregation': 'MEAN',
-                # metricGroupBy intentionally absent
-            },
-        }
-        self.client.alert_api.create_infra_alert_config_without_preload_content.return_value = \
-            _mock_response(201, {**payload_no_mgb, 'id': 'new-id'})
-
-        result = asyncio.run(self.client.execute_alert_config_operation(
-            operation='create', payload=payload_no_mgb
-        ))
-
-        self.assertNotIn('error', result)
-        self.assertNotIn('elicitation_needed', result)
-
-    def test_update_without_rule_metric_group_by_does_not_error(self):
-        """update should NOT return an error when rule.metricGroupBy is omitted."""
-        payload_no_mgb = {
-            **VALID_PAYLOAD,
-            'rule': {
-                'alertType': 'genericRule',
-                'metricName': 'cpu.sys',
-                'entityType': 'host',
-                'aggregation': 'MEAN',
-                'crossSeriesAggregation': 'MEAN',
-                # metricGroupBy intentionally absent
-            },
-        }
-        self.client.alert_api.update_infra_alert_config_without_preload_content.return_value = \
-            _mock_response(200, {**payload_no_mgb, 'id': 'abc'})
-
-        result = asyncio.run(self.client.execute_alert_config_operation(
-            operation='update', id='abc', payload=payload_no_mgb
-        ))
-
-        self.assertNotIn('error', result)
-        self.assertNotIn('elicitation_needed', result)
-
-    def test_create_without_rules_list_metric_group_by_does_not_error(self):
-        """create with a rules list should NOT error when inner rule.metricGroupBy is absent."""
-        payload_rules = {
-            **VALID_PAYLOAD,
-            'rules': [
-                {
-                    'thresholdOperator': '>=',
-                    'rule': {
-                        'alertType': 'genericRule',
-                        'metricName': 'cpu.sys',
-                        'entityType': 'host',
-                        'aggregation': 'MEAN',
-                        'crossSeriesAggregation': 'MEAN',
-                        # metricGroupBy intentionally absent
-                    },
-                    'thresholds': {'WARNING': {'type': 'staticThreshold', 'value': 0.8}},
-                }
-            ],
-        }
-        self.client.alert_api.create_infra_alert_config_without_preload_content.return_value = \
-            _mock_response(201, {**payload_rules, 'id': 'new-id'})
-
-        result = asyncio.run(self.client.execute_alert_config_operation(
-            operation='create', payload=payload_rules
-        ))
-
-        self.assertNotIn('error', result)
-        self.assertNotIn('elicitation_needed', result)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,6 +21,7 @@ from src.core.alert_channel_utils import (
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_success_status,
     sdk_call_with_keepalive,
     with_header_auth,
 )
@@ -160,7 +161,7 @@ def _validate_kind(kind: Optional[str]) -> Optional[Dict[str, Any]]:
 
 def _handle_overview_response_error(response: Any) -> Optional[Dict[str, Any]]:
     """Check and handle HTTP error responses for get_overview."""
-    if not hasattr(response, "status") or response.status < 400:
+    if not hasattr(response, "status") or is_success_status(response):
         return None
     if response.status == 401:
         logger.warning("get_overview: 401 Unauthorized - API token is missing, invalid, or expired")
@@ -305,7 +306,7 @@ async def _fetch_and_resolve_name(
     if isinstance(overview_resp, dict):
         return None, None, overview_resp
 
-    if hasattr(overview_resp, "status") and overview_resp.status >= 400:
+    if hasattr(overview_resp, "status") and not is_success_status(overview_resp):
         if overview_resp.status == 401:
             logger.warning("get (name lookup): 401 Unauthorized - API token is missing, invalid, or expired")
             return None, None, {
@@ -336,7 +337,7 @@ async def _fetch_and_resolve_name(
 
 def _handle_get_response_error(response: Any, resolved_id: str) -> Optional[Dict[str, Any]]:
     """Check and handle HTTP error responses for get channel by ID."""
-    if not hasattr(response, "status") or response.status < 400:
+    if not hasattr(response, "status") or is_success_status(response):
         return None
     if response.status == 404:
         return {

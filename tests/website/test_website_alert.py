@@ -71,6 +71,7 @@ from src.core.utils import decode_response as _decode_response
 class MockResponse:
     def __init__(self, payload, headers=None):
         self.data = payload
+        self.status = 200
         self.headers = headers or {}
 
 
@@ -89,6 +90,24 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         self.assertEqual(self.client.read_token, "test_token")
         self.assertEqual(self.client.base_url, "https://test.instana.io")
 
+    def test_find_website_alert_config_http_error(self):
+        """A non-2xx raw response is returned as an HTTP error, not parsed as data"""
+        class ErrorResponse:
+            status = 500
+            headers = {}
+            data = b'{"errors": ["boom"]}'
+
+        api = self.client.config_api
+        api.find_active_website_alert_configs_without_preload_content = Mock(return_value=ErrorResponse())
+        api.find_website_alert_config_without_preload_content = Mock(return_value=ErrorResponse())
+
+        for result in (
+            asyncio.run(self.client.find_active_website_alert_configs(website_id="site1")),
+            asyncio.run(self.client.find_website_alert_config(id="alert1")),
+        ):
+            self.assertEqual(result["status_code"], 500)
+            self.assertIn("HTTP 500", result["error"])
+
     def test_find_website_alert_config_with_id_success(self):
         """Test find_website_alert_config with id parameter"""
         mock_config = {
@@ -100,6 +119,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -121,6 +141,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -138,6 +159,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -152,6 +174,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps([]).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -168,6 +191,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(expected_dict).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -212,6 +236,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -244,6 +269,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -260,6 +286,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -295,6 +322,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -319,6 +347,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(configs).encode('utf-8'))
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -335,6 +364,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(b"invalid json{")
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)
@@ -357,6 +387,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -375,6 +406,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps([]).encode('utf-8'))
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -403,6 +435,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -426,6 +459,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_configs).encode('utf-8'))
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -445,6 +479,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(json.dumps(mock_config).encode('utf-8'))
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -461,6 +496,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(b"invalid json{")
         self.client.config_api.find_active_website_alert_configs_without_preload_content = Mock(return_value=mock_response)
@@ -512,6 +548,7 @@ class TestWebsiteAlertMCPTools(unittest.TestCase):
         class MockResponse:
             def __init__(self, data):
                 self.data = data
+                self.status = 200
 
         mock_response = MockResponse(b"invalid json{")
         self.client.config_api.find_website_alert_config_without_preload_content = Mock(return_value=mock_response)

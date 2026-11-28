@@ -64,8 +64,8 @@ LLM/GenAI agents: route by what's asked, not by the agent's name.
 - Trace-level data (latency, errors, spans, prompt/output content, "most recently
   failed" calls) → analyze here. Prompt/output content is in span attributes.
   Not manage_events.
-- Entity metrics (token usage, cost, throughput, "list GenAI apps") →
-  manage_infrastructure (oTelLLM).
+- Entity metrics (LLM call count, token usage, cost, throughput, usage by model,
+  "list GenAI apps/services") → manage_infrastructure (oTelLLM).
 - Both (e.g. ".run.workflow traces with P95 latency and tokens"): get traces
   here, then token metrics from manage_infrastructure, joined on agent/service name.
 
@@ -132,11 +132,14 @@ METRICS (resource_type="metrics"):
 ALERT_CONFIG (resource_type="alert_config"):
     operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
     params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
+    payload.groupBy: list of at most ONE object, e.g. [{"tagName": "service.name"}]. Only valid when
+        evaluationType is "CUSTOM". It is NOT a list of strings (that shape is for infrastructure only).
 
 GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
     operations: find_active, find_versions, find, create, update, delete, enable, disable, restore
     params: {application_id OR application_name, id, alert_ids, valid_on, created, payload, page, page_size}
-
+    payload.groupBy: list of at most ONE object, e.g. [{"tagName": "service.name"}]. Only valid when
+        evaluationType is "CUSTOM". It is NOT a list of strings (that shape is for infrastructure only).
 PAGINATION (alert_config / global_alert_config find_active, settings get_all):
     alert_config / global_alert_config find_active return page 1 (10 items) by default. settings get_all
     returns every item unless page/page_size is given. Paged responses carry a pagination envelope

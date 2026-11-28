@@ -126,28 +126,6 @@ class TestMobileAppAnalyzeHelpersE2E:
     # -- _build_beacon_groups_query_params --------------------------------------------
 
     @pytest.mark.mocked
-    def test_build_beacon_groups_query_params_normalises_group_and_adds_extras(self, instana_credentials):
-        client = create_mobile_app_analyze_client(instana_credentials)
-
-        params = client._build_beacon_groups_query_params(
-            "SESSION_START",
-            _metrics(),
-            {"groupByTag": "mobileBeacon.view.name", "groupByTagEntity": "NOT_APPLICABLE"},
-            {"windowSize": 1},
-            {"type": "EXPRESSION", "logicalOperator": "AND", "elements": []},
-            {"by": "beaconCount", "direction": "DESC"},
-            {"retrievalSize": 5},
-        )
-
-        assert params["group"] == {
-            "groupbyTag": "mobileBeacon.view.name",
-            "groupbyTagEntity": "NOT_APPLICABLE",
-        }
-        assert params["order"] == {"by": "beaconCount", "direction": "DESC"}
-        assert params["pagination"] == {"retrievalSize": 5}
-        assert "tagFilterExpression" in params
-
-    @pytest.mark.mocked
     def test_build_beacon_groups_query_params_group_defaults(self, instana_credentials):
         client = create_mobile_app_analyze_client(instana_credentials)
 
@@ -432,17 +410,6 @@ class TestMobileAppAnalyzeHelpersE2E:
         assert "entity" in result["message"]
 
     @pytest.mark.mocked
-    def test_validate_tag_names_invalid_tag_names(self, instana_credentials):
-        client = create_mobile_app_analyze_client(instana_credentials)
-
-        result = client._validate_tag_names(
-            _tag_filter("beacon.page.name"), {"groupByTag": "bad.tag"}, "VIEW_CHANGE", use_case="GROUPING"
-        )
-
-        assert result["invalid_tags"] == ["beacon.page.name", "bad.tag"]
-        assert result["required_action"]["params"] == {"beacon_type": "VIEW_CHANGE", "use_case": "GROUPING"}
-
-    @pytest.mark.mocked
     def test_validate_tag_names_no_tags_extracted(self, instana_credentials):
         client = create_mobile_app_analyze_client(instana_credentials)
 
@@ -450,14 +417,6 @@ class TestMobileAppAnalyzeHelpersE2E:
 
         assert result["reason"] == "No valid tag names found in tag_filter_expression or group"
         assert result["required_action"]["operation"] == "get_mobile_app_tag_catalog"
-
-    @pytest.mark.mocked
-    def test_validate_tag_names_valid_and_empty(self, instana_credentials):
-        client = create_mobile_app_analyze_client(instana_credentials)
-
-        assert client._validate_tag_names(_tag_filter(), _group(), "SESSION_START") is None
-        assert client._validate_tag_names(None, None, "SESSION_START") is None
-        assert client._validate_tag_names(None, {"groupByTag": "mobileBeacon.x"}, "SESSION_START") is None
 
     # -- _validate_metrics ------------------------------------------------------------
 

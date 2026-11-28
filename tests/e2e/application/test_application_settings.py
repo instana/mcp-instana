@@ -44,6 +44,7 @@ def _write_api(response_body):
     """Mock api_client whose low-level add/put serialize+call_api path returns response_body."""
     mock_api = MagicMock()
     rest_response = MagicMock()
+    rest_response.status = 200
     rest_response.data = json.dumps(response_body).encode("utf-8")
     mock_api.api_client.call_api.return_value = rest_response
     mock_api._add_application_config_serialize.return_value = ("serialized",)
@@ -478,7 +479,8 @@ class TestApplicationSettingsApplicationE2E:
     @pytest.mark.asyncio
     @pytest.mark.mocked
     async def test_update_application_config_empty_response_returns_success(self, instana_credentials):
-        mock_api, _ = _write_api({})
+        mock_api, rest_response = _write_api({})
+        rest_response.data = b""
         client = create_application_settings_client(instana_credentials)
 
         result = await client._update_application_config(

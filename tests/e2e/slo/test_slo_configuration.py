@@ -436,6 +436,7 @@ class TestSLOConfigurationE2E:
     @pytest.mark.mocked
     async def test_update_slo_config_success_refetches(self, instana_credentials):
         mock_api = MagicMock()
+        mock_api.update_slo_config_without_preload_content.return_value.status = 200
         client = create_slo_configuration_client(instana_credentials)
         # The re-fetch goes through the auth decorator without the injected mock client,
         # so stub it on this instance only.
@@ -457,6 +458,7 @@ class TestSLOConfigurationE2E:
     ], ids=["json", "single-quoted", "python-literal"])
     async def test_update_slo_config_string_payload_formats(self, instana_credentials, make_payload):
         mock_api = MagicMock()
+        mock_api.update_slo_config_without_preload_content.return_value.status = 200
         client = create_slo_configuration_client(instana_credentials)
         client.get_slo_config_by_id = AsyncMock(return_value={"id": "slo-1"})
 

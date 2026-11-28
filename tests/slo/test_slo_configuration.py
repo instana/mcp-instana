@@ -11,7 +11,7 @@ import os
 import sys
 import unittest
 from functools import wraps
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # Create a null handler that will discard all log messages
@@ -998,6 +998,74 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_update_slo_config_api_error_is_not_masked(self):
+        """A rejected update must return the API error, not re-fetch the old record."""
+        async def run_test():
+            payload = {
+                "name": "Updated SLO",
+                "tags": ["test"],
+                "target": 0.98,
+                "entity": {
+                    "type": "application",
+                    "applicationId": "app-1",
+                    "boundaryScope": "ALL",
+                    "includeInternal": False,
+                    "includeSynthetic": False,
+                },
+                "indicator": {"type": "timeBased", "blueprint": "latency"},
+                "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}
+            }
+
+            mock_response = MagicMock()
+            mock_response.status = 400
+            mock_response.data = b'{"errors": ["invalid target"]}'
+
+            self.mock_api.update_slo_config_without_preload_content.return_value = mock_response
+
+            with patch.object(self.client, "get_slo_config_by_id", new=AsyncMock()) as mock_get:
+                result = await self.client.update_slo_config(id="slo-123", payload=payload)
+
+            self.assertIn("error", result)
+            self.assertEqual(result["status_code"], 400)
+            self.assertIn("invalid target", result["error"])
+            mock_get.assert_not_called()
+
+        asyncio.run(run_test())
+
+    def test_update_slo_config_success_refetches_record(self):
+        """A successful update still re-fetches and returns the full record."""
+        async def run_test():
+            payload = {
+                "name": "Updated SLO",
+                "tags": ["test"],
+                "target": 0.98,
+                "entity": {
+                    "type": "application",
+                    "applicationId": "app-1",
+                    "boundaryScope": "ALL",
+                    "includeInternal": False,
+                    "includeSynthetic": False,
+                },
+                "indicator": {"type": "timeBased", "blueprint": "latency"},
+                "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"}
+            }
+
+            mock_response = MagicMock()
+            mock_response.status = 204
+            mock_response.data = b""
+
+            self.mock_api.update_slo_config_without_preload_content.return_value = mock_response
+            full_record = {"success": True, "data": {"id": "slo-123", "name": "Updated SLO"}}
+
+            with patch.object(self.client, "get_slo_config_by_id", new=AsyncMock(return_value=full_record)) as mock_get:
+                result = await self.client.update_slo_config(id="slo-123", payload=payload)
+
+            self.assertEqual(result, full_record)
+            mock_get.assert_called_once()
+
+        asyncio.run(run_test())
+
+
     def test_update_slo_config_unsupported_entity_type(self):
         """Test updating SLO config with unsupported entity type."""
         async def run_test():
@@ -1364,6 +1432,75 @@ class TestSLOConfigurationMCPTools(unittest.TestCase):
         self.assertIn("indicator.blueprint", result["missing_parameters"])
         self.assertIn("timeWindow.type", result["missing_parameters"])
         self.assertIn("timeWindow.durationUnit", result["missing_parameters"])
+
+
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+_VALID_SLO_PAYLOAD = {
+    "name": "Test SLO",
+    "tags": ["test"],
+    "target": 0.95,
+    "entity": {
+        "type": "application",
+        "applicationId": "app-1",
+        "boundaryScope": "ALL",
+        "includeInternal": False,
+        "includeSynthetic": False,
+    },
+    "indicator": {"type": "timeBased", "blueprint": "latency"},
+    "timeWindow": {"type": "rolling", "duration": 1, "durationUnit": "week"},
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; it must not be read as a response."""
+
+    def setUp(self):
+        self.client = SLOConfigurationMCPTools(read_token="test_token", base_url="https://test.instana.com")
+        self.client.slo_config_api = MagicMock()
+        patcher = patch(
+            "src.slo.slo_configuration.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _assert_timeout_error(self, result):
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.assertNotIn("status_code", result)
+
+    def test_delete_slo_config_timeout(self):
+        result = asyncio.run(self.client.delete_slo_config(id="slo-123"))
+
+        self._assert_timeout_error(result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_create_slo_config_timeout(self):
+        result = asyncio.run(self.client.create_slo_config(payload=dict(_VALID_SLO_PAYLOAD)))
+
+        self._assert_timeout_error(result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_update_slo_config_timeout_does_not_refetch(self):
+        with patch.object(self.client, "get_slo_config_by_id", new=AsyncMock()) as mock_get:
+            result = asyncio.run(self.client.update_slo_config(id="slo-123", payload=dict(_VALID_SLO_PAYLOAD)))
+
+        self._assert_timeout_error(result)
+        self.mock_keepalive.assert_called_once()
+        mock_get.assert_not_called()
 
 
 if __name__ == "__main__":

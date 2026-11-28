@@ -1289,6 +1289,49 @@ class TestSLOAlertConfigMCPTools(unittest.TestCase):
         self.assertIsNone(result)
 
 
+_TIMEOUT_DICT = {
+    "error": "Instana API call timed out after 180s (op). The Instana server did not respond in time.",
+    "operation": "op",
+    "timeout_seconds": 180,
+}
+
+
+async def _timeout_keepalive(coro, *args, **kwargs):
+    """Stand in for sdk_call_with_keepalive when the Instana API call times out."""
+    if asyncio.iscoroutine(coro):
+        coro.close()
+    return dict(_TIMEOUT_DICT)
+
+
+class TestSdkTimeoutHandling(unittest.TestCase):
+    """sdk_call_with_keepalive returns an error dict on timeout; a mutating call must not report success."""
+
+    def setUp(self):
+        self.client = SLOAlertConfigMCPTools(read_token="test_token", base_url="https://test.instana.com")
+        self.client.alert_config_api = MagicMock()
+        patcher = patch(
+            "src.slo.slo_alert_config.sdk_call_with_keepalive",
+            side_effect=_timeout_keepalive,
+        )
+        self.mock_keepalive = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _assert_timeout_error(self, result):
+        self.assertIn("timed out", result["error"])
+        self.assertEqual(result["timeout_seconds"], 180)
+        self.assertNotIn("success", result)
+        self.mock_keepalive.assert_called_once()
+
+    def test_delete_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.delete_alert_config(id="alert-123")))
+
+    def test_disable_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.disable_alert_config(id="alert-123")))
+
+    def test_enable_alert_config_timeout(self):
+        self._assert_timeout_error(asyncio.run(self.client.enable_alert_config(id="alert-123")))
+
+
 if __name__ == "__main__":
     unittest.main()
 

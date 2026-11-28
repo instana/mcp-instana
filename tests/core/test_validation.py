@@ -9,6 +9,8 @@ from datetime import datetime
 from unittest.mock import patch
 
 from src.core.validation import (
+    ENTITY_GUIDANCE_CALL_SEMANTICS,
+    ENTITY_GUIDANCE_EUM,
     RETRIEVAL_SIZE_MAX,
     RETRIEVAL_SIZE_MIN,
     VALID_AGGREGATIONS,
@@ -834,6 +836,51 @@ class TestStructureValidatorGroup(unittest.TestCase):
         result = StructureValidator.validate_group({"groupbyTag": "service.name"})
         self.assertEqual(result["api_error"][0], expected)
 
+    def test_eum_guidance_recommends_not_applicable(self):
+        result = StructureValidator.validate_group(
+            {"groupByTag": "beacon.page.name"},
+            entity_guidance=ENTITY_GUIDANCE_EUM,
+        )
+        msg = result["api_error"][0]
+        self.assertIn("NOT_APPLICABLE", msg)
+        self.assertIn("no source/destination pair", msg)
+        # EUM callers must not be pointed at catalog fields the tool does not return.
+        self.assertNotIn("canApplyToSource", msg)
+
+    def test_call_semantics_guidance_carries_the_catalog_rule(self):
+        result = StructureValidator.validate_group(
+            {"groupbyTag": "service.name"},
+            entity_guidance=ENTITY_GUIDANCE_CALL_SEMANTICS,
+        )
+        msg = result["api_error"][0]
+        # Mirrors the ENTITY FIELD VALUES block in the Application tool
+        # description: the semantic rule, the catalog hints, and the examples.
+        self.assertIn("canApplyToSource", msg)
+        self.assertIn("infrastructure or service component", msg)
+        self.assertIn("call behaviour or metadata", msg)
+        self.assertIn('"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"', msg)
+
+    def test_guidance_does_not_change_which_payloads_are_rejected(self):
+        """Guidance is text only — acceptance must be identical across variants."""
+        for guidance in (None, ENTITY_GUIDANCE_EUM, ENTITY_GUIDANCE_CALL_SEMANTICS):
+            self.assertIsNone(
+                StructureValidator.validate_group(
+                    {"groupbyTag": "x", "groupbyTagEntity": "NOT_APPLICABLE"},
+                    entity_guidance=guidance,
+                )
+            )
+            self.assertIsNotNone(
+                StructureValidator.validate_group(
+                    {"groupbyTag": "x"}, entity_guidance=guidance
+                )
+            )
+            self.assertIsNotNone(
+                StructureValidator.validate_group(
+                    {"groupbyTag": "x", "groupbyTagEntity": "ALL"},
+                    entity_guidance=guidance,
+                )
+            )
+
     def test_invalid_groupby_tag_entity(self):
         group = {"groupbyTag": "service.name", "groupbyTagEntity": "ALL"}
         result = StructureValidator.validate_group(group)
@@ -855,6 +902,171 @@ class TestStructureValidatorGroup(unittest.TestCase):
         self.assertIsNotNone(result)
         # Both groupbyTag and groupbyTagEntity missing
         self.assertGreaterEqual(len(result["api_error"]), 2)
+
+class TestNormalizeGroup(unittest.TestCase):
+    """Tests for StructureValidator.normalize_group"""
+
+    def test_aliases_mapped_to_canonical_keys(self):
+        result = StructureValidator.normalize_group({
+            "groupByTag": "service.name",
+            "groupByTagEntity": "DESTINATION",
+        })
+        self.assertEqual(result, {
+            "groupbyTag": "service.name",
+            "groupbyTagEntity": "DESTINATION",
+        })
+
+    def test_canonical_key_wins_on_conflict(self):
+        result = StructureValidator.normalize_group({
+            "groupByTag": "alias.value",
+            "groupbyTag": "canonical.value",
+            "groupByTagEntity": "SOURCE",
+            "groupbyTagEntity": "DESTINATION",
+        })
+        self.assertEqual(result, {
+            "groupbyTag": "canonical.value",
+            "groupbyTagEntity": "DESTINATION",
+        })
+
+    def test_alias_fills_empty_canonical(self):
+        for empty in ("", None, {}, []):
+            self.assertEqual(
+                StructureValidator.normalize_group({"groupByTag": "x", "groupbyTag": empty}),
+                {"groupbyTag": "x"},
+            )
+
+    def test_canonical_second_level_key_passes_through(self):
+        group = {"groupbyTag": "synthetic.tags", "groupbyTagSecondLevelKey": "region"}
+        self.assertEqual(StructureValidator.normalize_group(group), group)
+
+    def test_pass_through_keys_preserved(self):
+        result = StructureValidator.normalize_group(
+            {"groupByTag": "t", "direction": "DESC", "custom": 1}
+        )
+        self.assertEqual(result, {"groupbyTag": "t", "direction": "DESC", "custom": 1})
+
+    def test_no_defaults_injected(self):
+        self.assertEqual(StructureValidator.normalize_group({}), {})
+        self.assertEqual(
+            StructureValidator.normalize_group({"groupbyTag": "t"}), {"groupbyTag": "t"}
+        )
+
+    def test_non_dict_returned_unchanged(self):
+        for value in (None, "service.name", ["a"], 5):
+            self.assertIs(StructureValidator.normalize_group(value), value)
+
+    def test_does_not_mutate_input(self):
+        original = {"groupByTag": "t"}
+        StructureValidator.normalize_group(original)
+        self.assertEqual(original, {"groupByTag": "t"})
+
+    def test_validate_group_accepts_normalised_alias(self):
+        normalised = StructureValidator.normalize_group(
+            {"groupByTag": "service.name", "groupByTagEntity": "SOURCE"}
+        )
+        self.assertIsNone(StructureValidator.validate_group(normalised))
+
+
+class TestNormalizeTagFilterKey(unittest.TestCase):
+    """Tests for StructureValidator.normalize_tag_filter_key"""
+
+    def test_capital_t_renamed(self):
+        result = StructureValidator.normalize_tag_filter_key(
+            {"TagFilterExpression": {"type": "TAG_FILTER"}}
+        )
+        self.assertEqual(result, {"tagFilterExpression": {"type": "TAG_FILTER"}})
+
+    def test_lowercase_wins_on_conflict(self):
+        result = StructureValidator.normalize_tag_filter_key(
+            {"tagFilterExpression": {"type": "a"}, "TagFilterExpression": {"type": "b"}}
+        )
+        self.assertEqual(result, {"tagFilterExpression": {"type": "a"}})
+
+    def test_capital_t_fills_empty_lowercase(self):
+        for empty in (None, {}):
+            result = StructureValidator.normalize_tag_filter_key(
+                {"tagFilterExpression": empty, "TagFilterExpression": {"type": "b"}}
+            )
+            self.assertEqual(result, {"tagFilterExpression": {"type": "b"}})
+
+    def test_non_dict_returned_unchanged(self):
+        for value in (None, '{"TagFilterExpression": {}}', [1]):
+            self.assertIs(StructureValidator.normalize_tag_filter_key(value), value)
+
+    def test_does_not_mutate_input(self):
+        original = {"TagFilterExpression": {}}
+        StructureValidator.normalize_tag_filter_key(original)
+        self.assertIn("TagFilterExpression", original)
+
+
+class TestNormalizeGroupAgainstSdk(unittest.TestCase):
+    """Regression: the real SDK models drop the groupByTag spelling and fail
+    validation; normalising first makes the same request build.
+
+    Other test modules replace ``instana_client`` in ``sys.modules`` with mocks,
+    so the real SDK is imported in isolation and the previous entries restored.
+    """
+
+    def setUp(self):
+        import importlib
+        import sys
+
+        saved = {k: v for k, v in sys.modules.items() if k.split(".")[0] in ("instana_client", "pydantic")}
+        for key in saved:
+            del sys.modules[key]
+        self.addCleanup(self._restore, saved)
+        self.models = {
+            name: getattr(importlib.import_module(f"instana_client.models.{mod}"), name)
+            for mod, name in (
+                ("get_call_groups", "GetCallGroups"),
+                ("get_trace_groups", "GetTraceGroups"),
+                ("get_test_result_list", "GetTestResultList"),
+            )
+        }
+
+    @staticmethod
+    def _restore(saved):
+        import sys
+
+        for key in [k for k in sys.modules if k.split(".")[0] in ("instana_client", "pydantic")]:
+            del sys.modules[key]
+        sys.modules.update(saved)
+
+    def _body(self, tag, metric):
+        return {
+            "group": {"groupByTag": tag, "groupByTagEntity": "DESTINATION"},
+            "metrics": [{"metric": metric, "aggregation": "SUM"}],
+        }
+
+    def test_call_groups_alias_fails_raw_and_builds_when_normalised(self):
+        model_cls = self.models["GetCallGroups"]
+        body = self._body("service.name", "calls")
+        with self.assertRaises(Exception):
+            model_cls.from_dict(body)
+        body["group"] = StructureValidator.normalize_group(body["group"])
+        self.assertEqual(model_cls.from_dict(body).group.groupby_tag, "service.name")
+
+    def test_trace_groups_alias_fails_raw_and_builds_when_normalised(self):
+        model_cls = self.models["GetTraceGroups"]
+        body = self._body("trace.service.name", "traces")
+        with self.assertRaises(Exception):
+            model_cls.from_dict(body)
+        body["group"] = StructureValidator.normalize_group(body["group"])
+        self.assertEqual(model_cls.from_dict(body).group.groupby_tag, "trace.service.name")
+
+    def test_synthetic_filter_alias_is_silently_dropped_raw(self):
+        """Documents why the rename matters: no error, the filter just vanishes."""
+        model_cls = self.models["GetTestResultList"]
+        payload = {
+            "syntheticMetrics": ["synthetic.metricsStatus"],
+            "TagFilterExpression": {
+                "type": "TAG_FILTER", "name": "synthetic.locationId",
+                "operator": "EQUALS", "entity": "NOT_APPLICABLE", "stringValue": "x",
+            },
+        }
+        self.assertIsNone(model_cls.from_dict(payload).tag_filter_expression)
+        fixed = StructureValidator.normalize_tag_filter_key(payload)
+        self.assertIsNotNone(model_cls.from_dict(fixed).tag_filter_expression)
 
 
 # ---------------------------------------------------------------------------

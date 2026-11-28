@@ -76,6 +76,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
                 - threshold: Threshold value for the alert
                 - timeThreshold: Time threshold in milliseconds
                 - rule: Rule configuration
+                Optional fields:
+                - groupBy: list of at most ONE object, e.g. [{"tagName": "<tag>"}]. It is not
+                  a list of strings (that shape is for infrastructure alert configs only).
             ctx: The MCP context (optional)
 
         Returns:
@@ -124,7 +127,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"delete_log_alert_config called with id={id}")
 
             try:
-                await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_log_alert_config, id=id), ctx=ctx, operation_name="delete_log_alert_config")
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.delete_log_alert_config, id=id), ctx=ctx, operation_name="delete_log_alert_config")
+                if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return result
                 logger.debug(f"Successfully deleted log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} deleted successfully"}
             except Exception as e:
@@ -154,7 +159,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"disable_log_alert_config called with id={id}")
 
             try:
-                await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_log_alert_config, id=id), ctx=ctx, operation_name="disable_log_alert_config")
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.disable_log_alert_config, id=id), ctx=ctx, operation_name="disable_log_alert_config")
+                if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return result
                 logger.debug(f"Successfully disabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} disabled successfully"}
             except Exception as e:
@@ -184,7 +191,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"enable_log_alert_config called with id={id}")
 
             try:
-                await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_log_alert_config, id=id), ctx=ctx, operation_name="enable_log_alert_config")
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.enable_log_alert_config, id=id), ctx=ctx, operation_name="enable_log_alert_config")
+                if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return result
                 logger.debug(f"Successfully enabled log alert configuration with ID {id}")
                 return {"success": True, "message": f"Log alert configuration with ID {id} enabled successfully"}
             except Exception as e:
@@ -217,6 +226,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
                 # Call the API with raw JSON response to avoid Pydantic validation issues
                 result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_active_log_alert_configs_without_preload_content, alert_ids=alert_ids), ctx=ctx, operation_name="find_active_log_alert_configs")
                 logger.debug(f"Result from find_active_log_alert_configs: {result}")
+                if (err := self.check_response_status(result, "find active log alert configs", logger)):
+                    return err
 
                 # Parse the JSON response manually
                 import json
@@ -260,6 +271,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
                 # Call the API with raw JSON response to avoid Pydantic validation issues
                 result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_log_alert_config_without_preload_content, id=id, valid_on=valid_on), ctx=ctx, operation_name="find_log_alert_config")
                 logger.debug(f"Result from find_log_alert_config: {result}")
+                if (err := self.check_response_status(result, "find log alert config", logger)):
+                    return err
 
                 # Parse the JSON response manually
                 import json
@@ -302,6 +315,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
                 # Call the API with raw JSON response to avoid Pydantic validation issues
                 result = await sdk_call_with_keepalive(call_sdk_fn(api_client.find_log_alert_config_versions_without_preload_content, id=id), ctx=ctx, operation_name="find_log_alert_config_versions")
                 logger.debug(f"Result from find_log_alert_config_versions: {result}")
+                if (err := self.check_response_status(result, "find log alert config versions", logger)):
+                    return err
 
                 # Parse the JSON response manually
                 import json
@@ -342,7 +357,9 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             logger.debug(f"restore_log_alert_config called with id={id}, created={created}")
 
             try:
-                await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_log_alert_config, id=id, created=created), ctx=ctx, operation_name="restore_log_alert_config")
+                result = await sdk_call_with_keepalive(call_sdk_fn(api_client.restore_log_alert_config, id=id, created=created), ctx=ctx, operation_name="restore_log_alert_config")
+                if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                    return result
                 logger.debug(f"Successfully restored log alert configuration with ID {id}")
                 return {
                     "success": True,
@@ -366,7 +383,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
 
         Args:
             id: ID of the log alert configuration to update
-            config: Dictionary containing the updated log alert configuration
+            config: Dictionary containing the updated log alert configuration.
+                groupBy, if present, is a list of at most ONE object, e.g. [{"tagName": "<tag>"}].
             ctx: The MCP context (optional)
 
         Returns:

@@ -167,6 +167,21 @@ async def test_get_overview_permission_error(tools):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 304])
+async def test_get_overview_redirect_status_is_error(tools, status):
+    """A 3xx response must not be treated as success and parsed as a body."""
+    mock_resp = MockHTTPResponse(b"[]", status=status)
+    mock_api = MagicMock()
+
+    with patch("src.alert_channel.alert_channels_tools.sdk_call_with_keepalive", side_effect=_fake_sdk_call):
+        _fake_sdk_call.return_val = mock_resp
+        res = await tools.get_overview(api_client=mock_api)
+
+    assert "error" in res
+    assert res["status_code"] == status
+
+
+@pytest.mark.asyncio
 async def test_get_by_id_success(tools):
     channel_payload = {
         "id": "chan-webhook-1",

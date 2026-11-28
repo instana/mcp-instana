@@ -104,6 +104,27 @@ class TestSyntheticMetricsMCPTools(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertEqual(result, expected)
 
+    def test_get_metrics_result_normalises_group_aliases(self):
+        """groupByTag-style keys in `groups` are renamed before GetMetricsResult.from_dict."""
+        asyncio.run(self.client.get_metrics_result(
+            payload={
+                "metrics": [{"metric": "synthetic.metricsResponseTime", "aggregation": "MEAN"}],
+                "groups": [{
+                    "groupByTag": "synthetic.tags",
+                    "groupbyTagSecondLevelKey": "region",
+                    "groupByTagEntity": "NOT_APPLICABLE",
+                    "direction": "DESC",
+                }],
+            }
+        ))
+        sent = mock_get_metrics_result_class.from_dict.call_args[0][0]
+        self.assertEqual(sent["groups"], [{
+            "groupbyTag": "synthetic.tags",
+            "groupbyTagSecondLevelKey": "region",
+            "groupbyTagEntity": "NOT_APPLICABLE",
+            "direction": "DESC",
+        }])
+
     def test_get_metrics_result_with_json_string_payload(self):
         """Payload supplied as a JSON string should be parsed and accepted."""
         expected = {"items": []}

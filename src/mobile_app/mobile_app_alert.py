@@ -95,6 +95,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
                 tool_name=tool_name,
             )
 
+            if (err := self.check_response_status(response, "get active mobile app alert configs", logger)):
+                return err
+
             return parse_alert_config_response(response, "mobile app", mobile_app_id)
 
         except Exception as e:
@@ -151,6 +154,9 @@ class MobileAppAlertMCPTools(BaseInstanaClient):
                 resource_type=resource_type,
                 tool_name=tool_name,
             )
+
+            if (err := self.check_response_status(response, "get mobile app alert config", logger)):
+                return err
 
             return parse_single_alert_config_response(response)
 

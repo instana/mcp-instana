@@ -62,3 +62,16 @@ def restore_sys_modules_after_application_tests():
             sys.modules.pop(key, None)
         else:
             sys.modules[key] = original
+
+
+@pytest.fixture(autouse=True)
+def no_request_base_url():
+    """Keep link building independent of the mocked fastmcp.server.dependencies module."""
+    from unittest.mock import patch
+
+    ui_links = sys.modules.get("src.core.ui_links")
+    if ui_links is None:
+        yield
+        return
+    with patch.object(ui_links, "_request_base_url", return_value=None):
+        yield

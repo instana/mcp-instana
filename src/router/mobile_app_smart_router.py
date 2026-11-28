@@ -139,6 +139,8 @@ ANALYZE (resource_type="analyze"):
         - If timezone not specified in datetime string, defaults to UTC
         - windowSize: Duration in milliseconds (default: 3600000 = 1 hour)
 
+    group: `group` requires `groupbyTag` AND `groupbyTagEntity`; use lowercase `b`. Example: {"groupbyTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}
+
     tag_filter_expression: CRITICAL - Entity field is REQUIRED for ALL tag filters
         - ALWAYS set "entity": "NOT_APPLICABLE" for ALL mobile app beacon tags
         - This applies to ALL tags: mobileBeacon.mobileApp.*, mobileBeacon.view.*, mobileBeacon.device.*, mobileBeacon.geo.*, etc.
@@ -275,7 +277,7 @@ Returns:
 
         Examples:
             resource_type="catalog", operation="get_mobile_app_tag_catalog", params={"beacon_type": "SESSION_START", "use_case": "GROUPING"}
-            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupByTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
+            resource_type="analyze", operation="get_mobile_app_beacon_groups", params={"metrics": [{"metric": "beaconCount", "aggregation": "SUM"}], "group": {"groupbyTag": "mobileBeacon.view.name", "groupbyTagEntity": "NOT_APPLICABLE"}, "time_frame": {"to": "19 March 2026, 2:47 PM|IST", "windowSize": 3600000}, "beacon_type": "SESSION_START"}
             resource_type="analyze", operation="get_all_mobile_app_beacons", params={"time_frame": {"to": 1234567890000, "windowSize": 3600000}, "beacon_type": "SESSION_START", "pagination": {"retrievalSize": 50}, "filter_fields": True}
             resource_type="catalog", operation="get_mobile_app_metric_catalog"
             resource_type="configuration", operation="get_all"

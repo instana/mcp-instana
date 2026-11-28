@@ -217,6 +217,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -281,6 +282,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -316,6 +318,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -397,6 +400,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -466,6 +470,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -505,6 +510,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -540,6 +546,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -573,6 +580,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 
@@ -616,6 +624,7 @@ class TestInfrastructureTopologyE2E:
         # Create a mock API client
         mock_api_client = MagicMock()
         mock_response_obj = MagicMock()
+        mock_response_obj.status = 200
         mock_response_obj.data = json.dumps(mock_response).encode('utf-8')
         mock_api_client.get_topology_without_preload_content.return_value = mock_response_obj
 

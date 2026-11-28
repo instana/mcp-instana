@@ -15,6 +15,7 @@ from pydantic import StrictBool
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_sdk_timeout,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
@@ -125,6 +126,9 @@ class InfrastructureMetricsMCPTools(BaseInstanaClient):
 
             # Call the get_infrastructure_metrics method from the SDK
             result = await sdk_call_with_keepalive(call_sdk_fn(api_client.get_infrastructure_metrics, offline=offline, get_combined_metrics=get_combined_metrics), ctx=ctx, operation_name="get_infrastructure_metrics")
+
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             # Convert the result to a dictionary
             result_dict: Dict[str, Any] = {}

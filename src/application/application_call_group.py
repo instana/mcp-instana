@@ -23,11 +23,13 @@ except ImportError as e:
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_sdk_timeout,
     register_as_tool,
     sdk_call_with_keepalive,
     with_header_auth,
 )
 from src.core.validation import (
+    ENTITY_GUIDANCE_CALL_SEMANTICS,
     BooleanCoercer,
     StructureValidator,
 )
@@ -42,11 +44,6 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """Initialize the Application Call Group MCP tools client."""
         super().__init__(read_token=read_token, base_url=base_url)
 
-    # @register_as_tool decorator commented out - not exposed as MCP tool
-    # @register_as_tool(
-    #     title="Get Grouped Calls Metrics",
-    #     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
-    # )
     @staticmethod
     def _validate_call_group_structure(
         metrics: Optional[List[Dict[str, Any]]],
@@ -60,7 +57,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         all_errors: List[str] = []
         for validator_fn, field_val, kwargs in [
             (StructureValidator.validate_metrics_array, metrics, {"required": False}),
-            (StructureValidator.validate_group, group, {"required": False}),
+            (StructureValidator.validate_group, group, {"required": False, "entity_guidance": ENTITY_GUIDANCE_CALL_SEMANTICS}),
             (StructureValidator.validate_tag_filter_expression, tag_filter_expression, {}),
             (StructureValidator.validate_order, order, {}),
             (StructureValidator.validate_pagination, pagination, {}),
@@ -220,6 +217,7 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"get_grouped_calls_metrics called with metrics={metrics}, group={group}")
+            group = StructureValidator.normalize_group(group)
 
             include_internal = BooleanCoercer.coerce(include_internal) if include_internal is not None else include_internal
             include_synthetic = BooleanCoercer.coerce(include_synthetic) if include_synthetic is not None else include_synthetic
@@ -273,6 +271,9 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+
+            if is_sdk_timeout(result):  # timeout error dict from sdk_call_with_keepalive
+                return result
 
             # Convert the result to a dictionary
             if hasattr(result, 'to_dict'):

@@ -20,6 +20,7 @@ except ImportError:
 from src.core.utils import (
     BaseInstanaClient,
     call_sdk_fn,
+    is_success_status,
     sdk_call_with_keepalive,
     with_header_auth,
 )
@@ -120,9 +121,12 @@ class SLOReportMCPTools(BaseInstanaClient):
                 resource_type=resource_type, tool_name=tool_name,
             )
 
+            if isinstance(result, dict):  # timeout error dict from sdk_call_with_keepalive
+                return result
+
             logger.debug(f"API response status: {result.status}")
 
-            if result.status >= 400:
+            if not is_success_status(result):
                 error_text = result.data.decode('utf-8') if result.data else "No error details provided"
                 logger.error(f"API returned error status {result.status}: {error_text}")
                 return {"error": f"API error (status {result.status}): {error_text}", "status_code": result.status}

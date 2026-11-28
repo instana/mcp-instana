@@ -49,9 +49,12 @@ StructureValidator
       (``timeFrame``, ``order``, ``pagination``, ``tagFilterExpression``).
       Accepts flags for required-field checks and granularity ratio.
     * ``validate_group`` — ``groupbyTag`` non-empty, ``groupbyTagEntity`` enum.
+    * ``normalize_group`` / ``normalize_tag_filter_key`` — rename known alias
+      spellings (``groupByTag``, ``groupByTagEntity``, ``TagFilterExpression``) to the SDK keys.
+      All known aliases live in ``GROUP_KEY_ALIASES`` and ``PAYLOAD_KEY_ALIASES``.
 
     All methods collect *every* failing field before returning so the LLM receives
-    the full error list in one shot (Vipin's requirement).
+    the full error list in one shot.
 
 BooleanCoercer
     Silently normalises LLM-generated boolean-like values (string ``"true"``/
@@ -62,6 +65,16 @@ BooleanCoercer
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+# Non-canonical key spellings LLMs emit, mapped to the SDK keys. The SDK drops
+# the aliases silently, so StructureValidator.normalize_* renames them.
+GROUP_KEY_ALIASES: Dict[str, str] = {
+    "groupByTag": "groupbyTag",
+    "groupByTagEntity": "groupbyTagEntity",
+}
+PAYLOAD_KEY_ALIASES: Dict[str, str] = {
+    "TagFilterExpression": "tagFilterExpression",
+}
 
 
 class ValidationError:
@@ -607,8 +620,7 @@ class StructureValidator:
                   ``api_error`` (list of strings, one per problem found).
 
     All errors are **collected in a single pass** before returning so the LLM
-    receives the complete list in one response (Vipin's requirement: no round-trip
-    retries per field).
+    receives the complete list in one response
 
     The dict format mirrors the pattern established in PR #129
     (metric_validation.py / website_analyze.py / application_call_group.py).
@@ -1230,6 +1242,59 @@ class StructureValidator:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _rename_aliases(data: Any, aliases: Dict[str, str]) -> Any:
+        """
+        Rename alias keys in *data* to their canonical keys.
+
+        The alias is always removed. Its value is kept only when the canonical
+        key is missing or empty (``None``, ``""``, ``{}``, ``[]``), so a
+        populated canonical value wins but a blank one does not shadow a real
+        alias value. Non-dict input is returned unchanged; the caller's dict is
+        never mutated.
+        """
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        for alias, canonical in aliases.items():
+            if alias in normalized:
+                value = normalized.pop(alias)
+                if normalized.get(canonical) in (None, "", {}, []):
+                    normalized[canonical] = value
+        return normalized
+
+    @staticmethod
+    def normalize_group(group: Any) -> Any:
+        """
+        Rename known non-canonical spellings in a group object to the SDK keys.
+
+        The SDK group models read only ``groupbyTag``, ``groupbyTagEntity`` and
+        ``groupbyTagSecondLevelKey`` and silently drop other spellings. This maps
+        the aliases in ``GROUP_KEY_ALIASES`` (``groupByTag``, ``groupByTagEntity``)
+        to those keys.
+
+        * When both the alias and the canonical key are present, the canonical
+          value wins unless it is empty, in which case the alias value is used.
+        * Pass-through keys (e.g. ``direction``) are preserved unchanged.
+        * No defaults are injected.
+        * Non-dict input is returned unchanged.
+        * The caller's dict is never mutated; a shallow copy is returned.
+        """
+        return StructureValidator._rename_aliases(group, GROUP_KEY_ALIASES)
+
+    @staticmethod
+    def normalize_tag_filter_key(payload: Any) -> Any:
+        """
+        Rename ``TagFilterExpression`` to the SDK key ``tagFilterExpression``.
+
+        The SDK has no capital-T alias and silently drops it, which sends the
+        request unfiltered. When both spellings are present the lowercase value
+        wins unless it is empty, in which case the capital-T value is used.
+        Non-dict input is returned unchanged; the caller's dict is never
+        mutated.
+        """
+        return StructureValidator._rename_aliases(payload, PAYLOAD_KEY_ALIASES)
+
+    @staticmethod
     def validate_group(
         group: Optional[Any],
         field_name: str = "group",
@@ -1239,8 +1304,11 @@ class StructureValidator:
         """
         Validate a group object ``{"groupbyTag": "...", "groupbyTagEntity": "..."}``.
 
-        Accepts both ``groupbyTag`` and ``groupByTag`` — the service layer
-        normalises to the canonical alias afterwards.
+        Accepts both ``groupbyTag`` and ``groupByTag`` (likewise for the entity
+        key) so that a tolerated alias does not fail validation. This method
+        only validates; it does not rewrite *group*. Callers must pass the group
+        through :meth:`normalize_group` before building the SDK model, because
+        the SDK drops the non-canonical spelling.
 
         The *value* of ``groupbyTag`` is **not** checked here because allowed
         tag names differ per domain (e.g. only ``trace.endpoint.name`` /

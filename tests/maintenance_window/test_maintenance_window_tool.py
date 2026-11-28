@@ -358,6 +358,14 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         result = self.tool._check_response_status(mock_response, "test operation")
         self.assertIsNone(result)
 
+    def test_check_response_status_accepted(self):
+        """_check_response_status returns None for 202 Accepted (put_maintenance_config_v2)."""
+        mock_response = Mock()
+        mock_response.status = 202
+
+        result = self.tool._check_response_status(mock_response, "test operation")
+        self.assertIsNone(result)
+
     def test_check_response_status_error(self):
         """_check_response_status returns error dict for error status codes."""
         mock_response = Mock()
@@ -711,6 +719,128 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertIn("window_id", result["details"])
 
+    @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
+    @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')
+    @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
+    def test_create_window_accepts_202_with_empty_body(self, mock_config_class, mock_uuid, mock_timestamp):
+        """put_maintenance_config_v2 declares 202 Accepted; it must not be reported as an error."""
+        mock_timestamp.return_value = {"timestamp": self.current_time}
+        mock_uuid.return_value = Mock(hex='1234567890abcdef')
+
+        mock_api_client = Mock()
+        mock_response = Mock()
+        mock_response.status = 202
+        mock_response.data = b""
+        mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
+        mock_config_class.from_dict.return_value = Mock()
+
+        result = asyncio.run(self.tool._create_maintenance_window(
+            params={
+                "application_id": None,
+                "imap_code": "EAL-012471",
+                "start_time": self.future_time,
+                "end_time": None,
+                "duration_minutes": 60,
+                "duration_hours": None,
+                "duration_days": None,
+                "reason": "Test",
+                "template": None,
+                "change_request_id": None,
+                "affected_services": None,
+                "notification_channels": None,
+                "use_tag_filter_expression": False,
+                "tag_name": None,
+                "rrule": None,
+                "until_date": None,
+            },
+            ctx=None,
+            api_client=mock_api_client
+        ))
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["operation"], "create")
+        self.assertEqual(result["status"], "success")
+
+    @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
+    @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')
+    @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
+    def test_create_window_empty_body_on_200_is_still_an_error(self, mock_config_class, mock_uuid, mock_timestamp):
+        """The empty-body allowance is only for 202/204; an empty 200 stays an error."""
+        mock_timestamp.return_value = {"timestamp": self.current_time}
+        mock_uuid.return_value = Mock(hex='1234567890abcdef')
+
+        mock_api_client = Mock()
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.data = b""
+        mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
+        mock_config_class.from_dict.return_value = Mock()
+
+        result = asyncio.run(self.tool._create_maintenance_window(
+            params={
+                "application_id": None,
+                "imap_code": "EAL-012471",
+                "start_time": self.future_time,
+                "end_time": None,
+                "duration_minutes": 60,
+                "duration_hours": None,
+                "duration_days": None,
+                "reason": "Test",
+                "template": None,
+                "change_request_id": None,
+                "affected_services": None,
+                "notification_channels": None,
+                "use_tag_filter_expression": False,
+                "tag_name": None,
+                "rrule": None,
+                "until_date": None,
+            },
+            ctx=None,
+            api_client=mock_api_client
+        ))
+
+        self.assertIn("error", result)
+
+    @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
+    @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')
+    @patch('src.maintenance_window.maintenance_window_tool.MaintenanceConfigV2')
+    def test_create_window_still_rejects_server_error(self, mock_config_class, mock_uuid, mock_timestamp):
+        """5xx responses are still reported as errors."""
+        mock_timestamp.return_value = {"timestamp": self.current_time}
+        mock_uuid.return_value = Mock(hex='1234567890abcdef')
+
+        mock_api_client = Mock()
+        mock_response = Mock()
+        mock_response.status = 500
+        mock_response.data = b"{}"
+        mock_api_client.put_maintenance_config_v2_without_preload_content.return_value = mock_response
+        mock_config_class.from_dict.return_value = Mock()
+
+        result = asyncio.run(self.tool._create_maintenance_window(
+            params={
+                "application_id": None,
+                "imap_code": "EAL-012471",
+                "start_time": self.future_time,
+                "end_time": None,
+                "duration_minutes": 60,
+                "duration_hours": None,
+                "duration_days": None,
+                "reason": "Test",
+                "template": None,
+                "change_request_id": None,
+                "affected_services": None,
+                "notification_channels": None,
+                "use_tag_filter_expression": False,
+                "tag_name": None,
+                "rrule": None,
+                "until_date": None,
+            },
+            ctx=None,
+            api_client=mock_api_client
+        ))
+
+        self.assertEqual(result["status_code"], 500)
+
     # -------------------------------------------------------------------------
     # _modify_maintenance_window Tests
     # -------------------------------------------------------------------------
@@ -976,6 +1106,7 @@ class TestMaintenanceWindowMCPTools(unittest.TestCase):
         """create calculates duration in days from end_time."""
         mock_timestamp.return_value = {"timestamp": self.current_time}
         mock_uuid.return_value = Mock(hex='1234567890abcdef')
+
 
     @patch('src.maintenance_window.maintenance_window_tool.get_current_timestamp')
     @patch('src.maintenance_window.maintenance_window_tool.uuid.uuid4')

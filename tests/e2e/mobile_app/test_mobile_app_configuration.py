@@ -44,15 +44,6 @@ class TestMobileAppConfigurationE2E:
 
     @pytest.mark.asyncio
     @pytest.mark.mocked
-    async def test_debug_print(self):
-        """Test the debug_print helper function."""
-        # debug_print is not exported from the module
-        # This test verifies that the module can be imported successfully
-        assert create_mobile_app_configuration_client is not None
-
-
-    @pytest.mark.asyncio
-    @pytest.mark.mocked
     async def test_get_all_mobile_apps_returns_list(self, instana_credentials):
         """Test that get_all_mobile_apps returns a list."""
 
@@ -154,6 +145,7 @@ class TestMobileAppConfigurationE2E:
         mock_api_client.get_mobile_app_geo_mapping_rules_without_preload_content = MagicMock()
 
         mock_response = MagicMock()
+        mock_response.status = 200
         mock_response.data = b"IP,Country\n192.168.1.1,US"
         mock_api_client.get_mobile_app_geo_mapping_rules_without_preload_content.return_value = mock_response
 
