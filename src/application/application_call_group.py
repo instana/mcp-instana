@@ -4,10 +4,12 @@ Application Call Group MCP Tools Module
 This module provides application call group metrics-specific MCP tools for Instana monitoring.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 # Import the necessary classes from the SDK
@@ -87,12 +89,55 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         }
 
     @staticmethod
+    def _normalize_group(group: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Normalize group keys to lowercase 'groupbyTag' canonical format required by SDK."""
+        if not group:
+            return {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
+        normalized: Dict[str, Any] = {}
+        # Tag key
+        if "groupbyTag" in group:
+            normalized["groupbyTag"] = group["groupbyTag"]
+        elif "groupByTag" in group:
+            normalized["groupbyTag"] = group["groupByTag"]
+
+        # Entity key
+        if "groupbyTagEntity" in group:
+            normalized["groupbyTagEntity"] = group["groupbyTagEntity"]
+        elif "groupByTagEntity" in group:
+            normalized["groupbyTagEntity"] = group["groupByTagEntity"]
+        elif "entity" in group:
+            normalized["groupbyTagEntity"] = group["entity"]
+
+        # Second level key
+        if "groupbyTagSecondLevelKey" in group:
+            normalized["groupbyTagSecondLevelKey"] = group["groupbyTagSecondLevelKey"]
+        elif "groupByTagSecondLevelKey" in group:
+            normalized["groupbyTagSecondLevelKey"] = group["groupByTagSecondLevelKey"]
+
+        return normalized
+
+    @staticmethod
+    def _normalize_pagination(pagination: Optional[Dict[str, Any]]) -> Dict[str, int]:
+        """Normalize pagination keys (e.g., pageSize -> retrievalSize)."""
+        if not pagination:
+            return {"retrievalSize": 20}
+        normalized: Dict[str, Any] = {}
+        retrieval_size = pagination.get("retrievalSize") or pagination.get("pageSize") or 20
+        normalized["retrievalSize"] = retrieval_size
+        if "offset" in pagination:
+            normalized["offset"] = pagination["offset"]
+        if "ingestionTime" in pagination:
+            normalized["ingestionTime"] = pagination["ingestionTime"]
+        return normalized
+
+    @staticmethod
     def _apply_call_group_defaults(
         metrics: Optional[List[Dict[str, Any]]],
         time_frame: Optional[Dict[str, int]],
-        group: Optional[Dict[str, str]],
-    ) -> tuple:
-        """Return (metrics, time_frame, group) with defaults applied where None/empty."""
+        group: Optional[Dict[str, Any]],
+        pagination: Optional[Dict[str, Any]] = None,
+    ) -> tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, str], Dict[str, int]]:
+        """Return (metrics, time_frame, group, pagination) with defaults applied where None/empty."""
         if not time_frame:
             time_frame = {
                 "to": int(datetime.now().timestamp() * 1000),
@@ -103,9 +148,9 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 {"metric": "calls", "aggregation": "SUM"},
                 {"metric": "latency", "aggregation": "MEAN"},
             ]
-        if not group:
-            group = {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
-        return metrics, time_frame, group
+        group = ApplicationCallGroupMCPTools._normalize_group(group)
+        pagination = ApplicationCallGroupMCPTools._normalize_pagination(pagination)
+        return metrics, time_frame, group, pagination
 
     @staticmethod
     def _build_call_group_request(
@@ -235,7 +280,9 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
             if validation_error:
                 return validation_error
 
-            metrics, time_frame, group = self._apply_call_group_defaults(metrics, time_frame, group)
+            metrics, time_frame, group, pagination = self._apply_call_group_defaults(
+                metrics, time_frame, group, pagination
+            )
 
             request_body = self._build_call_group_request(
                 metrics, time_frame, group, tag_filter_expression, order, pagination,
@@ -290,6 +337,76 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"Error in get_grouped_calls_metrics: {e}", exc_info=True)
             return {"error": f"Failed to get grouped calls metrics: {e!s}"}
+
+    @with_header_auth(ApplicationAnalyzeApi)
+    async def query_call_groups(
+        self,
+        payload: Dict[str, Any],
+        max_items: int = 1000,
+        ctx: Optional[Context] = None,
+        api_client: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Query call groups (POST /api/application-monitoring/analyze/call-groups) and return them in memory.
+
+        The payload is sent as-is (camelCase GetCallGroups body). The raw JSON response is
+        parsed directly, and the API cursor (ingestionTime + offset) is followed until
+        canLoadMore is false or max_items is reached.
+
+        Args:
+            payload: GetCallGroups request body. pagination.retrievalSize defaults to 200.
+            max_items: Upper bound on the number of groups collected across pages.
+
+        Returns:
+            {"items": [group dicts], "totalHits": int|None, "canLoadMore": bool (True when
+            truncated at max_items), "adjustedTimeframe": dict|None} or {"error": "..."}.
+        """
+        try:
+            if api_client is None:
+                return {"error": "query_call_groups requires an Instana API client (api_client is None)"}
+
+            body = dict(payload)
+            pagination = dict(body.get("pagination") or {})
+            pagination.setdefault("retrievalSize", 200)
+            body["pagination"] = pagination
+
+            collected: List[Dict[str, Any]] = []
+            total_hits = None
+            adjusted = None
+            can_load_more = False
+            for _ in range(max(1, -(-max_items // pagination["retrievalSize"]))):
+                raw = api_client.get_call_group_without_preload_content(
+                    get_call_groups=GetCallGroups.from_dict(body)
+                )
+                if hasattr(raw, "read"):
+                    if getattr(raw, "status", 200) >= 400:
+                        raise RuntimeError(f"HTTP {raw.status}: {raw.data.decode('utf-8', 'replace')[:300]}")
+                    result_dict = json.loads(raw.data)
+                else:
+                    result_dict = raw.to_dict() if hasattr(raw, "to_dict") else raw
+                items = result_dict.get("items") or []
+                collected.extend(items)
+                total_hits = result_dict.get("totalHits", total_hits)
+                adjusted = result_dict.get("adjustedTimeframe", adjusted)
+                can_load_more = bool(result_dict.get("canLoadMore"))
+                cursor = items[-1].get("cursor") if items else None
+                if not (can_load_more and cursor and "ingestionTime" in cursor):
+                    can_load_more = False if not items else can_load_more
+                    break
+                body["pagination"] = {
+                    **pagination,
+                    "ingestionTime": cursor["ingestionTime"],
+                    "offset": cursor.get("offset", 0),
+                }
+            return {
+                "items": collected,
+                "totalHits": total_hits,
+                "canLoadMore": can_load_more,
+                "adjustedTimeframe": adjusted,
+            }
+        except Exception as e:
+            logger.error(f"Error in query_call_groups: {e}", exc_info=True)
+            return {"error": f"Failed to query call groups: {e!s}"}
 
     @staticmethod
     def _extract_metric_entry(metric_key: str, metric_data: Any) -> tuple:

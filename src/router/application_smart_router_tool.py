@@ -6,19 +6,141 @@ application-specific tools for Instana monitoring.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+import re
+import time as _time
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from zoneinfo import ZoneInfo
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from src.core.pagination import apply_navigation, page_kwargs, paginate, stable_sort_key
 from src.core.timestamp_utils import (
+    TIMEZONE_ALIASES,
     convert_datetime_param,
     convert_nested_datetime_param,
+    convert_to_timestamp,
+    parse_timezone,
 )
 from src.core.utils import BaseInstanaClient, register_as_tool
 
 logger = logging.getLogger(__name__)
+_MS_MINUTE = 60 * 1000
+_MS_HOUR = 60 * _MS_MINUTE
+_MS_DAY = 24 * _MS_HOUR
+_MAX_WINDOW_MS = 31 * _MS_DAY  # largest windowSize the Instana TimeFrame accepts (2678400000)
+
+
+# Rolling windows that end "now": canonical label -> window size in ms.
+_ROLLING_TIME_RANGES = {
+    "last minute": _MS_MINUTE,
+    "last 5 minutes": 5 * _MS_MINUTE,
+    "last 10 minutes": 10 * _MS_MINUTE,
+    "last 30 minutes": 30 * _MS_MINUTE,
+    "last hour": _MS_HOUR,
+    "last 6 hours": 6 * _MS_HOUR,
+    "last 12 hours": 12 * _MS_HOUR,
+    "last 24 hours": _MS_DAY,
+    "last seven days": 7 * _MS_DAY,
+}
+_CALENDAR_TIME_RANGES = ("today", "yesterday", "two days ago", "previous week")
+DEFAULT_ERROR_TIME_RANGE = "last hour"
+_ERROR_TRACE_FETCH_LIMIT = 1000  # max erroneous traces fetched per request
+
+
+def invalid_timezone_error(timezone: Any) -> Optional[Dict[str, Any]]:
+    """Return a structured error when *timezone* is set but not a usable IANA name or alias.
+
+    ``parse_timezone`` silently falls back to UTC (and raises on non-strings), which would
+    give wrong calendar-day boundaries without telling the user. ``None``/empty means UTC.
+    """
+    if timezone is None or timezone == "":
+        return None
+    if isinstance(timezone, str):
+        name = TIMEZONE_ALIASES.get(timezone.strip().upper(), timezone.strip())
+        try:
+            ZoneInfo(name)
+            return None
+        except Exception:
+            pass
+    return {
+        "error": f"Invalid timezone '{timezone}'.",
+        "valid_time_zones": ["UTC", *sorted(TIMEZONE_ALIASES)[:20]],
+        "hint": "Use an IANA name such as 'America/New_York' or 'Asia/Kolkata', or an alias such as 'IST'. "
+                "Omit timezone to use UTC.",
+    }
+
+
+def resolve_time_range(
+    time_range: Optional[str], timezone: Optional[str] = None
+) -> Optional[Tuple[Dict[str, int], str]]:
+    """Turn a time-range phrase into an Instana ``timeFrame`` and a display label.
+
+    Every range returns an explicit ``to`` (epoch ms) and ``windowSize`` (ms); only these
+    two fields exist in the API's TimeFrame (``focusedMoment`` / ``autoRefresh`` are UI-only).
+    Rolling ranges ("last 5 minutes", "last hour", "last seven days", ...) end at the
+    current time. Calendar ranges use exact day boundaries in *timezone* (default UTC):
+
+    * ``today``         - local midnight until now
+    * ``yesterday``     - the previous calendar day
+    * ``two days ago``  - the calendar day before yesterday
+    * ``previous week`` - the previous calendar week, Monday 00:00 until Monday 00:00
+
+    Also accepts a generic "last N minutes/hours/days/weeks". Returns ``None`` when the
+    phrase is not understood or the window exceeds the API maximum of 31 days.
+    """
+    from datetime import datetime, timedelta
+
+    now_ms = int(_time.time() * 1000)
+    # Accept "last_seven_days" / "last-seven-days" (metrics-style names) as "last seven days".
+    text = re.sub(r"[\s_\-]+", " ", (time_range or "").strip().lower())
+    if not text:
+        return None
+    text = {
+        "last 1 minute": "last minute", "last 1 hour": "last hour",
+        "last 7 days": "last seven days", "last week": "last seven days",
+        "past 7 days": "last seven days", "last 1 day": "last 24 hours",
+        "last day": "last 24 hours", "day before yesterday": "two days ago",
+        "last 1 hours": "last hour", "previous 7 days": "last seven days",
+        "past seven days": "last seven days", "past week": "last seven days",
+        "this past week": "last seven days", "over the last week": "last seven days",
+        "in the last 7 days": "last seven days", "over the last 7 days": "last seven days",
+        "prior week": "previous week", "last calendar week": "previous week",
+    }.get(text, text)
+
+    if text in _ROLLING_TIME_RANGES:
+        return {"to": now_ms, "windowSize": _ROLLING_TIME_RANGES[text]}, text
+
+    generic = re.match(r"^(?:last|past)\s+(\d+)\s*(minute|min|hour|hr|day|week)s?$", text)
+    if generic:
+        unit_ms = {"minute": _MS_MINUTE, "min": _MS_MINUTE, "hour": _MS_HOUR,
+                   "hr": _MS_HOUR, "day": _MS_DAY, "week": 7 * _MS_DAY}[generic.group(2)]
+        count = int(generic.group(1))
+        if count < 1 or count * unit_ms > _MAX_WINDOW_MS:
+            return None
+        return (
+            {"to": now_ms, "windowSize": count * unit_ms},
+            f"last {count} {generic.group(2)}{'s' if count != 1 else ''}",
+        )
+
+    if text not in _CALENDAR_TIME_RANGES:
+        return None
+
+    tz = parse_timezone(timezone or "UTC")
+    now = datetime.now(tz)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if text == "today":
+        start, end = midnight, now
+    elif text == "yesterday":
+        start, end = midnight - timedelta(days=1), midnight
+    elif text == "two days ago":
+        start, end = midnight - timedelta(days=2), midnight - timedelta(days=1)
+    else:  # previous week: Monday..Monday before the current week
+        this_monday = midnight - timedelta(days=midnight.weekday())
+        start, end = this_monday - timedelta(days=7), this_monday
+    start_ms, end_ms = int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+    return {"to": end_ms, "windowSize": max(1, end_ms - start_ms)}, text
+
 
 
 class ApplicationSmartRouterMCPTool(BaseInstanaClient):
@@ -175,6 +297,31 @@ RESOURCES (resource_type="resources"):
     get_application_endpoints - Get endpoints for an application service
         params: {application_id, service_id, endpoint_id, name_filter, types, technologies, application_boundary_scope}
         Returns: Paginated endpoints with type and technology metadata
+    get_error_messages_by_application_name - List the erroneous endpoints (errors) of an application
+        params: {application_name OR application_id (one required), time_range (optional), timezone (optional, default UTC)}
+        ALWAYS use this (not manage_events get_events) for "show/list all error messages / errors for an
+        application", whether the user gives an application name or an Instana application ID
+        (e.g. "SZNCeB7YR_iR1xMZrlN2bw"). Put an ID in application_id, a name in application_name.
+        time_range must be one of: "last minute", "last 5 minutes", "last 10 minutes", "last 30 minutes",
+        "last hour" (default when the user gives none), "last 6 hours", "last 12 hours", "last 24 hours", "today", "yesterday",
+        "two days ago", "last seven days", "previous week". "today"/"yesterday"/"two days ago" are calendar
+        days in `timezone` ("previous week" = previous Monday-to-Monday); the others end now.
+        Pass the user's phrase as time_range; do NOT convert it to window_size yourself.
+        If the user does not state a time range, OMIT time_range entirely (the default is "last hour");
+        never add a time_range such as "last seven days" on your own.
+        Use this operation when the user asks to "list error messages for application", "what errors does
+        <application> have", or "show errors for <application>". Do NOT use get_trace_groups for this.
+        Resolves application_name (or IMAP code) to the application, then lists its erroneous calls grouped by
+        endpoint (POST /api/application-monitoring/analyze/call-groups with
+        call.inbound_of_application = <application>, call.erroneous = true,
+        group by endpoint.name, metric erroneousCalls SUM), highest error count first.
+        Returns: 10 endpoints per page, each with endpoint name and erroneous_calls count, plus
+        total_hits, the standard pagination envelope and a pre-rendered 'display_markdown' to show verbatim.
+        At most 1000 endpoints are fetched; if more matched, the response carries a "note" - show it.
+        Navigate with operation = pagination.next_operation / previous_operation, which look like
+        "error_page_2:<application_name>|<time_range>"; copy them exactly.
+
+
 
 CATALOG (resource_type="catalog"):
     operations: get_tag_catalog, get_metric_catalog
@@ -231,7 +378,7 @@ Examples:
     resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS", "var_from": 1710658800000}
 
     # METRICS operations
-    resource_type="metrics", operation="get_grouped_calls_metrics", params={"metrics": [{"metric": "calls", "aggregation": "SUM"}, {"metric": "latency", "aggregation": "MEAN"}], "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"}, "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}, "time_frame": {"to": 1710658800000, "windowSize": 3600000}, "order": {"by": "calls", "direction": "DESC"}, "pagination": {"page": 1, "pageSize": 50}, "include_internal": False, "include_synthetic": False}
+    resource_type="metrics", operation="get_grouped_calls_metrics", params={"metrics": [{"metric": "calls", "aggregation": "SUM"}, {"metric": "latency", "aggregation": "MEAN"}], "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"}, "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}, "time_frame": {"to": 1710658800000, "windowSize": 3600000}, "order": {"by": "calls", "direction": "DESC"}, "pagination": {"retrievalSize": 20}, "include_internal": False, "include_synthetic": False}
 
     # ALERT_CONFIG operations
     resource_type="alert_config", operation="find_active", params={"application_name": "All Services", "alert_ids": ["alert-1", "alert-2"]}
@@ -932,6 +1079,197 @@ Examples:
             "message": f"Invalid operation '{operation}' for resource_type 'catalog'. Valid operations: {valid_operations}"
         }
 
+    async def _get_error_messages_by_application_name(
+        self, params: Dict[str, Any], ctx
+    ) -> Dict[str, Any]:
+        """List the erroneous endpoints of an application for a time range.
+
+        Uses POST /api/application-monitoring/analyze/call-groups (via
+        ``query_call_groups``) filtered to erroneous inbound calls of the application
+        (``call.inbound_of_application``, ``call.erroneous``), grouped by ``endpoint.name``,
+        ordered by ``erroneousCalls`` (SUM) descending.
+        """
+        operation = "get_error_messages_by_application_name"
+        app_name = params.get("application_name")
+        app_id = params.get("application_id")
+        if not app_name and not app_id:
+            return {
+                "error": (
+                    f"{operation} requires 'application_name' or 'application_id' in params. "
+                    "For next/previous/page_N, use pagination.next_operation / previous_operation "
+                    "from the last Error messages response."
+                ),
+                "operation": operation,
+            }
+
+        # Accept either a name or an Instana application ID (the ID may also arrive in
+        # application_name). Try the name first, then fall back to an ID lookup.
+        resolved: Dict[str, Any] = {}
+        if app_name:
+            resolved = await self._get_application_id_by_name(app_name, ctx)
+        if "error" in resolved or not resolved:
+            candidate_id = app_id or app_name
+            config = await self.app_settings_client.execute_settings_operation(
+                operation="get", resource_subtype="application", id=candidate_id, ctx=ctx,
+                resource_type="settings", tool_name="manage_applications",
+            )
+            if isinstance(config, dict) and config.get("label"):
+                resolved = {"application_id": candidate_id, "application_name": config["label"]}
+            elif not resolved:
+                return {
+                    "error": f"No application found with id '{candidate_id}'",
+                    "operation": operation,
+                }
+        if "error" in resolved:
+            return resolved
+        resolved_app_name = resolved["application_name"]
+
+        # Time range: a phrase such as "last 5 minutes" / "yesterday" / "previous week".
+        # An explicit window_size (ms) still works; with neither, default to the last hour.
+        time_range = params.get("time_range")
+        timezone = params.get("timezone")
+        if time_range:
+            _tz_error = invalid_timezone_error(timezone)
+            if _tz_error:
+                return {**_tz_error, "operation": operation}
+            resolved_range = resolve_time_range(time_range, timezone)
+            if resolved_range is None:
+                return {
+                    "error": f"Unsupported time_range '{time_range}'.",
+                    "operation": operation,
+                    "valid_time_ranges": list(_ROLLING_TIME_RANGES) + list(_CALENDAR_TIME_RANGES),
+                    "hint": "Use one of valid_time_ranges (or 'last N minutes/hours/days', at most 31 days).",
+                }
+            time_frame, time_range_label = resolved_range
+        elif params.get("window_size"):
+            time_frame = {"to": int(_time.time() * 1000), "windowSize": int(params["window_size"])}
+            time_range_label = f"last {round(time_frame['windowSize'] / _MS_HOUR, 2)} hours"
+        else:
+            time_frame, time_range_label = cast(
+                Tuple[Dict[str, int], str], resolve_time_range(DEFAULT_ERROR_TIME_RANGE)
+            )
+
+        # Call groups, grouped by endpoint: one row per endpoint with its erroneous-call count.
+        result = await self.app_call_group_client.query_call_groups(
+            payload={
+                "tagFilterExpression": {
+                    "type": "EXPRESSION",
+                    "logicalOperator": "AND",
+                    "elements": [
+                        {"type": "TAG_FILTER", "name": "call.inbound_of_application", "operator": "EQUALS",
+                         "entity": "NOT_APPLICABLE", "value": resolved_app_name},
+                        {"type": "TAG_FILTER", "name": "call.erroneous", "operator": "EQUALS",
+                         "entity": "NOT_APPLICABLE", "value": True},
+                    ],
+                },
+                "metrics": [
+                    {"metric": "erroneousCalls", "aggregation": "SUM"},
+                ],
+                "includeInternal": True,
+                "includeSynthetic": True,
+                "timeFrame": time_frame,
+                "order": {"by": "erroneousCalls", "direction": "DESC"},
+                "group": {"groupbyTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"},
+            },
+            max_items=_ERROR_TRACE_FETCH_LIMIT,
+            ctx=ctx,
+        )
+
+        raw_items = result.get("items") if isinstance(result, dict) else None
+        if not isinstance(raw_items, list):
+            err = result.get("error") if isinstance(result, dict) else None
+            return {
+                "error": err or "Unexpected response while retrieving error call groups",
+                "operation": operation,
+                "application_name": resolved_app_name,
+            }
+
+        def _metric_value(metrics: Any, prefix: str) -> Optional[float]:
+            # Keys look like "erroneousCalls.sum" (optionally ".<granularity>"); value is [[timestamp, value]].
+            if not isinstance(metrics, dict):
+                return None
+            series = next((v for k, v in metrics.items() if k.startswith(prefix + ".")), None)
+            if series and isinstance(series[0], list) and len(series[0]) >= 2:
+                return series[0][1]
+            return None
+
+        errors = []
+        for _it in raw_items:
+            if not isinstance(_it, dict):
+                continue
+            _erroneous = _metric_value(_it.get("metrics"), "erroneousCalls")
+            errors.append({
+                "endpoint": str(_it.get("name") or "").strip(),
+                "erroneous_calls": int(_erroneous) if _erroneous is not None else None,
+            })
+        total_hits = result.get("totalHits") if isinstance(result, dict) else None
+        truncated = bool(result.get("canLoadMore")) if isinstance(result, dict) else False
+
+        page_items, pagination_meta = paginate(
+            errors,
+            params.get("page_number") or params.get("page") or 1,
+            params.get("page_size"),
+            list_id="application_error_messages",
+        )
+        # Own navigation prefix + application name (+ time range) so next/previous work statelessly.
+        _nav_suffix = f":{resolved_app_name}" + (f"|{time_range}" if time_range else "")
+        for _k in ("next_operation", "previous_operation"):
+            if pagination_meta.get(_k):
+                pagination_meta[_k] = f"error_{pagination_meta[_k]}{_nav_suffix}"
+        nav_params = {"application_name": resolved_app_name}
+        if time_range:
+            nav_params["time_range"] = time_range
+            if timezone:
+                nav_params["timezone"] = timezone
+        elif params.get("window_size"):
+            nav_params["window_size"] = params["window_size"]
+        pagination_meta["nav_params"] = nav_params
+
+        response = {
+            "resource_type": "resources",
+            "operation": operation,
+            "application_name": resolved_app_name,
+            "time_range": time_range_label,
+            "total_hits": total_hits,
+            "results": {"items": page_items},
+            "pagination": pagination_meta,
+        }
+        if truncated:
+            response["note"] = (
+                f"More than {_ERROR_TRACE_FETCH_LIMIT} erroneous endpoints matched; only the most recent "
+                f"{len(errors)} are listed. Narrow the time range to see the rest."
+            )
+        if page_items:
+            _start = (pagination_meta["page"] - 1) * pagination_meta["page_size"] + 1
+            _lines = []
+            for _i, _e in enumerate(page_items, start=_start):
+                _label = " ".join(_e["endpoint"].split())
+                if len(_label) > 200:
+                    _label = _label[:200] + "…"
+                _suffix = f" — {_e['erroneous_calls']} erroneous calls" if _e.get("erroneous_calls") is not None else ""
+                _lines.append(f"{_i}. {_label}{_suffix}")
+            _end = _start + len(page_items) - 1
+            _total = pagination_meta.get("total_items", len(errors))
+            _footer = (
+                f"Showing {_start}-{_end} of {_total} erroneous endpoints "
+                f"(page {pagination_meta['page']} of {pagination_meta.get('total_pages', 1)}, {time_range_label})."
+            )
+            _nav = [w for w, on in (
+                ("next", pagination_meta.get("has_more")),
+                ("previous", pagination_meta.get("has_previous")),
+            ) if on]
+            if _nav:
+                _footer += f" Reply {', '.join(_nav)}, or page N to navigate."
+            response["display_markdown"] = "\n".join(_lines) + "\n\n" + _footer
+            response["display_instruction"] = (
+                "Show the user the 'display_markdown' exactly as-is under the 'Application error "
+                "messages' header, including the final 'Showing ...' line with the total and navigation "
+                "hint. Do not drop that line, and do not invent or reword entries. When the user replies "
+                "next / previous / page N, call this tool again with operation = pagination.next_operation / "
+                "previous_operation (or 'error_page_N:<application_name>[|<time_range>]')."
+            )
+        return response
+
     async def _handle_resources(
         self,
         operation: str,
@@ -939,10 +1277,25 @@ Examples:
         ctx
     ) -> Dict[str, Any]:
         """Handle Application Resources operations."""
+        # ── Error-message list navigation: "error_page_N:<application_name>" ──
+        # get_error_messages_by_application_name is paginated separately from the services
+        # list, so its next/previous operations use their own prefix to avoid ambiguity.
+        _err_nav = re.match(r"^error_page_(\d+)(?::(.+))?$", (operation or "").strip(), re.IGNORECASE)
+        if _err_nav:
+            operation = "get_error_messages_by_application_name"
+            params["page_number"] = int(_err_nav.group(1))
+            # The time range rides along after a "|": "error_page_2:<application_name>|<time_range>".
+            _nav_app, _, _nav_range = (_err_nav.group(2) or "").partition("|")
+            if _nav_app.strip() and not params.get("application_name"):
+                params["application_name"] = _nav_app.strip()
+            if _nav_range.strip() and not params.get("time_range"):
+                params["time_range"] = _nav_range.strip()
+
         valid_operations = [
             "get_application_endpoints",
             "get_application_services",
             "get_applications",
+            "get_error_messages_by_application_name",
             "get_services",
         ]
 
@@ -960,30 +1313,41 @@ Examples:
                 "message": f"Invalid operation '{operation}' for resource_type 'resources'. Valid operations: {valid_operations}"
             }
 
-        # Extract all parameters
-        application_id = params.get("application_id")
-        service_id = params.get("service_id")
-        endpoint_id = params.get("endpoint_id")
-        name_filter = params.get("name_filter")
-        types = params.get("types")
-        technologies = params.get("technologies")
-        application_boundary_scope = params.get("application_boundary_scope")
-        include_snapshot_ids = params.get("include_snapshot_ids")
+        try:
+            if operation == "get_error_messages_by_application_name":
+                return await self._get_error_messages_by_application_name(params, ctx)
 
-        # Route to the resources client dispatcher
-        result = await self.app_resources_client.execute_resources_operation(
-            operation=operation,
-            application_id=application_id,
-            service_id=service_id,
-            endpoint_id=endpoint_id,
-            name_filter=name_filter,
-            types=types,
-            technologies=technologies,
-            application_boundary_scope=application_boundary_scope,
-            include_snapshot_ids=include_snapshot_ids,
-            ctx=ctx,
-            resource_type="resources", tool_name="manage_applications",
-        )
+            # Extract all parameters
+            application_id = params.get("application_id")
+            service_id = params.get("service_id")
+            endpoint_id = params.get("endpoint_id")
+            name_filter = params.get("name_filter")
+            types = params.get("types")
+            technologies = params.get("technologies")
+            application_boundary_scope = params.get("application_boundary_scope")
+            include_snapshot_ids = params.get("include_snapshot_ids")
+
+            # Route to the resources client dispatcher
+            result = await self.app_resources_client.execute_resources_operation(
+                operation=operation,
+                application_id=application_id,
+                service_id=service_id,
+                endpoint_id=endpoint_id,
+                name_filter=name_filter,
+                types=types,
+                technologies=technologies,
+                application_boundary_scope=application_boundary_scope,
+                include_snapshot_ids=include_snapshot_ids,
+                ctx=ctx,
+                resource_type="resources", tool_name="manage_applications",
+            )
+
+        except Exception as e:
+            logger.error(
+                "[manage_applications] _handle_resources error: operation=%s error=%s",
+                operation, e, exc_info=True
+            )
+            return {"error": f"Resources operation failed: {e!s}", "operation": operation}
 
         return {
             "resource_type": "resources",
